@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assessmentTrend, cardioEquivalentMinutes, cardioPrescription, latestAssessment, minimumEffectiveOptions, nextSkillStep, readinessDecision, targetProgress, weeklyMinutes } from './whole-person';
+import { assessmentTrend, athleticPlan, cardioEquivalentMinutes, cardioOptions, cardioPrescription, latestAssessment, minimumEffectiveOptions, nextSkillStep, readinessDecision, readinessTrend, targetProgress, weeklyMinutes } from './whole-person';
 
 describe('whole-person fitness model',()=>{
   it('caps target progress at one',()=>{
@@ -36,6 +36,17 @@ describe('whole-person fitness model',()=>{
     expect(result.allowProgression).toBe(false);
   });
 
+  it('summarizes repeated readiness constraints across the recent week',()=>{
+    const now=new Date('2026-09-02T12:00:00Z');
+    const trend=readinessTrend([
+      {recordedAt:'2026-09-01T12:00:00Z',input:{sleep:'poor',fatigue:'high'}},
+      {recordedAt:'2026-08-31T12:00:00Z',input:{stress:'high'}},
+      {recordedAt:'2026-08-30T12:00:00Z',input:{sleep:'good',fatigue:'low'}},
+    ],now);
+    expect(trend.reduced).toBe(2);
+    expect(trend.message).toContain('common');
+  });
+
   it('converts hard cardio to moderate-equivalent minutes',()=>{
     expect(cardioEquivalentMinutes(30,'hard')).toBe(60);
     expect(cardioEquivalentMinutes(30,'moderate')).toBe(30);
@@ -46,6 +57,11 @@ describe('whole-person fitness model',()=>{
     const next=cardioPrescription(90,150,30);
     expect(next.minutes).toBe(30);
     expect(next.effort).toBe('moderate');
+  });
+
+  it('removes hard interval option when readiness is reduced',()=>{
+    expect(cardioOptions(60,150,'normal',30).some(x=>x.type==='intervals')).toBe(true);
+    expect(cardioOptions(60,150,'reduced',30).some(x=>x.type==='intervals')).toBe(false);
   });
 
   it('advances through a bodyweight skill tree without exceeding the last step',()=>{
@@ -60,5 +76,11 @@ describe('whole-person fitness model',()=>{
     ];
     expect(latestAssessment(values,'pullups')?.value).toBe(6);
     expect(assessmentTrend(values,'pullups')).toBe(3);
+  });
+
+  it('keeps athletic plan low risk in recovery state',()=>{
+    const plan=athleticPlan([], 'recovery');
+    expect(plan.every(x=>x.domain!=='power')).toBe(true);
+    expect(plan[0].domain).toBe('balance');
   });
 });
