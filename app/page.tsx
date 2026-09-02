@@ -4,6 +4,7 @@ import { AdaptContext, GymProfile, HistoryEntry, SessionId, Workout } from '@/li
 import { buildSession, gyms, substitutions } from '@/lib/program';
 import { adaptWorkout, nextLoadRecommendation, platePlan, summarizeWorkout } from '@/lib/engine';
 import { store } from '@/lib/storage';
+import { readinessDecision } from '@/lib/whole-person';
 import { CapabilityPanel, TodayWholePerson } from './whole-person-panel';
 
 const sequence:SessionId[]=['upper-a','lower-a','upper-b','lower-b'];
@@ -33,9 +34,14 @@ export default function Home(){
   const recentStrengthSessions=useMemo(()=>{const cutoff=Date.now()-7*24*60*60*1000;return history.filter(h=>new Date(h.completedAt).getTime()>=cutoff).length},[history]);
 
   function start(context:AdaptContext={}){
+    const saved=store.loadReadiness();
+    const latest=saved.at(-1)?.input;
+    const readiness=readinessDecision(latest||{});
+    const effectiveContext={...context,gym:context.gym||gym,lowEnergy:context.lowEnergy ?? readiness.level!=='normal'};
     const base=buildSession(nextSession);
-    const adapted=adaptWorkout(base,{...context,gym:context.gym||gym});
-    setNotes(adapted.notes);
+    const adapted=adaptWorkout(base,effectiveContext);
+    const readinessNotes=readiness.level==='normal'?[]:[`Readiness: ${readiness.reasons.join(' ')||'Recovery signals suggest a conservative session.'} Automatic load progression should stay off today.`];
+    setNotes([...readinessNotes,...adapted.notes]);
     setActive({id:crypto.randomUUID(),session:nextSession,startedAt:new Date().toISOString(),status:'active',gymId:(context.gym||gym).id,exercises:adapted.exercises});
   }
   function logSet(ei:number,reps:number,weight:number,rir=2,pain=false){
