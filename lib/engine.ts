@@ -36,8 +36,8 @@ export function adaptWorkout(items: WorkoutExercise[], context: AdaptContext): {
 
 export function nextLoadRecommendation(exercise: WorkoutExercise, previous?: WorkoutExercise){
   const logs=exercise.logs.filter(l=>!l.pain);
+  if(exercise.logs.some(l=>l.pain)) return {action:'hold',message:'Pain or unusual discomfort was flagged. Stop progressing this exercise for now and reassess before continuing.'};
   if(!logs.length) return {action:'baseline',message:'Establish a comfortable baseline and leave 2–3 reps in reserve.'};
-  if(exercise.logs.some(l=>l.pain)) return {action:'hold',message:'Pain was flagged. Do not auto-progress this exercise.'};
   const [,high]=exercise.repRange;
   const allTop=logs.length>=exercise.sets && logs.every(l=>l.reps>=high);
   const effortOk=logs.every(l=>(l.rir ?? 2)>=1);
@@ -63,6 +63,7 @@ export function summarizeWorkout(exercises: WorkoutExercise[], history: HistoryE
     const bestNow=Math.max(0,...e.logs.map(l=>l.weight*l.reps));
     if(bestNow>bestPrior && bestPrior>0){ prs++; messages.push(`${e.name}: new performance best.`); }
   }
+  if(exercises.some(e=>e.logs.some(l=>l.pain))) messages.push('Discomfort was flagged during this session. Progression is paused for the affected exercise until it is reassessed.');
   if(!messages.length) messages.push('Session completed. Consistency is progress; use the next-session recommendations to continue building.');
   return {prs,messages};
 }
