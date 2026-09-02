@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { minimumEffectiveOptions, targetProgress, weeklyMinutes } from './whole-person';
+import { cardioEquivalentMinutes, minimumEffectiveOptions, nextSkillStep, readinessDecision, targetProgress, weeklyMinutes } from './whole-person';
 
 describe('whole-person fitness model',()=>{
   it('caps target progress at one',()=>{
@@ -21,5 +21,28 @@ describe('whole-person fitness model',()=>{
     const result=minimumEffectiveOptions(10,['bodyweight','core']);
     expect(result.map(x=>x.domain)).toEqual(['bodyweight','core']);
     expect(result.every(x=>x.minutes<=10)).toBe(true);
+  });
+
+  it('reduces training recommendations under multiple recovery strains',()=>{
+    const result=readinessDecision({sleep:'poor',fatigue:'high'});
+    expect(result.level).toBe('reduced');
+    expect(result.allowProgression).toBe(false);
+    expect(result.volumeMultiplier).toBeLessThan(1);
+  });
+
+  it('treats pain as a recovery-state guardrail rather than a progression signal',()=>{
+    const result=readinessDecision({pain:true});
+    expect(result.level).toBe('recovery');
+    expect(result.allowProgression).toBe(false);
+  });
+
+  it('converts hard cardio to moderate-equivalent minutes',()=>{
+    expect(cardioEquivalentMinutes(30,'hard')).toBe(60);
+    expect(cardioEquivalentMinutes(30,'moderate')).toBe(30);
+  });
+
+  it('advances through a bodyweight skill tree without exceeding the last step',()=>{
+    expect(nextSkillStep('pull-up','assisted')?.id).toBe('strict');
+    expect(nextSkillStep('pull-up','weighted')?.id).toBe('weighted');
   });
 });
