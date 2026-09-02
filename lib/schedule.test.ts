@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HistoryEntry } from './domain';
-import { nextRollingSession, workoutCompletionRatio } from './schedule';
+import { contextualRollingSession, nextRollingSession, workoutCompletionRatio } from './schedule';
 
 function entry(status:'completed'|'ended-early',logs:number):HistoryEntry{
   return {session:'upper-a',status,completedAt:'2026-09-02T12:00:00-04:00',exercises:[
@@ -21,5 +21,25 @@ describe('rolling schedule',()=>{
     const decision=nextRollingSession([entry('ended-early',6)]);
     expect(workoutCompletionRatio(entry('ended-early',6))).toBe(.75);
     expect(decision.session).toBe('lower-a');
+  });
+
+  it('keeps the rolling position in travel mode but marks the session portable and non-progressive',()=>{
+    const decision=contextualRollingSession([entry('completed',8)],'travel');
+    expect(decision.session).toBe('lower-a');
+    expect(decision.adaptation).toBe('portable');
+    expect(decision.progressionAllowed).toBe(false);
+  });
+
+  it('keeps the sequence in return mode while pausing progression',()=>{
+    const decision=contextualRollingSession([entry('completed',8)],'return');
+    expect(decision.session).toBe('lower-a');
+    expect(decision.adaptation).toBe('reduced');
+    expect(decision.progressionAllowed).toBe(false);
+  });
+
+  it('does not turn maintenance mode into catch-up scheduling',()=>{
+    const decision=contextualRollingSession([entry('ended-early',6)],'maintenance');
+    expect(decision.session).toBe('lower-a');
+    expect(decision.adaptation).toBe('maintenance');
   });
 });
