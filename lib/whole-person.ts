@@ -95,6 +95,7 @@ export const progressionTracks:ProgressionTrack[]=[
 
 export type ReadinessInput={sleep?:'poor'|'okay'|'good';fatigue?:'low'|'moderate'|'high';soreness?:'low'|'moderate'|'high';stress?:'low'|'moderate'|'high';illness?:boolean;pain?:boolean};
 export type ReadinessDecision={level:'normal'|'reduced'|'recovery';volumeMultiplier:number;allowProgression:boolean;reasons:string[]};
+export type ReadinessRecord={recordedAt:string;input:ReadinessInput};
 
 export function readinessDecision(input:ReadinessInput):ReadinessDecision{
   const reasons:string[]=[];
@@ -111,11 +112,37 @@ export function readinessDecision(input:ReadinessInput):ReadinessDecision{
   return {level:'normal',volumeMultiplier:1,allowProgression:true,reasons};
 }
 
+export function readinessTrend(records:ReadinessRecord[],now=new Date()){
+  const cutoff=now.getTime()-7*24*60*60*1000;
+  const recent=records.filter(r=>new Date(r.recordedAt).getTime()>=cutoff);
+  if(!recent.length)return {normal:0,reduced:0,recovery:0,message:'No readiness trend yet.'};
+  const counts={normal:0,reduced:0,recovery:0};
+  recent.forEach(r=>counts[readinessDecision(r.input).level]++);
+  const constrained=counts.reduced+counts.recovery;
+  const message=constrained>=Math.ceil(recent.length/2)
+    ?'Recovery constraints have been common this week. Keep progression conservative and prioritize consistency over catching up.'
+    :'Recovery has been mostly supportive of normal training this week.';
+  return {...counts,message};
+}
+
 export function cardioEquivalentMinutes(minutes:number,effort:'easy'|'moderate'|'hard'){
   if(minutes<=0)return 0;
   if(effort==='hard')return minutes*2;
   if(effort==='easy')return minutes*.75;
   return minutes;
+}
+
+export type CardioSessionType='recovery'|'steady'|'intervals';
+export type CardioOption={type:CardioSessionType;name:string;minutes:number;effort:'easy'|'moderate'|'hard';description:string};
+export function cardioOptions(equivalentMinutes:number,target=150,readiness:'normal'|'reduced'|'recovery'='normal',availableMinutes=30):CardioOption[]{
+  const remaining=Math.max(0,target-equivalentMinutes);
+  if(readiness==='recovery')return [{type:'recovery',name:'Recovery aerobic',minutes:Math.min(20,availableMinutes),effort:'easy',description:'Easy conversational movement only. Stop if symptoms or unusual discomfort worsen.'}];
+  const options:CardioOption[]=[
+    {type:'recovery',name:'Easy aerobic',minutes:Math.min(25,availableMinutes),effort:'easy',description:'Low-fatigue walking, cycling, rowing, or incline treadmill.'},
+    {type:'steady',name:'Steady aerobic',minutes:Math.min(Math.max(20,Math.min(40,remaining||30)),availableMinutes),effort:'moderate',description:'Conversational-to-moderate continuous work that builds weekly aerobic volume.'},
+  ];
+  if(readiness==='normal'&&availableMinutes>=15)options.push({type:'intervals',name:'Short intervals',minutes:Math.min(20,availableMinutes),effort:'hard',description:'Brief harder efforts with generous recovery. Use sparingly and avoid stacking beside unusually demanding lower-body work.'});
+  return options;
 }
 
 export function cardioPrescription(equivalentMinutes:number,target=150,availableMinutes=30){
@@ -143,6 +170,18 @@ export function assessmentTrend(assessments:Assessment[],metricId:string){
   const values=assessments.filter(a=>a.metricId===metricId).sort((a,b)=>new Date(a.recordedAt).getTime()-new Date(b.recordedAt).getTime());
   if(values.length<2)return null;
   return values[values.length-1].value-values[0].value;
+}
+
+export type AthleticPlan={domain:'power'|'balance'|'movement';name:string;items:string[];reason:string};
+export function athleticPlan(assessments:Assessment[],readiness:'normal'|'reduced'|'recovery'):AthleticPlan[]{
+  if(readiness==='recovery')return [{domain:'balance',name:'Low-risk balance practice',items:['Supported single-leg balance 2×20–30 sec/side','Easy gait or carry pattern if comfortable'],reason:'Recovery-first mode avoids high-impact power work.'}];
+  const balance=latestAssessment(assessments,'single-leg-balance')?.value||0;
+  const jumpTrend=assessmentTrend(assessments,'jump');
+  const plans:AthleticPlan[]=[];
+  if(balance<30)plans.push({domain:'balance',name:'Balance foundation',items:['Single-leg balance 3×20–30 sec/side','Step-down control 2×6/side'],reason:'Build repeatable single-leg control before harder agility work.'});
+  if(readiness==='normal')plans.push({domain:'power',name:'Low-volume power',items:['3–5 sets of 2–3 crisp jumps or explosive concentric reps','Full recovery between sets'],reason:jumpTrend!==null&&jumpTrend<0?'Recent jump benchmark is down; keep volume low and focus on quality.':'Use low fatigue and full recovery to train power without turning it into conditioning.'});
+  plans.push({domain:'movement',name:'Carry + locomotion',items:['Suitcase or farmer carry 3×20–40 m','Optional controlled lateral/forward locomotion drill'],reason:'Build practical work capacity and trunk control.'});
+  return plans;
 }
 
 export function weeklyMinutes(doses:ActivityDose[],domain:CapabilityDomain,now=new Date()){
