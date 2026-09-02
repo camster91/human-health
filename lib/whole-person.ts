@@ -41,6 +41,7 @@ export const capabilityMetrics:CapabilityMetric[] = [
   {id:'ankle-mobility',domain:'mobility',name:'Ankle mobility',unit:'cm/quality',direction:'higher',description:'User-selected repeatable ankle benchmark.'},
   {id:'single-leg-balance',domain:'balance',name:'Single-leg balance',unit:'seconds/level',direction:'higher',description:'Repeatable balance benchmark with explicit test conditions.'},
   {id:'jump',domain:'power',name:'Jump benchmark',unit:'cm',direction:'higher',description:'Optional power benchmark; high-impact testing can be disabled.'},
+  {id:'carry',domain:'movement',name:'Loaded carry',unit:'distance/load',direction:'higher',description:'Practical work-capacity benchmark when equipment and user capability allow.'},
 ];
 
 export type SkillStep={id:string;name:string;target:string};
@@ -66,9 +67,45 @@ export type MicroSession={id:string;domain:CapabilityDomain;name:string;minutes:
 export const microSessions:MicroSession[]=[
   {id:'core-8',domain:'core',name:'Core control',minutes:8,items:['Dead bug','Side plank','Pallof press']},
   {id:'mobility-hips-8',domain:'mobility',name:'Hip + ankle mobility',minutes:8,items:['Ankle rocks','90/90 hip switches','Hip-flexor mobility']},
+  {id:'mobility-upper-8',domain:'mobility',name:'Shoulder + thoracic mobility',minutes:8,items:['Wall slide','Thoracic rotation','Controlled shoulder circles']},
   {id:'cardio-20',domain:'cardio',name:'Easy aerobic session',minutes:20,items:['Brisk walk, cycle, row, or incline treadmill at conversational effort']},
   {id:'bodyweight-10',domain:'bodyweight',name:'Pull + push skill practice',minutes:10,items:['Current pull-up progression','Current push-up progression']},
+  {id:'balance-power-10',domain:'power',name:'Power + balance primer',minutes:10,items:['Low-volume jump or fast concentric drill','Single-leg balance','Carry or locomotion drill']},
 ];
+
+export type ReadinessInput={sleep?:'poor'|'okay'|'good';fatigue?:'low'|'moderate'|'high';soreness?:'low'|'moderate'|'high';stress?:'low'|'moderate'|'high';illness?:boolean;pain?:boolean};
+export type ReadinessDecision={level:'normal'|'reduced'|'recovery';volumeMultiplier:number;allowProgression:boolean;reasons:string[]};
+
+export function readinessDecision(input:ReadinessInput):ReadinessDecision{
+  const reasons:string[]=[];
+  if(input.pain) reasons.push('Pain or unusual discomfort was reported.');
+  if(input.illness) reasons.push('Illness was reported.');
+  if(input.sleep==='poor') reasons.push('Sleep was poor.');
+  if(input.fatigue==='high') reasons.push('Fatigue is high.');
+  if(input.soreness==='high') reasons.push('Soreness is high.');
+  if(input.stress==='high') reasons.push('Stress is high.');
+  if(input.pain||input.illness) return {level:'recovery',volumeMultiplier:.5,allowProgression:false,reasons};
+  const strain=[input.sleep==='poor',input.fatigue==='high',input.soreness==='high',input.stress==='high'].filter(Boolean).length;
+  if(strain>=2) return {level:'reduced',volumeMultiplier:.7,allowProgression:false,reasons};
+  if(strain===1) return {level:'reduced',volumeMultiplier:.85,allowProgression:false,reasons};
+  return {level:'normal',volumeMultiplier:1,allowProgression:true,reasons};
+}
+
+export function cardioEquivalentMinutes(minutes:number,effort:'easy'|'moderate'|'hard'){
+  if(minutes<=0)return 0;
+  if(effort==='hard')return minutes*2;
+  if(effort==='easy')return minutes*.75;
+  return minutes;
+}
+
+export function nextSkillStep(treeId:string,currentStepId?:string){
+  const tree=skillTrees.find(t=>t.id===treeId);
+  if(!tree)return null;
+  if(!currentStepId)return tree.steps[0];
+  const index=tree.steps.findIndex(s=>s.id===currentStepId);
+  if(index<0)return tree.steps[0];
+  return tree.steps[Math.min(index+1,tree.steps.length-1)];
+}
 
 export function weeklyMinutes(doses:ActivityDose[],domain:CapabilityDomain,now=new Date()){
   const start=new Date(now); start.setHours(0,0,0,0); start.setDate(start.getDate()-6);
