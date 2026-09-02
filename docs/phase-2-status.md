@@ -33,12 +33,14 @@ Phase 2 is branched from `phase-1-adaptive-training-coach` so work can proceed w
 - [x] Quick core/mobility/bodyweight completion logging
 - [x] Interactive readiness check UI
 - [x] Interactive bodyweight skill selection UI
+- [x] Saved readiness modifies workout volume and pauses progression guidance when recovery signals are low (#36 baseline)
+- [x] Pain flagged during a workout immediately pauses progression guidance for the remainder of the session
 - [ ] Core programming progression and detailed session logging (#31)
 - [ ] Mobility/flexibility progression and targeted session detail (#32)
 - [ ] Bodyweight skill assessment history and automatic advancement rules (#33)
 - [ ] Cardio prescriptions beyond manual logging (#34)
 - [ ] Athleticism/power/balance assessments and progression (#35)
-- [ ] Saved readiness automatically modifying workout adaptation (#36)
+- [ ] Recovery/readiness trend history and richer adaptation rules (#36)
 - [ ] Capability map populated from stored assessments/trends (#37)
 - [ ] Adaptive rolling schedule (#38; source blocker #45 addressed, verification pending)
 - [ ] Minimum-effective-day recommendation tied to deficits/readiness/time (#39)
@@ -54,10 +56,10 @@ Capability domains are not combined into a universal medical health score. Each 
 
 ## Next implementation order
 
-1. Feed saved readiness into workout adaptation (#36).
-2. Turn quick core/mobility/bodyweight sessions into structured logged sessions (#31–#33).
-3. Add cardio prescriptions and weekly target-aware recommendations (#34).
-4. Add measurable power/balance assessments (#35).
-5. Populate the capability map from real observations (#37).
-6. Build adaptive rolling scheduling using ended-early state (#38).
-7. Use domain gaps + readiness + available time for minimum-effective-day recommendations (#39).
+1. Turn quick core/mobility/bodyweight sessions into structured logged sessions (#31–#33).
+2. Add cardio prescriptions and weekly target-aware recommendations (#34).
+3. Add measurable power/balance assessments (#35).
+4. Populate the capability map from real observations (#37).
+5. Build adaptive rolling scheduling using ended-early state (#38).
+6. Use domain gaps + readiness + available time for minimum-effective-day recommendations (#39).
+7. Add travel/return-to-training/maintenance modes (#40).
