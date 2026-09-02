@@ -33,10 +33,12 @@ Phase 2 is branched from `phase-1-adaptive-training-coach` so work can proceed w
 - [x] Persistent capability assessments and progression-track state
 - [x] Manual cardio logging and equivalent-minute display
 - [x] Target-aware cardio prescription baseline (#34)
+- [x] Recovery-aware cardio session choices: easy, steady, and intervals when appropriate (#34)
 - [x] Quick core/mobility/bodyweight completion logging
 - [x] Structured core progression tracks and session logging baseline (#31)
 - [x] Structured lower/upper mobility progression tracks and session logging baseline (#32)
 - [x] Interactive readiness check UI
+- [x] Seven-day readiness trend summary and conservative repeated-strain messaging (#36)
 - [x] Interactive bodyweight skill selection UI
 - [x] Assessment-driven bodyweight advancement/regression baseline requiring repeatable clean passes (#33)
 - [x] Pain blocks bodyweight skill advancement (#33)
@@ -44,16 +46,15 @@ Phase 2 is branched from `phase-1-adaptive-training-coach` so work can proceed w
 - [x] Pain flagged during a workout immediately pauses progression guidance for the remainder of the session
 - [x] Capability assessment entry for pull-ups, hangs, ankle mobility, balance, and jump (#35/#37 baseline)
 - [x] Capability map reads latest assessment and measurable change over time (#37 baseline)
-- [x] Low-volume power, balance, and carry/locomotion programming baseline (#35)
+- [x] Recovery-aware athletic plan with low-volume power, balance, and carry/locomotion work (#35)
 - [x] Adaptive rolling schedule baseline (#38; ended-early state supported in source)
 - [x] Deficit-aware minimum-effective-day planning baseline (#39)
 - [x] Normal, travel, return-to-training, and maintenance life modes baseline (#40)
 - [x] Interactive life-mode/time selector and suggested-work completion flow (#39/#40)
-- [ ] Richer cardio session types/intensity prescriptions (#34)
-- [ ] Power/balance progression rules tied to repeated assessments (#35)
-- [ ] Recovery/readiness trend history and richer adaptation rules (#36)
-- [ ] Capability map strength/cardio trend normalization and periodic assessment workflow (#37)
+- [ ] Power/balance automatic progression rules tied to repeated benchmark evidence (#35)
+- [ ] Capability map strength/cardio normalization and periodic assessment workflow (#37)
 - [ ] Broader rolling-schedule QA and interaction with life modes (#38)
+- [ ] Verification of all source-level tests/build/PWA/browser behaviours
 
 ## Verification rule
 
@@ -65,8 +66,7 @@ Capability domains are not combined into a universal medical health score. Each 
 
 ## Next implementation order
 
-1. Add richer cardio session choices and intensity/recovery handling (#34).
-2. Tie power/balance progression to repeatable benchmark evidence (#35).
-3. Add readiness and capability trend views (#36–#37).
-4. Exercise the rolling schedule against travel/return/maintenance scenarios (#38/#40).
-5. Run Phase 1/2 typecheck, tests, production build, PWA/offline QA, and representative mobile/tablet/desktop browser QA before either PR is merge-ready.
+1. Tie power/balance progression to repeatable benchmark evidence (#35).
+2. Add normalized strength/cardio trend summaries and periodic-assessment workflow (#37).
+3. Exercise the rolling schedule against travel/return/maintenance scenarios (#38/#40).
+4. Run Phase 1/2 typecheck, tests, production build, PWA/offline QA, and representative mobile/tablet/desktop browser QA before either PR is merge-ready.
