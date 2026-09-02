@@ -14,6 +14,7 @@ export type ActivityDose = {
   minutes?:number;
   sets?:number;
   effort?:'easy'|'moderate'|'hard';
+  sessionId?:string;
   completedAt:string;
 };
 
@@ -73,6 +74,25 @@ export const microSessions:MicroSession[]=[
   {id:'balance-power-10',domain:'power',name:'Power + balance primer',minutes:10,items:['Low-volume jump or fast concentric drill','Single-leg balance','Carry or locomotion drill']},
 ];
 
+export type ProgressionLevel={id:string;name:string;items:string[];target:string};
+export type ProgressionTrack={id:string;domain:'core'|'mobility';name:string;levels:ProgressionLevel[]};
+export const progressionTracks:ProgressionTrack[]=[
+  {id:'core-control',domain:'core',name:'Core control',levels:[
+    {id:'base',name:'Base control',items:['Dead bug 3×6/side','Side plank 3×20–30 sec/side','Pallof press 3×8/side'],target:'Complete with steady breathing and no loss of trunk position.'},
+    {id:'intermediate',name:'Anti-movement strength',items:['Dead bug 3×10/side','Long-lever side plank 3×20 sec/side','Tall-kneeling Pallof press 3×10/side'],target:'Repeat cleanly for two sessions before advancing.'},
+    {id:'advanced',name:'Loaded control',items:['Ab-wheel or long-lever rollout 3×6–10','Suitcase carry 3×30–45 sec/side','Cable anti-rotation 3×10/side'],target:'Progress difficulty only while control remains consistent.'},
+  ]},
+  {id:'lower-mobility',domain:'mobility',name:'Hip + ankle mobility',levels:[
+    {id:'base',name:'Restore range',items:['Ankle rocks 2×10/side','90/90 hip switches 2×8','Hip-flexor mobility 2×30 sec/side'],target:'Move through a comfortable, repeatable range.'},
+    {id:'control',name:'Control the range',items:['Knee-over-toe ankle pulses 2×10','90/90 lift-offs 2×6/side','Cossack squat supported 2×6/side'],target:'Own the available range without forcing end positions.'},
+    {id:'integrate',name:'Integrate range',items:['Deep squat hold 2×30 sec','Cossack squat 2×8/side','Split-squat mobility 2×8/side'],target:'Use mobility in loaded or athletic movement without pain.'},
+  ]},
+  {id:'upper-mobility',domain:'mobility',name:'Shoulder + thoracic mobility',levels:[
+    {id:'base',name:'Restore motion',items:['Wall slide 2×8','Thoracic rotation 2×8/side','Controlled shoulder circles 2×5/side'],target:'Smooth motion without forcing range.'},
+    {id:'control',name:'Control overhead range',items:['Wall slide lift-off 2×6','Open-book rotation 2×8/side','Light cable external rotation 2×12'],target:'Repeat overhead motion without compensating through the low back.'},
+  ]},
+];
+
 export type ReadinessInput={sleep?:'poor'|'okay'|'good';fatigue?:'low'|'moderate'|'high';soreness?:'low'|'moderate'|'high';stress?:'low'|'moderate'|'high';illness?:boolean;pain?:boolean};
 export type ReadinessDecision={level:'normal'|'reduced'|'recovery';volumeMultiplier:number;allowProgression:boolean;reasons:string[]};
 
@@ -98,6 +118,14 @@ export function cardioEquivalentMinutes(minutes:number,effort:'easy'|'moderate'|
   return minutes;
 }
 
+export function cardioPrescription(equivalentMinutes:number,target=150,availableMinutes=30){
+  const remaining=Math.max(0,target-equivalentMinutes);
+  if(remaining===0)return {minutes:0,effort:'easy' as const,message:'Weekly aerobic target is covered. Optional easy cardio can be used for enjoyment or recovery.'};
+  if(availableMinutes<=15)return {minutes:Math.min(15,availableMinutes),effort:'moderate' as const,message:`About ${Math.round(remaining)} equivalent minutes remain this week. Use a short moderate session today.`};
+  const minutes=Math.min(availableMinutes,Math.max(20,Math.min(40,remaining)));
+  return {minutes,effort:'moderate' as const,message:`About ${Math.round(remaining)} equivalent minutes remain this week. ${minutes} moderate minutes is a useful next dose.`};
+}
+
 export function nextSkillStep(treeId:string,currentStepId?:string){
   const tree=skillTrees.find(t=>t.id===treeId);
   if(!tree)return null;
@@ -105,6 +133,16 @@ export function nextSkillStep(treeId:string,currentStepId?:string){
   const index=tree.steps.findIndex(s=>s.id===currentStepId);
   if(index<0)return tree.steps[0];
   return tree.steps[Math.min(index+1,tree.steps.length-1)];
+}
+
+export type Assessment={metricId:string;value:number;recordedAt:string;note?:string};
+export function latestAssessment(assessments:Assessment[],metricId:string){
+  return assessments.filter(a=>a.metricId===metricId).sort((a,b)=>new Date(b.recordedAt).getTime()-new Date(a.recordedAt).getTime())[0]||null;
+}
+export function assessmentTrend(assessments:Assessment[],metricId:string){
+  const values=assessments.filter(a=>a.metricId===metricId).sort((a,b)=>new Date(a.recordedAt).getTime()-new Date(b.recordedAt).getTime());
+  if(values.length<2)return null;
+  return values[values.length-1].value-values[0].value;
 }
 
 export function weeklyMinutes(doses:ActivityDose[],domain:CapabilityDomain,now=new Date()){
