@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cardioEquivalentMinutes, minimumEffectiveOptions, nextSkillStep, readinessDecision, targetProgress, weeklyMinutes } from './whole-person';
+import { assessmentTrend, cardioEquivalentMinutes, cardioPrescription, latestAssessment, minimumEffectiveOptions, nextSkillStep, readinessDecision, targetProgress, weeklyMinutes } from './whole-person';
 
 describe('whole-person fitness model',()=>{
   it('caps target progress at one',()=>{
@@ -41,8 +41,24 @@ describe('whole-person fitness model',()=>{
     expect(cardioEquivalentMinutes(30,'moderate')).toBe(30);
   });
 
+  it('prescribes cardio against the remaining weekly target',()=>{
+    expect(cardioPrescription(150,150,30).minutes).toBe(0);
+    const next=cardioPrescription(90,150,30);
+    expect(next.minutes).toBe(30);
+    expect(next.effort).toBe('moderate');
+  });
+
   it('advances through a bodyweight skill tree without exceeding the last step',()=>{
     expect(nextSkillStep('pull-up','assisted')?.id).toBe('strict');
     expect(nextSkillStep('pull-up','weighted')?.id).toBe('weighted');
+  });
+
+  it('returns latest assessment and a simple measurable trend',()=>{
+    const values=[
+      {metricId:'pullups',value:3,recordedAt:'2026-08-01T12:00:00Z'},
+      {metricId:'pullups',value:6,recordedAt:'2026-09-01T12:00:00Z'},
+    ];
+    expect(latestAssessment(values,'pullups')?.value).toBe(6);
+    expect(assessmentTrend(values,'pullups')).toBe(3);
   });
 });
