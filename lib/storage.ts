@@ -1,11 +1,13 @@
 import { HistoryEntry, Workout } from './domain';
-import { ActivityDose, ReadinessInput } from './whole-person';
+import { ActivityDose, Assessment, ReadinessInput } from './whole-person';
 
 const ACTIVE='human-health:active';
 const HISTORY='human-health:history';
 const ACTIVITY='human-health:activity';
 const READINESS='human-health:readiness';
 const SKILLS='human-health:skills';
+const ASSESSMENTS='human-health:assessments';
+const PROGRESSIONS='human-health:progressions';
 
 function read<T>(key:string,fallback:T):T{
   if(typeof window==='undefined')return fallback;
@@ -22,5 +24,9 @@ export const store={
   loadReadiness():({recordedAt:string;input:ReadinessInput})[]{return read(READINESS,[])},
   saveReadiness(v:{recordedAt:string;input:ReadinessInput}[]){if(typeof window==='undefined')return; localStorage.setItem(READINESS,JSON.stringify(v))},
   loadSkills():Record<string,string>{return read<Record<string,string>>(SKILLS,{})},
-  saveSkills(v:Record<string,string>){if(typeof window==='undefined')return; localStorage.setItem(SKILLS,JSON.stringify(v))}
+  saveSkills(v:Record<string,string>){if(typeof window==='undefined')return; localStorage.setItem(SKILLS,JSON.stringify(v))},
+  loadAssessments():Assessment[]{return read<Assessment[]>(ASSESSMENTS,[])},
+  saveAssessments(v:Assessment[]){if(typeof window==='undefined')return; localStorage.setItem(ASSESSMENTS,JSON.stringify(v))},
+  loadProgressions():Record<string,string>{return read<Record<string,string>>(PROGRESSIONS,{})},
+  saveProgressions(v:Record<string,string>){if(typeof window==='undefined')return; localStorage.setItem(PROGRESSIONS,JSON.stringify(v))}
 };
