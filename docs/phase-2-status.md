@@ -11,6 +11,7 @@ Phase 2 is branched from `phase-1-adaptive-training-coach` so work can proceed w
 - #45 ended-early workout status: source fix implemented on Phase 1 and carried into Phase 2; verification pending.
 - #46 live pain/discomfort flag: source fix implemented on Phase 1 and carried into Phase 2; verification pending.
 - #47 wake-lock: Screen Wake Lock API baseline implemented with feature detection and graceful fallback; browser/device verification pending.
+- #49 Phase 2 is behind the latest Phase 1 head and must be reconciled before merge-readiness.
 
 ## Phase 2 implementation
 
@@ -47,18 +48,22 @@ Phase 2 is branched from `phase-1-adaptive-training-coach` so work can proceed w
 - [x] Capability assessment entry for pull-ups, hangs, ankle mobility, balance, and jump (#35/#37 baseline)
 - [x] Capability map reads latest assessment and measurable change over time (#37 baseline)
 - [x] Recovery-aware athletic plan with low-volume power, balance, and carry/locomotion work (#35)
+- [x] Benchmark-driven balance/jump progression requiring repeated comparable improvement before advancing (#35)
+- [x] Athletic progression is held when readiness is reduced and remains explicitly reversible (#35)
+- [x] Normalized primary-lift strength trend based on per-exercise estimated strength change without mixing exercise variants (#37)
+- [x] Cardio coverage normalized to weekly equivalent-minute target (#37)
+- [x] Periodic capability-assessment due workflow with configurable retest interval (#37)
+- [x] Longitudinal capability panel showing strength trend, cardio coverage, repeated lifts, and due assessments (#37)
 - [x] Adaptive rolling schedule baseline (#38; ended-early state supported in source)
 - [x] Deficit-aware minimum-effective-day planning baseline (#39)
 - [x] Normal, travel, return-to-training, and maintenance life modes baseline (#40)
 - [x] Interactive life-mode/time selector and suggested-work completion flow (#39/#40)
-- [ ] Power/balance automatic progression rules tied to repeated benchmark evidence (#35)
-- [ ] Capability map strength/cardio normalization and periodic assessment workflow (#37)
-- [ ] Broader rolling-schedule QA and interaction with life modes (#38)
-- [ ] Verification of all source-level tests/build/PWA/browser behaviours
+- [ ] Broader rolling-schedule QA and interaction with life modes (#38/#40)
+- [ ] Verification of all source-level tests/typecheck/build/PWA/browser behaviour
 
 ## Verification rule
 
-New Phase 2 helpers have unit-test coverage in source, but tests have not been executed in this connector session. Do not mark implementation verified until typecheck/tests/build and representative browser QA pass.
+Phase 2 helpers have unit-test coverage in source, but tests have not been executed in this connector session. Do not mark implementation verified until typecheck/tests/build and representative browser QA pass.
 
 ## Design rule
 
@@ -66,7 +71,7 @@ Capability domains are not combined into a universal medical health score. Each 
 
 ## Next implementation order
 
-1. Tie power/balance progression to repeatable benchmark evidence (#35).
-2. Add normalized strength/cardio trend summaries and periodic-assessment workflow (#37).
-3. Exercise the rolling schedule against travel/return/maintenance scenarios (#38/#40).
-4. Run Phase 1/2 typecheck, tests, production build, PWA/offline QA, and representative mobile/tablet/desktop browser QA before either PR is merge-ready.
+1. Exercise the rolling schedule against travel/return/maintenance scenarios (#38/#40).
+2. Reconcile Phase 2 with the latest verified Phase 1 head (#49) without losing either branch's fixes.
+3. Run Phase 1/2 typecheck, tests, production build, PWA/offline QA, and representative mobile/tablet/desktop browser QA before either PR is merge-ready.
+4. Only after verification, decide whether Phase 2 is ready to leave draft and whether Phase 1/2 should be merged; do not deploy without explicit approval.
