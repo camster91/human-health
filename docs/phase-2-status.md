@@ -55,10 +55,11 @@ Phase 2 is branched from `phase-1-adaptive-training-coach` so work can proceed w
 - [x] Periodic capability-assessment due workflow with configurable retest interval (#37)
 - [x] Longitudinal capability panel showing strength trend, cardio coverage, repeated lifts, and due assessments (#37)
 - [x] Adaptive rolling schedule baseline (#38; ended-early state supported in source)
+- [x] Rolling schedule source coverage for normal, travel, return-to-training, and maintenance modes (#38/#40)
+- [x] Travel and return modes preserve rolling position while pausing automatic progression; maintenance avoids catch-up behaviour (#38/#40)
 - [x] Deficit-aware minimum-effective-day planning baseline (#39)
 - [x] Normal, travel, return-to-training, and maintenance life modes baseline (#40)
 - [x] Interactive life-mode/time selector and suggested-work completion flow (#39/#40)
-- [ ] Broader rolling-schedule QA and interaction with life modes (#38/#40)
 - [ ] Verification of all source-level tests/typecheck/build/PWA/browser behaviour
 
 ## Verification rule
@@ -71,7 +72,7 @@ Capability domains are not combined into a universal medical health score. Each 
 
 ## Next implementation order
 
-1. Exercise the rolling schedule against travel/return/maintenance scenarios (#38/#40).
-2. Reconcile Phase 2 with the latest verified Phase 1 head (#49) without losing either branch's fixes.
-3. Run Phase 1/2 typecheck, tests, production build, PWA/offline QA, and representative mobile/tablet/desktop browser QA before either PR is merge-ready.
+1. Reconcile Phase 2 with the latest verified Phase 1 head (#49) without losing either branch's fixes.
+2. Run Phase 1/2 typecheck, tests, production build, PWA/offline QA, and representative mobile/tablet/desktop browser QA before either PR is merge-ready.
+3. Fix any verification defects and repeat the gate until clean.
 4. Only after verification, decide whether Phase 2 is ready to leave draft and whether Phase 1/2 should be merged; do not deploy without explicit approval.
