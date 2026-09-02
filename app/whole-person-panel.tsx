@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { store } from '@/lib/storage';
-import { ActivityDose, Assessment, CapabilityDomain, ReadinessInput, assessmentTrend, capabilityMetrics, cardioEquivalentMinutes, cardioPrescription, latestAssessment, minimumEffectiveOptions, progressionTracks, readinessDecision, skillTrees, targetProgress, weeklyMinutes, weeklyTargets } from '@/lib/whole-person';
+import { ActivityDose, Assessment, CapabilityDomain, ReadinessInput, assessmentTrend, athleticPlan, capabilityMetrics, cardioEquivalentMinutes, cardioOptions, cardioPrescription, latestAssessment, minimumEffectiveOptions, progressionTracks, readinessDecision, readinessTrend, skillTrees, targetProgress, weeklyTargets } from '@/lib/whole-person';
 
 function recent(d:ActivityDose){return Date.now()-new Date(d.completedAt).getTime()<=7*24*60*60*1000}
 
@@ -9,17 +9,20 @@ export function TodayWholePerson({strengthSessions}:{strengthSessions:number}){
   const [activity,setActivity]=useState<ActivityDose[]>([]);
   const [readiness,setReadiness]=useState<ReadinessInput>({sleep:'okay',fatigue:'moderate',soreness:'low',stress:'moderate'});
   const [savedReadiness,setSavedReadiness]=useState<ReadinessInput|undefined>();
+  const [readinessRecords,setReadinessRecords]=useState<{recordedAt:string;input:ReadinessInput}[]>([]);
   const [minutes,setMinutes]=useState(20);
   const [effort,setEffort]=useState<'easy'|'moderate'|'hard'>('moderate');
   const [skills,setSkills]=useState<Record<string,string>>({});
   const [progressions,setProgressions]=useState<Record<string,string>>({});
+  const [assessments,setAssessments]=useState<Assessment[]>([]);
 
   useEffect(()=>{
     setActivity(store.loadActivity());
-    const checks=store.loadReadiness();
+    const checks=store.loadReadiness(); setReadinessRecords(checks);
     if(checks.length){setSavedReadiness(checks[checks.length-1].input);setReadiness(checks[checks.length-1].input)}
     setSkills(store.loadSkills());
     setProgressions(store.loadProgressions());
+    setAssessments(store.loadAssessments());
   },[]);
 
   const cardioTarget=weeklyTargets.find(t=>t.domain==='cardio')?.minutes||150;
@@ -27,15 +30,22 @@ export function TodayWholePerson({strengthSessions}:{strengthSessions:number}){
   const quick=minimumEffectiveOptions(10,['mobility','core','bodyweight']);
   const decision=readinessDecision(savedReadiness||{});
   const prescription=cardioPrescription(cardioMinutes,cardioTarget,30);
+  const cardioChoices=cardioOptions(cardioMinutes,cardioTarget,decision.level,30);
+  const recoveryTrend=readinessTrend(readinessRecords);
+  const athletic=athleticPlan(assessments,decision.level);
 
   function saveCheck(){
     const next=[...store.loadReadiness(),{recordedAt:new Date().toISOString(),input:readiness}].slice(-90);
-    store.saveReadiness(next); setSavedReadiness(readiness);
+    store.saveReadiness(next); setReadinessRecords(next); setSavedReadiness(readiness);
   }
 
   function logCardio(){
     const dose:ActivityDose={domain:'cardio',minutes,effort,sessionId:'manual-cardio',completedAt:new Date().toISOString()};
     const next=[...activity,dose]; store.saveActivity(next); setActivity(next);
+  }
+
+  function useCardioChoice(choice:{name:string;minutes:number;effort:'easy'|'moderate'|'hard'}){
+    setMinutes(Math.max(1,choice.minutes)); setEffort(choice.effort);
   }
 
   function logMicro(domain:CapabilityDomain,sessionMinutes:number,sessionId?:string){
@@ -79,17 +89,26 @@ export function TodayWholePerson({strengthSessions}:{strengthSessions:number}){
         <button className="primary" onClick={saveCheck}>Save check-in</button>
       </div>
       <div className="coach-note"><b>{decision.level==='normal'?'Normal training':decision.level==='reduced'?'Reduce optional volume':'Recovery-first'}</b><br/>{decision.reasons.length?decision.reasons.join(' '):'No major recovery constraints are currently recorded.'}</div>
+      <p className="muted"><b>7-day pattern:</b> {recoveryTrend.message} Normal {recoveryTrend.normal} · reduced {recoveryTrend.reduced} · recovery-first {recoveryTrend.recovery}.</p>
     </section>
 
     <section className="card" aria-labelledby="cardio-log-title">
       <h3 id="cardio-log-title">Cardio</h3>
       <p className="muted">Suggested today: {prescription.minutes?`${prescription.minutes} min ${prescription.effort}`:'optional easy work'}.</p>
+      <div className="quick-grid" style={{marginBottom:12}}>{cardioChoices.map(choice=><button key={choice.type} onClick={()=>useCardioChoice(choice)}><b>{choice.name}</b><br/><small>{choice.minutes} min · {choice.effort}</small></button>)}</div>
+      {cardioChoices.map(choice=><p className="muted" key={`${choice.type}-description`}><b>{choice.name}:</b> {choice.description}</p>)}
       <div className="log-box">
         <label>Minutes<input type="number" min="1" max="240" value={minutes} onChange={e=>setMinutes(Math.max(1,Number(e.target.value)))}/></label>
         <label>Effort<select value={effort} onChange={e=>setEffort(e.target.value as typeof effort)}><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
         <button className="primary" onClick={logCardio}>Log cardio</button>
       </div>
       <p className="muted" style={{marginTop:10}}>Hard minutes count as roughly double for planning. This is a training-planning convention, not a medical fitness score.</p>
+    </section>
+
+    <section className="card" aria-labelledby="athletic-title">
+      <h3 id="athletic-title">Athleticism</h3>
+      <p className="muted">Power, balance and practical movement are kept low-volume so they support strength and health instead of becoming extra fatigue.</p>
+      {athletic.map(plan=><div className="history" key={plan.domain}><b>{plan.name}</b><span>{plan.domain}</span><small>{plan.items.join(' · ')} · {plan.reason}</small><button className="link" onClick={()=>logMicro(plan.domain,10,`athletic:${plan.domain}`)}>Mark 10 min done</button></div>)}
     </section>
 
     <section className="card" aria-labelledby="progression-title">
