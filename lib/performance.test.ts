@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { athleticRecommendation, domainDeficits, minimumEffectiveDay, recommendSkillProgression } from './performance';
+import { athleticRecommendation, domainDeficits, minimumEffectiveDay, recentTrainingLoad, recommendSkillProgression } from './performance';
 
 describe('skill progression',()=>{
   it('advances only after two clean passes',()=>{
@@ -36,5 +36,12 @@ describe('whole-person daily planning',()=>{
 describe('athletic planning',()=>{
   it('avoids high-impact power when high impact is not appropriate',()=>{
     expect(athleticRecommendation({highImpactOkay:false}).impact).toBe('low');
+  });
+
+  it('avoids extra power immediately after recent lower-body training',()=>{
+    const history=[{session:'lower-a' as const,status:'completed' as const,completedAt:'2026-09-03T08:00:00Z',exercises:[{id:'squat',name:'Squat',movement:'squat' as const,equipment:['barbell' as const],priority:'primary' as const,repRange:[5,8] as [number,number],sets:4,logs:[{weight:60,reps:6,completedAt:'2026-09-03T08:05:00Z'},{weight:60,reps:6,completedAt:'2026-09-03T08:10:00Z'}]}]}];
+    const load=recentTrainingLoad(history,new Date('2026-09-03T20:00:00Z'));
+    expect(load.lowerBodyRecent).toBe(true);
+    expect(athleticRecommendation({recentLowerBody:load.lowerBodyRecent}).domain).toBe('balance');
   });
 });

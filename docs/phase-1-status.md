@@ -19,12 +19,15 @@ Legend: `implemented` means source is present on the Phase 1 branch. `verified` 
 
 - [x] Today screen — implemented
 - [x] Live workout logging — implemented
-- [x] Rest timer — implemented; wake-lock remains a verification/compatibility follow-up
+- [x] Rest timer — implemented
+- [x] Screen Wake Lock API baseline — implemented with feature detection; browser verification pending
 - [x] Previous-performance comparison — implemented
 - [x] Exercise substitutions — implemented
 - [x] Short-on-time adaptation — implemented
 - [x] Different-gym adaptation — implemented
 - [x] Recovery-aware / low-energy adaptation — implemented baseline
+- [x] Pain/discomfort flag in live set logging — implemented; verification pending (#46)
+- [x] Ended-early status persistence — implemented with backward-compatible history fallback; verification pending (#45)
 - [x] Plate calculator — implemented
 - [x] Progression rules — implemented deterministic baseline
 - [x] PRs / workout history — implemented baseline
@@ -42,6 +45,7 @@ Legend: `implemented` means source is present on the Phase 1 branch. `verified` 
 - [ ] Mobile/tablet/desktop browser QA
 - [ ] Offline/interruption QA
 - [ ] PWA install QA on supported device/browser
-- [ ] Confirm wake-lock behaviour or explicitly ship without it
+- [ ] Confirm Screen Wake Lock behaviour on a supported browser and graceful fallback on an unsupported browser
+- [ ] Verify ended-early state and pain/discomfort guardrail through the live UI
 
-The Phase 1 source implementation is complete on the feature branch, but it must not be called verified or production-ready until this gate passes.
+The Phase 1 source implementation and review fixes are present on the feature branch, but it must not be called verified or production-ready until this gate passes.
