@@ -50,6 +50,7 @@ Phase 2 is branched from `phase-1-adaptive-training-coach` so work can proceed w
 - [x] Recovery-aware athletic plan with low-volume power, balance, and carry/locomotion work (#35)
 - [x] Benchmark-driven balance/jump progression requiring repeated comparable improvement before advancing (#35)
 - [x] Athletic progression is held when readiness is reduced and remains explicitly reversible (#35)
+- [x] Recent lower-body training load is surfaced and suppresses unnecessary high-impact power work for 36 hours (#35)
 - [x] Normalized primary-lift strength trend based on per-exercise estimated strength change without mixing exercise variants (#37)
 - [x] Cardio coverage normalized to weekly equivalent-minute target (#37)
 - [x] Periodic capability-assessment due workflow with configurable retest interval (#37)
@@ -67,7 +68,7 @@ Phase 2 is branched from `phase-1-adaptive-training-coach` so work can proceed w
 
 ## Verification rule
 
-Automated verification is now configured to install dependencies, run TypeScript checking, run unit tests, and build the production app. A passing workflow result has not yet been observed in this connector session, so neither phase should be considered verified. Browser/device QA remains a separate gate even after CI passes.
+Automated verification is configured to install dependencies, run TypeScript checking, run unit tests, and build the production app. A passing workflow result has not yet been observed in this connector session, so neither phase should be considered verified. Browser/device QA remains a separate gate even after CI passes.
 
 ## Design rule
 
