@@ -1,3 +1,4 @@
+import { HistoryEntry } from './domain';
 import { ActivityDose, CapabilityDomain, ReadinessDecision, SkillTree, minimumEffectiveOptions, skillTrees, weeklyTargets } from './whole-person';
 
 export type SkillAssessment={treeId:string;stepId:string;passed:boolean;clean:boolean;pain:boolean;recordedAt:string};
@@ -27,10 +28,21 @@ export const athleticSessions:AthleticSession[]=[
   {id:'movement-carry',name:'Carry + locomotion',domain:'movement',minutes:10,impact:'low',items:['Suitcase carry 3×30 sec/side','Farmer carry 3×30 sec','Backward walk or controlled march 3×30 sec']},
 ];
 
-export function athleticRecommendation(options:{pain?:boolean;lowEnergy?:boolean;highImpactOkay?:boolean}){
+export type RecentTrainingLoad={lowerBodyRecent:boolean;lowerBodySets:number;hoursSinceLower:number|null;message:string};
+export function recentTrainingLoad(history:HistoryEntry[],now=new Date()):RecentTrainingLoad{
+  const lowerSessions=history.filter(h=>h.session.startsWith('lower-')).sort((a,b)=>new Date(b.completedAt).getTime()-new Date(a.completedAt).getTime());
+  const last=lowerSessions[0];
+  if(!last)return {lowerBodyRecent:false,lowerBodySets:0,hoursSinceLower:null,message:'No recent lower-body session is recorded.'};
+  const hours=(now.getTime()-new Date(last.completedAt).getTime())/36e5;
+  const sets=last.exercises.reduce((sum,e)=>sum+e.logs.length,0);
+  const recent=hours>=0&&hours<36;
+  return {lowerBodyRecent:recent,lowerBodySets:sets,hoursSinceLower:Math.max(0,hours),message:recent?`Lower-body training was ${Math.round(hours)} hours ago (${sets} logged sets). Avoid stacking unnecessary high-impact fatigue.`:`Last lower-body session was about ${Math.round(hours)} hours ago.`};
+}
+
+export function athleticRecommendation(options:{pain?:boolean;lowEnergy?:boolean;highImpactOkay?:boolean;recentLowerBody?:boolean}){
   if(options.pain)return athleticSessions.find(s=>s.id==='balance-base')!;
   if(options.lowEnergy)return athleticSessions.find(s=>s.id==='movement-carry')!;
-  if(options.highImpactOkay===false)return athleticSessions.find(s=>s.id==='balance-base')!;
+  if(options.highImpactOkay===false||options.recentLowerBody)return athleticSessions.find(s=>s.id==='balance-base')!;
   return athleticSessions.find(s=>s.id==='power-base')!;
 }
 
