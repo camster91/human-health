@@ -1,0 +1,11 @@
+export type Movement = 'horizontal-push'|'horizontal-pull'|'vertical-push'|'vertical-pull'|'squat'|'hinge'|'single-leg'|'glute'|'calf'|'biceps'|'triceps'|'core';
+export type Equipment = 'barbell'|'rack'|'bench'|'cable'|'bodyweight'|'dumbbell'|'machine';
+export type Exercise = { id:string; name:string; movement:Movement; equipment:Equipment[]; priority:'primary'|'secondary'|'accessory'; repRange:[number,number]; };
+export type SetLog = { reps:number; weight:number; rir?:number; completedAt:string; pain?:boolean; };
+export type WorkoutExercise = Exercise & { sets:number; logs:SetLog[]; originalId?:string };
+export type SessionId = 'upper-a'|'lower-a'|'upper-b'|'lower-b';
+export type WorkoutStatus = 'active'|'completed'|'ended-early';
+export type Workout = { id:string; session:SessionId; startedAt:string; status:WorkoutStatus; gymId:string; exercises:WorkoutExercise[]; };
+export type GymProfile = { id:string; name:string; equipment:Equipment[] };
+export type HistoryEntry = { session:SessionId; completedAt:string; exercises:WorkoutExercise[]; status?:Exclude<WorkoutStatus,'active'> };
+export type AdaptContext = { minutes?:number; gym?:GymProfile; lowEnergy?:boolean; unavailable?:Equipment[] };
