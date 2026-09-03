@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { store } from '@/lib/storage';
 import { athleticRecommendation, LifeMode, minimumEffectiveDay, recommendSkillProgression, SkillAssessment } from '@/lib/performance';
 import { athleticLevelSession, AthleticLevel, recommendAthleticProgression } from '@/lib/athletic-progression';
-import { Assessment, microSessions, readinessDecision, skillTrees } from '@/lib/whole-person';
+import { ActivityDose, Assessment, ReadinessRecord, microSessions, readinessDecision, skillTrees } from '@/lib/whole-person';
 
 export function PerformancePanel(){
   const [mode,setMode]=useState<LifeMode>('normal');
@@ -12,11 +12,18 @@ export function PerformancePanel(){
   const [assessments,setAssessments]=useState<SkillAssessment[]>([]);
   const [capabilityAssessments,setCapabilityAssessments]=useState<Assessment[]>([]);
   const [progressions,setProgressions]=useState<Record<string,string>>({});
-  const [,rerender]=useState(0);
+  const [activity,setActivity]=useState<ActivityDose[]>([]);
+  const [checks,setChecks]=useState<ReadinessRecord[]>([]);
 
-  useEffect(()=>{setSkills(store.loadSkills());setAssessments(store.loadSkillAssessments());setCapabilityAssessments(store.loadAssessments());setProgressions(store.loadProgressions())},[]);
-  const activity=store.loadActivity();
-  const checks=store.loadReadiness();
+  useEffect(()=>{
+    setSkills(store.loadSkills());
+    setAssessments(store.loadSkillAssessments());
+    setCapabilityAssessments(store.loadAssessments());
+    setProgressions(store.loadProgressions());
+    setActivity(store.loadActivity());
+    setChecks(store.loadReadiness());
+  },[]);
+
   const readiness=readinessDecision(checks.at(-1)?.input||{});
   const plan=minimumEffectiveDay({availableMinutes:minutes,activity,readiness,mode});
   const athletic=athleticRecommendation({pain:checks.at(-1)?.input.pain,lowEnergy:readiness.level!=='normal',highImpactOkay:mode!=='return'});
@@ -24,7 +31,8 @@ export function PerformancePanel(){
   function completePlan(){
     const now=new Date().toISOString();
     const doses=plan.sessionIds.flatMap(id=>{const session=microSessions.find(s=>s.id===id);return session?[{domain:session.domain,minutes:session.minutes,effort:'easy' as const,sessionId:`daily:${mode}:${id}`,completedAt:now}]:[]});
-    store.saveActivity([...store.loadActivity(),...doses]);rerender(x=>x+1);
+    const next=[...activity,...doses];
+    store.saveActivity(next);setActivity(next);
   }
 
   function assess(treeId:string,passed:boolean,pain=false){
