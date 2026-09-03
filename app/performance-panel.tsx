@@ -1,11 +1,12 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import { HistoryEntry } from '@/lib/domain';
 import { store } from '@/lib/storage';
-import { athleticRecommendation, LifeMode, minimumEffectiveDay, recommendSkillProgression, SkillAssessment } from '@/lib/performance';
+import { athleticRecommendation, LifeMode, minimumEffectiveDay, recentTrainingLoad, recommendSkillProgression, SkillAssessment } from '@/lib/performance';
 import { athleticLevelSession, AthleticLevel, recommendAthleticProgression } from '@/lib/athletic-progression';
 import { ActivityDose, Assessment, ReadinessRecord, microSessions, readinessDecision, skillTrees } from '@/lib/whole-person';
 
-export function PerformancePanel(){
+export function PerformancePanel({history}:{history:HistoryEntry[]}){
   const [mode,setMode]=useState<LifeMode>('normal');
   const [minutes,setMinutes]=useState(20);
   const [skills,setSkills]=useState<Record<string,string>>({});
@@ -26,7 +27,8 @@ export function PerformancePanel(){
 
   const readiness=readinessDecision(checks.at(-1)?.input||{});
   const plan=minimumEffectiveDay({availableMinutes:minutes,activity,readiness,mode});
-  const athletic=athleticRecommendation({pain:checks.at(-1)?.input.pain,lowEnergy:readiness.level!=='normal',highImpactOkay:mode!=='return'});
+  const load=recentTrainingLoad(history);
+  const athletic=athleticRecommendation({pain:checks.at(-1)?.input.pain,lowEnergy:readiness.level!=='normal',highImpactOkay:mode!=='return',recentLowerBody:load.lowerBodyRecent});
 
   function completePlan(){
     const now=new Date().toISOString();
@@ -79,7 +81,8 @@ export function PerformancePanel(){
     <section className="card" aria-labelledby="athletic-title">
       <h3 id="athletic-title">Athleticism</h3>
       <p className="muted">Power, balance and practical movement are trained in small doses rather than added as random fatigue.</p>
-      <b>{athletic.name} · {athletic.minutes} min</b><p>{athletic.items.join(' · ')}</p><small>{athletic.impact} impact recommendation based on current context.</small>
+      <div className="coach-note"><b>Recent training context</b><br/>{load.message}</div>
+      <b>{athletic.name} · {athletic.minutes} min</b><p>{athletic.items.join(' · ')}</p><small>{athletic.impact} impact recommendation based on current recovery and recent training load.</small>
       {athleticProgressions.map(({metricId,level,decision})=><div className="history" key={metricId} style={{marginTop:14}}><b>{metricId==='jump'?'Jump/power':'Single-leg balance'} · {level}</b><span>{decision.evidenceCount} tests</span><small>{decision.message}</small><p className="muted">Current work: {athleticLevelSession(metricId,level).join(' · ')}</p>{decision.action!=='hold'&&<button className="link" onClick={()=>applyAthletic(metricId,decision.nextLevel)}>Apply {decision.action}: {decision.nextLevel}</button>}</div>)}
     </section>
   </>;
