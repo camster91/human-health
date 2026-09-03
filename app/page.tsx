@@ -12,6 +12,8 @@ import { CapabilityTrendPanel } from './capability-trend-panel';
 
 const title=(s:SessionId)=>s.split('-').map(x=>x[0].toUpperCase()+x.slice(1)).join(' ');
 
+type WakeSentinel={release:()=>Promise<void>;released?:boolean;addEventListener?:(type:'release',listener:()=>void)=>void};
+
 export default function Home(){
   const [history,setHistory]=useState<HistoryEntry[]>([]);
   const [active,setActive]=useState<Workout|null>(null);
@@ -21,17 +23,56 @@ export default function Home(){
   const [now,setNow]=useState(Date.now());
   const [progressionAllowed,setProgressionAllowed]=useState(true);
   const [tab,setTab]=useState<'today'|'progress'|'coach'>('today');
-  useEffect(()=>{setHistory(store.loadHistory());setActive(store.loadActive());const latest=store.loadReadiness().at(-1)?.input;setProgressionAllowed(readinessDecision(latest||{}).allowProgression)},[]);
+  useEffect(()=>{
+    const savedActive=store.loadActive();
+    const savedRest=store.loadRestUntil();
+    setHistory(store.loadHistory());
+    setActive(savedActive);
+    if(savedActive&&savedRest&&savedRest>Date.now())setRestUntil(savedRest);else if(savedRest)store.saveRestUntil(null);
+    const latest=store.loadReadiness().at(-1)?.input;
+    setProgressionAllowed(readinessDecision(latest||{}).allowProgression);
+  },[]);
   useEffect(()=>{if(active)store.saveActive(active)},[active]);
-  useEffect(()=>{if(!restUntil)return;const id=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(id)},[restUntil]);
+  useEffect(()=>{store.saveRestUntil(restUntil)},[restUntil]);
+  useEffect(()=>{
+    if(!restUntil)return;
+    const id=setInterval(()=>{
+      const current=Date.now();
+      setNow(current);
+      if(current>=restUntil)setRestUntil(null);
+    },1000);
+    return()=>clearInterval(id);
+  },[restUntil]);
   useEffect(()=>{
     if(!active || typeof navigator==='undefined' || !('wakeLock' in navigator)) return;
-    let sentinel:{release:()=>Promise<void>;released?:boolean}|null=null;
+    let sentinel:WakeSentinel|null=null;
     let cancelled=false;
-    const request=async()=>{try{const s=await (navigator as Navigator & {wakeLock:{request:(type:'screen')=>Promise<{release:()=>Promise<void>;released?:boolean}>}}).wakeLock.request('screen');if(cancelled)await s.release();else sentinel=s}catch{}};
-    const onVisibility=()=>{if(document.visibilityState==='visible' && !sentinel)void request()};
-    void request(); document.addEventListener('visibilitychange',onVisibility);
-    return()=>{cancelled=true;document.removeEventListener('visibilitychange',onVisibility);if(sentinel&&!sentinel.released)void sentinel.release()};
+    const request=async()=>{
+      if(cancelled||document.visibilityState!=='visible')return;
+      try{
+        const s=await (navigator as Navigator & {wakeLock:{request:(type:'screen')=>Promise<WakeSentinel>}}).wakeLock.request('screen');
+        if(cancelled){await s.release();return;}
+        sentinel=s;
+        s.addEventListener?.('release',()=>{if(sentinel===s)sentinel=null;});
+      }catch{sentinel=null;}
+    };
+    const onVisibility=()=>{
+      if(document.visibilityState==='visible'){
+        if(!sentinel||sentinel.released)void request();
+      }else if(sentinel&&!sentinel.released){
+        const current=sentinel;
+        sentinel=null;
+        void current.release().catch(()=>{});
+      }
+    };
+    void request();
+    document.addEventListener('visibilitychange',onVisibility);
+    return()=>{
+      cancelled=true;
+      document.removeEventListener('visibilitychange',onVisibility);
+      if(sentinel&&!sentinel.released)void sentinel.release().catch(()=>{});
+      sentinel=null;
+    };
   },[active?.id]);
   const rolling=useMemo(()=>nextRollingSession(history),[history]);
   const nextSession=rolling.session;
@@ -48,13 +89,20 @@ export default function Home(){
     const readinessNotes=readiness.level==='normal'?[]:[`Readiness: ${readiness.reasons.join(' ')||'Recovery signals suggest a conservative session.'} Automatic load progression is paused today.`];
     const scheduleNotes=rolling.repeating?[rolling.reason]:[];
     setNotes([...scheduleNotes,...readinessNotes,...adapted.notes]);
+    setRestUntil(null);
     setActive({id:crypto.randomUUID(),session:nextSession,startedAt:new Date().toISOString(),status:'active',gymId:(context.gym||gym).id,exercises:adapted.exercises});
   }
   function logSet(ei:number,reps:number,weight:number,rir=2,pain=false){
-    if(!active)return;const copy=structuredClone(active);copy.exercises[ei].logs.push({reps,weight,rir,pain,completedAt:new Date().toISOString()});setActive(copy);setRestUntil(Date.now()+90000);if(pain)setProgressionAllowed(false);
+    if(!active)return;
+    const copy=structuredClone(active);
+    copy.exercises[ei].logs.push({reps,weight,rir,pain,completedAt:new Date().toISOString()});
+    setActive(copy);
+    setNow(Date.now());
+    setRestUntil(Date.now()+90000);
+    if(pain)setProgressionAllowed(false);
   }
   function swap(ei:number){if(!active)return;const item=active.exercises[ei];const alt=substitutions(item,gym)[0];if(!alt)return;const copy=structuredClone(active);copy.exercises[ei]={...alt,sets:item.sets,logs:[],originalId:item.id};setActive(copy)}
-  function finish(early=false){if(!active)return;const entry:HistoryEntry={session:active.session,completedAt:new Date().toISOString(),status:early?'ended-early':'completed',exercises:active.exercises};const next=[...history,entry];setHistory(next);store.saveHistory(next);store.saveActive(null);setActive(null);setRestUntil(null);setNotes(summarizeWorkout(entry.exercises,history).messages);setTab('coach')}
+  function finish(early=false){if(!active)return;const entry:HistoryEntry={session:active.session,completedAt:new Date().toISOString(),status:early?'ended-early':'completed',exercises:active.exercises};const next=[...history,entry];setHistory(next);store.saveHistory(next);store.saveActive(null);store.saveRestUntil(null);setActive(null);setRestUntil(null);setNotes(summarizeWorkout(entry.exercises,history).messages);setTab('coach')}
   const remaining=restUntil?Math.max(0,Math.ceil((restUntil-now)/1000)):0;
 
   if(active) return <main className="workout-shell"><header className="workout-head"><div><span className="eyebrow">LIVE WORKOUT</span><h1>{title(active.session)}</h1></div><button className="ghost" onClick={()=>finish(true)}>End early</button></header>{notes.length>0&&<div className="coach-note">{notes.join(' ')}</div>}{active.exercises.map((e,ei)=>{const prev=[...history].reverse().flatMap(h=>h.exercises).find(x=>x.id===e.id);const suggestion=progressionAllowed?nextLoadRecommendation(e,prev):{action:'hold',message:'Progression is paused for this session. Keep load conservative and use clean reps; reassess next time.'};const last=e.logs[e.logs.length-1];return <section className="exercise" key={`${e.id}-${ei}`}><div className="exercise-title"><div><span className="pill">{e.priority}</span><h2>{e.name}</h2><p>{e.sets} sets · {e.repRange[0]}–{e.repRange[1]} reps</p></div><button className="link" onClick={()=>swap(ei)}>Swap</button></div>{prev&&<div className="previous">Previous: {prev.logs.map(x=>`${x.weight}kg × ${x.reps}`).join(' · ')||'No logged sets'}</div>}<div className="set-grid">{Array.from({length:e.sets}).map((_,i)=><div className={i<e.logs.length?'set done':'set'} key={i}><b>Set {i+1}</b><span>{e.logs[i]?`${e.logs[i].weight} kg × ${e.logs[i].reps}${e.logs[i].pain?' · discomfort flagged':''}`:'Ready'}</span></div>)}</div>{e.logs.length<e.sets&&<SetEntry defaultWeight={last?.weight||prev?.logs.at(-1)?.weight||20} defaultReps={e.repRange[0]} onLog={(r,w,rir,pain)=>logSet(ei,r,w,rir,pain)} />}{e.equipment.includes('barbell')&&<PlateHelper target={last?.weight||prev?.logs.at(-1)?.weight||20}/>}<div className="coach-mini">Coach: {suggestion.message}</div></section>})}{restUntil&&<div className="rest-dock"><b>Rest</b><span>{remaining>0?`${Math.floor(remaining/60)}:${String(remaining%60).padStart(2,'0')}`:'Ready'}</span><button onClick={()=>setRestUntil(null)}>Skip</button></div>}<button className="primary finish" onClick={()=>finish(false)}>Finish workout</button></main>;
