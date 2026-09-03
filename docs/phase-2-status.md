@@ -60,11 +60,14 @@ Phase 2 is branched from `phase-1-adaptive-training-coach` so work can proceed w
 - [x] Deficit-aware minimum-effective-day planning baseline (#39)
 - [x] Normal, travel, return-to-training, and maintenance life modes baseline (#40)
 - [x] Interactive life-mode/time selector and suggested-work completion flow (#39/#40)
-- [ ] Verification of all source-level tests/typecheck/build/PWA/browser behaviour
+- [x] Client-side performance planning now hydrates activity/readiness state after mount to avoid direct localStorage-derived render mismatches
+- [x] Automated verification workflow added to both Phase 1 and Phase 2 feature branches
+- [ ] Verification workflow result observed and reviewed
+- [ ] Verification of PWA/offline and representative browser/device behaviour
 
 ## Verification rule
 
-Phase 2 helpers have unit-test coverage in source, but tests have not been executed in this connector session. Do not mark implementation verified until typecheck/tests/build and representative browser QA pass.
+Automated verification is now configured to install dependencies, run TypeScript checking, run unit tests, and build the production app. A passing workflow result has not yet been observed in this connector session, so neither phase should be considered verified. Browser/device QA remains a separate gate even after CI passes.
 
 ## Design rule
 
@@ -72,7 +75,8 @@ Capability domains are not combined into a universal medical health score. Each 
 
 ## Next implementation order
 
-1. Reconcile Phase 2 with the latest verified Phase 1 head (#49) without losing either branch's fixes.
-2. Run Phase 1/2 typecheck, tests, production build, PWA/offline QA, and representative mobile/tablet/desktop browser QA before either PR is merge-ready.
-3. Fix any verification defects and repeat the gate until clean.
-4. Only after verification, decide whether Phase 2 is ready to leave draft and whether Phase 1/2 should be merged; do not deploy without explicit approval.
+1. Observe the automated verification result and fix any typecheck/test/build failures.
+2. Reconcile Phase 2 with the latest verified Phase 1 head (#49) without losing either branch's fixes.
+3. Run PWA/offline QA and representative mobile/tablet/desktop browser QA.
+4. Repeat the verification gate after branch reconciliation.
+5. Only after verification, decide whether Phase 2 is ready to leave draft and whether Phase 1/2 should be merged; do not deploy without explicit approval.
