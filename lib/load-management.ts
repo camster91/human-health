@@ -1,21 +1,23 @@
-import { HistoryEntry } from './domain';
-import { CardioOption } from './whole-person';
+import { HistoryEntry, SessionId } from './domain';
+import { ActivityDose, CardioOption } from './whole-person';
 
-export type RecentTrainingLoad={lowerSets:number;upperSets:number;hoursSinceLower:number|null;hoursSinceAny:number|null};
+export type RecentTrainingLoad={lowerSets:number;upperSets:number;hoursSinceLower:number|null;hoursSinceAny:number|null;hardCardioMinutes:number;hoursSinceHardCardio:number|null};
 
-export function recentTrainingLoad(history:HistoryEntry[],now=new Date()):RecentTrainingLoad{
-  const result:RecentTrainingLoad={lowerSets:0,upperSets:0,hoursSinceLower:null,hoursSinceAny:null};
+export function recentTrainingLoad(history:HistoryEntry[],activity:ActivityDose[]=[],now=new Date()):RecentTrainingLoad{
+  const result:RecentTrainingLoad={lowerSets:0,upperSets:0,hoursSinceLower:null,hoursSinceAny:null,hardCardioMinutes:0,hoursSinceHardCardio:null};
   const completed=[...history].filter(h=>(h.status||'completed')==='completed').sort((a,b)=>new Date(b.completedAt).getTime()-new Date(a.completedAt).getTime());
-  if(!completed.length)return result;
-  result.hoursSinceAny=(now.getTime()-new Date(completed[0].completedAt).getTime())/36e5;
+  if(completed.length)result.hoursSinceAny=(now.getTime()-new Date(completed[0].completedAt).getTime())/36e5;
   for(const entry of completed){
     const hours=(now.getTime()-new Date(entry.completedAt).getTime())/36e5;
     if(hours>48)continue;
     const sets=entry.exercises.reduce((sum,e)=>sum+e.logs.length,0);
-    if(entry.session.startsWith('lower')){
-      result.lowerSets+=sets;
-      if(result.hoursSinceLower===null||hours<result.hoursSinceLower)result.hoursSinceLower=hours;
-    }else result.upperSets+=sets;
+    if(entry.session.startsWith('lower')){result.lowerSets+=sets;if(result.hoursSinceLower===null||hours<result.hoursSinceLower)result.hoursSinceLower=hours}else result.upperSets+=sets;
+  }
+  for(const dose of activity.filter(a=>a.domain==='cardio'&&a.effort==='hard')){
+    const hours=(now.getTime()-new Date(dose.completedAt).getTime())/36e5;
+    if(hours<0||hours>36)continue;
+    result.hardCardioMinutes+=dose.minutes||0;
+    if(result.hoursSinceHardCardio===null||hours<result.hoursSinceHardCardio)result.hoursSinceHardCardio=hours;
   }
   return result;
 }
@@ -30,5 +32,15 @@ export function coordinateCardio(options:CardioOption[],load:RecentTrainingLoad,
 export function powerAllowed(load:RecentTrainingLoad,readiness:'normal'|'reduced'|'recovery'){
   if(readiness!=='normal')return {allowed:false,reason:'Recovery/readiness is not normal, so explosive work stays low impact.'};
   if(load.hoursSinceLower!==null&&load.hoursSinceLower<36&&load.lowerSets>=6)return {allowed:false,reason:`${load.lowerSets} lower-body sets were logged within the last 36 hours; avoid stacking extra jump fatigue.`};
-  return {allowed:true,reason:'No recent lower-body load or recovery signal currently requires power work to be deferred.'};
+  if(load.hoursSinceHardCardio!==null&&load.hoursSinceHardCardio<24&&load.hardCardioMinutes>=15)return {allowed:false,reason:`${load.hardCardioMinutes} hard cardio minutes were logged within the last 24 hours; keep athletic work low impact today.`};
+  return {allowed:true,reason:'No recent lower-body or hard-cardio load currently requires power work to be deferred.'};
+}
+
+export function strengthLoadAdjustment(session:SessionId,load:RecentTrainingLoad,readiness:'normal'|'reduced'|'recovery'){
+  if(readiness==='recovery')return {reduce:true,pauseProgression:true,reason:'Recovery-first readiness overrides normal strength progression.'};
+  if(session.startsWith('lower')&&load.hoursSinceHardCardio!==null&&load.hoursSinceHardCardio<24&&load.hardCardioMinutes>=20){
+    return {reduce:true,pauseProgression:true,reason:`Recent hard cardio (${load.hardCardioMinutes} min) may add lower-body fatigue. Keep the lower session conservative and do not force progression.`};
+  }
+  if(readiness==='reduced')return {reduce:true,pauseProgression:true,reason:'Readiness is reduced; trim optional volume and hold load progression.'};
+  return {reduce:false,pauseProgression:false,reason:'Current recent workload does not require an automatic strength reduction.'};
 }
