@@ -2,42 +2,34 @@
 
 Phase 2 expands Human Health from an adaptive strength coach into a whole-person fitness system while keeping recommendations measurable, explainable, and reversible.
 
-## Dependency note
-Phase 2 is branched from `phase-1-adaptive-training-coach`. Phase 1 PR #44 remains draft and must pass verification independently. #49 tracks reconciliation with the latest Phase 1 head before merge-readiness.
+## Source scope status: COMPLETE
+All planned Phase 2 product capabilities are implemented in source. Remaining work is verification/integration, not unimplemented Phase 2 feature scope.
 
-## Implemented in source
+## Implemented
 - [x] Whole-person domains: strength, cardio, mobility, core, bodyweight, balance, power, movement, recovery, consistency
-- [x] Upper/lower adaptive workout backbone, substitutions, gym profiles, time/energy adaptation, rolling schedule
-- [x] Readiness checks, seven-day trend, pain/illness guardrails, reduced/recovery modes
-- [x] Cardio equivalent minutes, weekly target, easy/steady/interval choices
-- [x] Cross-domain fatigue coordination: demanding lower-body work within 36 hours removes hard intervals and suppresses extra jump/power fatigue
-- [x] Core and upper/lower mobility progression tracks
-- [x] Pull-up/push-up assessment-driven progression; pain blocks advancement
-- [x] Athletic power/balance/carry programming and benchmark-driven progression
-- [x] Capability assessments and longitudinal strength/cardio trend views
-- [x] Periodic retest workflow
-- [x] Normal, travel, return-to-training, maintenance, and minimum-effective-day planning
-- [x] Recent lower-body workload is visible in coaching rationale rather than silently changing recommendations
-- [x] Source-level tests cover load coordination, readiness, cardio choices, skill progression, athletic progression, capability trends, and rolling scheduling
-- [x] Verification workflow files exist on Phase 1/2 branches
+- [x] Adaptive Upper/Lower backbone, rolling schedule, time/energy changes, gym profiles and exercise substitution
+- [x] Readiness/recovery checks, seven-day trend, pain/illness guardrails
+- [x] Cardio weekly targets, equivalent minutes, steady/recovery/interval programming
+- [x] Cross-domain fatigue coordination across lower-body strength, hard cardio and power work
+- [x] Core progression and upper/lower mobility progression
+- [x] Bodyweight skill trees for pull-ups, chin-ups, push-ups, dips and hangs with assessment-driven advancement/regression
+- [x] Athletic power, balance, carry/locomotion work and benchmark-driven progression
+- [x] Capability map, normalized strength/cardio trends and periodic assessments
+- [x] Normal, travel, return-to-training and maintenance modes
+- [x] Minimum-effective-day planning
+- [x] Explanations and user overrides remain visible; automatic changes do not rewrite historical records
+- [x] Source tests cover core Phase 2 engines
 
-## Still blocked / awaiting verification
-- [ ] #51: observe a real GitHub Actions typecheck/test/build run; Actions currently reports no runs
-- [ ] #49: reconcile Phase 2 with the latest verified Phase 1 head
-- [ ] PWA/offline behaviour QA
-- [ ] Representative mobile/tablet/desktop browser QA
-- [ ] Screen Wake Lock real-device/browser verification
+## Verification/integration blockers
+- [ ] #51 obtain a real typecheck + unit-test + production-build run; GitHub currently reports no Actions run for the Phase 2 head
+- [ ] #49 reconcile the Phase 2 branch with the latest verified Phase 1 head
+- [ ] rerun verification after reconciliation
+- [ ] PWA/offline QA
+- [ ] representative mobile/tablet/desktop browser QA
+- [ ] Screen Wake Lock browser/device QA
 
-## Verification rule
-Do not call either phase verified or merge-ready until typecheck, unit tests, production build, PWA/offline QA, and representative browser QA pass after branch reconciliation.
+## Definition of Phase 2 finished
+Phase 2 is **source-complete but not verified complete**. It becomes fully complete only when the verification/integration blockers above pass. Do not mark PR #48 ready, merge, or deploy solely because feature scope is complete.
 
-## Design and safety rule
+## Safety rule
 Capability domains remain independently measurable rather than being collapsed into a universal medical health score. Recovery and pain signals constrain training recommendations but do not diagnose conditions or prescribe medication.
-
-## Next implementation order
-1. Continue tightening cross-domain workload coordination and recovery-aware recommendations while CI is blocked.
-2. Resolve #51 and inspect the first actual verification result.
-3. Reconcile Phase 2 with verified Phase 1 (#49).
-4. Repeat CI after reconciliation.
-5. Complete PWA/browser/device QA.
-6. Only then decide whether PRs leave draft; deployment remains a separate explicit approval.
