@@ -8,17 +8,18 @@ export function sourceStatesFromObservations(observations: HealthObservation[], 
   return [...groups.entries()].map(([sourceId, values]) => {
     const prior = existing.get(sourceId);
     const latestImport = values.map(item => item.provenance.importedAt).sort().at(-1) || new Date().toISOString();
+    const metrics = [...new Set([...(prior?.supportedMetrics || []), ...values.map(item => item.metric)])];
     return {
       id: sourceId,
       provider: values[0].provenance.provider,
       displayName: values[0].provenance.sourceName,
       status: 'current' as const,
-      supportedMetrics: [...new Set(values.map(item => item.metric))],
-      grantedMetrics: [...new Set(values.map(item => item.metric))],
+      supportedMetrics: metrics,
+      grantedMetrics: metrics,
       staleAfterMs: prior?.staleAfterMs || 365 * 24 * 3_600_000,
       lastAttemptAt: latestImport,
       lastSuccessAt: latestImport,
-      recordCount: (prior?.recordCount || 0) + values.length,
+      recordCount: prior?.recordCount || 0,
     };
   });
 }
@@ -26,6 +27,12 @@ export function sourceStatesFromObservations(observations: HealthObservation[], 
 export async function saveImportedSourceStates(observations: HealthObservation[]) {
   const previous = await healthRepository.listSources();
   const states = sourceStatesFromObservations(observations, previous);
-  await Promise.all(states.map(state => healthRepository.saveSource(state)));
-  return states;
+  const saved: HealthSourceState[] = [];
+  for (const state of states) {
+    const actualCount = (await healthRepository.listObservations({ sourceId: state.id })).length;
+    const next = { ...state, recordCount: actualCount };
+    await healthRepository.saveSource(next);
+    saved.push(next);
+  }
+  return saved;
 }
