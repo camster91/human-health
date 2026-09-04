@@ -1,6 +1,6 @@
 # Phase 4 final source review — Coaching intelligence
 
-PR: pending
+PR: #80
 Base: `main`
 Branch: `phase-4-coaching-intelligence`
 Tracking: #77; verification #78; runner #51
@@ -60,7 +60,7 @@ The optional `window.HumanHealthCoachAI` adapter is narrative-only. The request 
 - the safety boundary
 - explicit rules prohibiting action changes, confidence upgrades, diagnosis, medication/insulin/carb dosing and universal health scoring
 
-No provider is bundled with credentials. Deterministic explanations remain available without AI.
+No provider is bundled with credentials. Deterministic explanations remain available without AI. Source tests also preserve the snapshot before and after an injected narrative provider call to demonstrate that narrative generation does not mutate deterministic actions or evidence.
 
 ## Movement/video review
 
@@ -69,6 +69,8 @@ Camera/video analysis is not enabled. The reliability gate requires explicit rev
 ## UX/PWA review
 
 A dedicated `/coach/` route presents next actions, evidence, plateau/deload review, multi-goal planning, conversational adaptation, explanation-layer status and the movement/video gate. The global quick-route control exposes Coach and Health outside the focused live-workout screen. `/coach/` is included in the service-worker precache and static PWA check expectations.
+
+The existing compact Coach tab in the training shell remains a session-note surface; the advanced Phase 4 coaching experience is the dedicated `/coach/` route. This avoids a risky wholesale rewrite of the mature live-workout shell during the coaching phase.
 
 ## Source-review risks / limits
 
@@ -81,4 +83,4 @@ A dedicated `/coach/` route presents next actions, evidence, plateau/deload revi
 
 ## Merge/deploy gate
 
-Keep the Phase 4 PR draft and unmerged until the source review is accepted and Cameron explicitly approves merge. Production deployment remains a separate approval and verification decision.
+Keep PR #80 draft and unmerged until Cameron explicitly approves merge. Production deployment remains a separate approval and verification decision.
