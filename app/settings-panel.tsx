@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Equipment, GymProfile, SessionId } from '@/lib/domain';
 import { DomainPriority, UserPreferences } from '@/lib/preferences';
 import { store } from '@/lib/storage';
@@ -27,9 +27,22 @@ export function SettingsPanel({
   onDataCleared: () => void;
 }) {
   const [notice, setNotice] = useState('');
+  const [platesText, setPlatesText] = useState(preferences.availablePlatesKg.join(', '));
+  useEffect(() => { setPlatesText(preferences.availablePlatesKg.join(', ')); }, [preferences.availablePlatesKg]);
 
   function update(patch: Partial<UserPreferences>) {
     onChange({ ...preferences, ...patch });
+  }
+
+  function savePlates() {
+    const plates = [...new Set(platesText.split(',').map(value => Number(value.trim())).filter(value => Number.isFinite(value) && value > 0))].sort((a, b) => b - a);
+    if (!plates.length) {
+      setNotice('Enter at least one positive metric plate denomination, such as 20, 10, 5, 2.5, 1.25.');
+      return;
+    }
+    update({ availablePlatesKg: plates });
+    setPlatesText(plates.join(', '));
+    setNotice('Plate denominations saved. Physical plate-pair quantities are not modelled in Phase 2.');
   }
 
   async function toggleNotifications() {
@@ -88,7 +101,7 @@ export function SettingsPanel({
         <label><b>Units</b><select value={preferences.unitSystem} onChange={event => update({ unitSystem: event.target.value as UserPreferences['unitSystem'] })}><option value="metric">Metric</option><option value="imperial">Imperial display</option></select></label>
         <label><b>Next session override</b><select value={preferences.nextSessionOverride || ''} onChange={event => update({ nextSessionOverride: (event.target.value || null) as SessionId | null })}><option value="">Use rolling recommendation</option>{sessions.map(session => <option key={session} value={session}>{label(session)}</option>)}</select></label>
         <label><b>Bar weight (kg)</b><input type="number" min="0" max="50" step="0.5" value={preferences.plateBarKg} onChange={event => update({ plateBarKg: Number(event.target.value) })}/></label>
-        <label><b>Available plate sizes (kg)</b><input value={preferences.availablePlatesKg.join(', ')} onChange={event => update({ availablePlatesKg: event.target.value.split(',').map(Number).filter(value => Number.isFinite(value) && value > 0) })}/><small>Comma-separated denominations; quantities are not tracked in Phase 2.</small></label>
+        <label><b>Available plate sizes (kg)</b><input value={platesText} onChange={event => setPlatesText(event.target.value)} onBlur={savePlates}/><small>Comma-separated denominations. Use Save plate sizes or leave the field to apply them.</small><button type="button" className="link" onClick={savePlates}>Save plate sizes</button></label>
       </div>
       <div className="toggle-grid">
         <button className={preferences.highImpactAllowed ? 'active' : ''} aria-pressed={preferences.highImpactAllowed} onClick={() => update({ highImpactAllowed: !preferences.highImpactAllowed })}>High-impact work {preferences.highImpactAllowed ? 'allowed' : 'disabled'}</button>
