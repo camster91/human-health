@@ -101,6 +101,8 @@ export type GymProfile = {
 };
 
 export type HistoryEntry = {
+  /** Stable id of the active workout that produced this history entry. Legacy entries may omit it. */
+  workoutId?: string;
   session: SessionId;
   completedAt: string;
   startedAt?: string;
