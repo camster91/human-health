@@ -59,7 +59,7 @@ Status: merged into `main`; executable/browser/native validation remains separat
 
 ## Phase 4 — Coaching intelligence
 
-Status: source implementation is on `phase-4-coaching-intelligence`; review/verification remain separate gates.
+Status: merged into `main`; release verification remains separately tracked in #78/#51.
 
 1. Explainable trend detection with evidence/confidence/insufficient-data states
 2. Plateau/regression detection and conservative advisory deload logic
@@ -71,12 +71,14 @@ Status: source implementation is on `phase-4-coaching-intelligence`; review/veri
 
 ## Phase 5 — Long-horizon health platform
 
-1. Preventive-health reminders and records where appropriate
-2. Clinician-friendly export where useful
-3. Validated capability models
-4. Privacy-preserving personal models
-5. API/integration platform
-6. Regulatory review checkpoints as product scope evolves
+Status: source implementation is complete and under review on `phase-5-health-platform`. Executable/runtime verification and external validation evidence remain separate gates.
+
+1. User/clinician-entered preventive-health reminders and records without invented clinical schedules
+2. Clinician-friendly local discussion export with provenance and explicit non-diagnostic framing
+3. Capability-model validation registry and evidence claim gate; current built-in models remain experimental until real external validation/replication evidence is recorded
+4. Privacy-preserving deterministic personal baselines generated on-device with no automatic sharing
+5. Versioned scoped integration bundle plus optional explicit user-triggered integration-host contract
+6. Regulatory escalation checkpoints as intended use and product scope evolve
 
 ## Delivery principles
 
@@ -88,4 +90,5 @@ Status: source implementation is on `phase-4-coaching-intelligence`; review/veri
 - Never silently treat two exercise loads as equivalent across different equipment.
 - Safety and recovery override progression.
 - Do not turn fitness coaching into medical diagnosis, medication dosing, or injury clearance.
+- Do not call algorithms clinically validated without appropriate evidence for the recorded intended use.
 - Review the 5–10 year roadmap annually; do not treat speculative future features as fixed commitments.
