@@ -21,12 +21,14 @@ export function CoachingPanel() {
   const [message, setMessage] = useState('');
   const [aiExplanation, setAiExplanation] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState(false);
 
   useEffect(() => {
     setHistory(store.loadHistory());
     setActivity(store.loadActivity());
     setReadiness(store.loadReadiness());
     setPreferences(store.loadPreferences());
+    setAiAvailable(Boolean(getCoachExplanationProvider()));
   }, []);
 
   const connectedSignals = useMemo(() => connectedHealthTrends(connected.observations, connected.sources, connected.preferences).map(item => ({
@@ -45,9 +47,9 @@ export function CoachingPanel() {
   const interpretation = useMemo(() => interpretCoachMessage(message, gyms), [message]);
   const conversationPreview = useMemo(() => previewConversationPlan({ interpretation, history, activity, readiness, preferences }), [interpretation, history, activity, readiness, preferences]);
   const videoGate = movementVideoGate();
-  const aiAvailable = typeof window !== 'undefined' && Boolean(getCoachExplanationProvider());
 
   async function explainWithAI() {
+    if (!window.confirm('Send the displayed coaching actions and evidence summaries to the optional AI explanation provider? The provider may be external to this browser depending on the host integration.')) return;
     setAiBusy(true);
     try { setAiExplanation(await requestAIExplanation(snapshot)); }
     catch (error) { setAiExplanation(error instanceof Error ? error.message : 'AI explanation failed.'); }
@@ -103,7 +105,7 @@ export function CoachingPanel() {
     <section className="card" aria-labelledby="explanation-title">
       <span className="eyebrow">EXPLANATION LAYER</span><h2 id="explanation-title">Deterministic recommendation first</h2>
       <pre className="coach-explanation">{deterministicExplanation(snapshot)}</pre>
-      <p className="muted">An optional AI provider may rewrite this into clearer prose, but the provider receives fixed actions, evidence and safety rules and cannot change the underlying recommendation.</p>
+      <p className="muted">An optional AI provider may rewrite this into clearer prose. If you request it, the displayed coaching actions and evidence summaries are passed to that provider; depending on the host integration, the provider may be external. It receives fixed actions and safety rules and cannot change the underlying deterministic recommendation.</p>
       <button className="ghost" disabled={!aiAvailable || aiBusy} onClick={() => void explainWithAI()}>{aiBusy ? 'Explaining…' : aiAvailable ? 'Generate optional AI explanation' : 'AI explanation provider not connected'}</button>
       {aiExplanation && <div className="coach-note"><b>Optional AI narrative</b><br/>{aiExplanation}</div>}
     </section>
