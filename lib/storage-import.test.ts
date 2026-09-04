@@ -77,6 +77,27 @@ describe('training archive validation and rollback', () => {
     expect(() => validateTrainingExport(badPreference)).toThrow(/unknown domain/i);
   });
 
+  it('normalizes empty legacy optional strings instead of rejecting an otherwise valid archive', () => {
+    const archive = store.exportData() as any;
+    archive.history = [historyFixture()];
+    archive.history[0].gymId = '  work  ';
+    archive.history[0].exercises[0].logs[0].note = '   ';
+    archive.readiness = [{ recordedAt: new Date().toISOString(), input: {}, sourceName: '' }];
+    archive.assessments = [{ metricId: 'single-leg-balance', value: 20, recordedAt: new Date().toISOString(), note: '' }];
+    archive.skillAssessments = [{
+      treeId: 'pull-up', stepId: 'assisted', passed: false, clean: true, pain: false,
+      recordedAt: new Date().toISOString(), metric: 'reps', value: 3, variation: '', note: '',
+    }];
+
+    const validated = validateTrainingExport(archive);
+    expect(validated.history[0].gymId).toBe('work');
+    expect(validated.history[0].exercises[0].logs[0].note).toBeUndefined();
+    expect(validated.readiness[0].sourceName).toBeUndefined();
+    expect(validated.assessments[0].note).toBeUndefined();
+    expect(validated.skillAssessments[0].variation).toBeUndefined();
+    expect(validated.skillAssessments[0].note).toBeUndefined();
+  });
+
   it('rejects materially future-dated imported evidence before any mutation', () => {
     const archive = store.exportData() as any;
     archive.activity = [{ domain: 'cardio', minutes: 30, effort: 'moderate', kind: 'planned', completedAt: new Date(Date.now() + 60 * 60_000).toISOString() }];
