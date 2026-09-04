@@ -10,5 +10,7 @@ export * from './sync';
 export * from './events';
 export * from './habits';
 export * from './summary';
+export * from './portability';
 export * from './import/apple-health-xml';
 export * from './import/canonical-json';
+export * from './import/source-state';

@@ -22,37 +22,22 @@ const STORAGE_PROBE = `${PREFIX}storage-probe`;
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
-  try {
-    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)) as T;
-  } catch {
-    return fallback;
-  }
+  try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)) as T; } catch { return fallback; }
 }
 
 function write(key: string, value: unknown) {
   if (typeof window === 'undefined') return false;
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch {
-    return false;
-  }
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; }
 }
 
 function remove(key: string) {
   if (typeof window === 'undefined') return;
-  try { localStorage.removeItem(key); } catch { /* storage can be unavailable */ }
+  try { localStorage.removeItem(key); } catch { /* browser storage can be unavailable */ }
 }
 
 function canPersist() {
   if (typeof window === 'undefined') return false;
-  try {
-    localStorage.setItem(STORAGE_PROBE, '1');
-    localStorage.removeItem(STORAGE_PROBE);
-    return true;
-  } catch {
-    return false;
-  }
+  try { localStorage.setItem(STORAGE_PROBE, '1'); localStorage.removeItem(STORAGE_PROBE); return true; } catch { return false; }
 }
 
 function activeWorkout(value: unknown): Workout | null {
@@ -78,6 +63,40 @@ export type HumanHealthExport = {
   preferences: UserPreferences;
   scheduleEvents: ScheduleEvent[];
 };
+
+export function validateTrainingExport(value: unknown): HumanHealthExport {
+  if (!value || typeof value !== 'object') throw new Error('Training archive is not an object.');
+  const candidate = value as Partial<HumanHealthExport>;
+  if (candidate.schemaVersion !== 2) throw new Error('Unsupported training archive version.');
+  const arrays: (keyof HumanHealthExport)[] = ['history', 'activity', 'readiness', 'assessments', 'skillAssessments', 'scheduleEvents'];
+  for (const key of arrays) if (!Array.isArray(candidate[key])) throw new Error(`Training archive field ${String(key)} is invalid.`);
+  if (!candidate.skills || typeof candidate.skills !== 'object' || Array.isArray(candidate.skills)) throw new Error('Training skills are invalid.');
+  if (!candidate.progressions || typeof candidate.progressions !== 'object' || Array.isArray(candidate.progressions)) throw new Error('Training progressions are invalid.');
+  const active = candidate.activeWorkout === null ? null : activeWorkout(candidate.activeWorkout);
+  if (candidate.activeWorkout && !active) throw new Error('Imported active workout is invalid.');
+  return {
+    schemaVersion: 2,
+    exportedAt: typeof candidate.exportedAt === 'string' ? candidate.exportedAt : new Date().toISOString(),
+    activeWorkout: active,
+    restTimer: sanitizeRestTimer(candidate.restTimer) || null,
+    history: candidate.history as HistoryEntry[],
+    activity: candidate.activity as ActivityDose[],
+    readiness: candidate.readiness as { recordedAt: string; input: ReadinessInput }[],
+    skills: candidate.skills as Record<string, string>,
+    assessments: candidate.assessments as Assessment[],
+    progressions: candidate.progressions as Record<string, string>,
+    skillAssessments: candidate.skillAssessments as SkillAssessment[],
+    preferences: normalizePreferences(candidate.preferences || defaultPreferences),
+    scheduleEvents: candidate.scheduleEvents as ScheduleEvent[],
+  };
+}
+
+function mergeUnique<T>(current: T[], incoming: T[], key: (value: T) => string) {
+  const values = new Map<string, T>();
+  incoming.forEach(value => values.set(key(value), value));
+  current.forEach(value => values.set(key(value), value));
+  return [...values.values()];
+}
 
 export const store = {
   canPersist,
@@ -137,6 +156,41 @@ export const store = {
       preferences: store.loadPreferences(),
       scheduleEvents: store.loadScheduleEvents(),
     };
+  },
+
+  importData(value: unknown, mode: 'merge' | 'replace' = 'merge') {
+    const incoming = validateTrainingExport(value);
+    const current = store.exportData();
+    const next = mode === 'replace' ? incoming : {
+      ...current,
+      activeWorkout: current.activeWorkout || incoming.activeWorkout,
+      restTimer: current.activeWorkout ? current.restTimer : incoming.restTimer,
+      history: mergeUnique(current.history, incoming.history, item => `${item.completedAt}|${item.session}|${item.status || 'completed'}`),
+      activity: mergeUnique(current.activity, incoming.activity, item => `${item.completedAt}|${item.domain}|${item.sessionId || ''}|${item.minutes || ''}|${item.sets || ''}|${item.source || ''}`),
+      readiness: mergeUnique(current.readiness, incoming.readiness, item => item.recordedAt),
+      skills: { ...incoming.skills, ...current.skills },
+      assessments: mergeUnique(current.assessments, incoming.assessments, item => `${item.metricId}|${item.recordedAt}`),
+      progressions: { ...incoming.progressions, ...current.progressions },
+      skillAssessments: mergeUnique(current.skillAssessments, incoming.skillAssessments, item => `${item.treeId}|${item.stepId}|${item.recordedAt}`),
+      preferences: current.preferences,
+      scheduleEvents: mergeUnique(current.scheduleEvents, incoming.scheduleEvents, item => `${item.recordedAt}|${item.type}|${item.from}|${item.to}`),
+    } satisfies HumanHealthExport;
+    if (mode === 'replace') store.clearAll();
+    const writes = [
+      store.saveActive(next.activeWorkout),
+      store.saveRestTimer(next.activeWorkout ? next.restTimer : null),
+      store.saveHistory(next.history),
+      store.saveActivity(next.activity),
+      store.saveReadiness(next.readiness),
+      store.saveSkills(next.skills),
+      store.saveAssessments(next.assessments),
+      store.saveProgressions(next.progressions),
+      store.saveSkillAssessments(next.skillAssessments),
+      store.savePreferences(next.preferences),
+      store.saveScheduleEvents(next.scheduleEvents),
+    ];
+    if (writes.some(result => !result)) throw new Error('The browser could not persist the complete training archive.');
+    return next;
   },
 
   clearAll() {
