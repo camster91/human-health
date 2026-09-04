@@ -1,9 +1,12 @@
 import { convertToCanonical } from '../metrics';
 import { observationId, stableHash } from '../merge';
 import { ConnectedMetric, HealthObservation } from '../types';
+import type { ImportedSourceSummary } from './source-state';
 
 export type AppleHealthImportReport = {
   observations: HealthObservation[];
+  importedCount: number;
+  sourceSummaries: ImportedSourceSummary[];
   parsedTags: number;
   skippedTags: number;
   unsupportedTypes: Record<string, number>;
@@ -21,6 +24,10 @@ const quantityTypes: Record<string, ConnectedMetric> = {
   HKQuantityTypeIdentifierDietaryProtein: 'protein',
   HKQuantityTypeIdentifierDietaryFiber: 'fibre',
 };
+
+function newReport(): AppleHealthImportReport {
+  return { observations: [], importedCount: 0, sourceSummaries: [], parsedTags: 0, skippedTags: 0, unsupportedTypes: {}, warnings: [] };
+}
 
 function decodeXml(value: string) {
   return value.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
@@ -145,6 +152,24 @@ function tagObservations(tagName: string, rawAttributes: string, importedAt: str
   return { observations: observation ? [observation] : [], supported: true, invalid: !observation, type };
 }
 
+function recordSummary(report: AppleHealthImportReport, observations: HealthObservation[]) {
+  report.importedCount += observations.length;
+  const summaries = new Map(report.sourceSummaries.map(summary => [summary.sourceId, summary]));
+  for (const observation of observations) {
+    const current = summaries.get(observation.sourceId);
+    const metrics = new Set([...(current?.metrics || []), observation.metric]);
+    summaries.set(observation.sourceId, {
+      sourceId: observation.sourceId,
+      provider: observation.provenance.provider,
+      displayName: observation.provenance.sourceName,
+      importedAt: current && current.importedAt > observation.provenance.importedAt ? current.importedAt : observation.provenance.importedAt,
+      metrics: [...metrics],
+      count: (current?.count || 0) + 1,
+    });
+  }
+  report.sourceSummaries = [...summaries.values()];
+}
+
 function parseCompleteXmlFragment(fragment: string, importedAt: string, report: AppleHealthImportReport, batch: HealthObservation[]) {
   const pattern = /<(Record|Workout)\b([^>]*)>/g;
   let match: RegExpExecArray | null;
@@ -156,12 +181,13 @@ function parseCompleteXmlFragment(fragment: string, importedAt: string, report: 
       continue;
     }
     if (parsed.invalid) report.skippedTags++;
+    recordSummary(report, parsed.observations);
     batch.push(...parsed.observations);
   }
 }
 
 export function parseAppleHealthXmlText(text: string, importedAt = new Date().toISOString()): AppleHealthImportReport {
-  const report: AppleHealthImportReport = { observations: [], parsedTags: 0, skippedTags: 0, unsupportedTypes: {}, warnings: [] };
+  const report = newReport();
   parseCompleteXmlFragment(text, importedAt, report, report.observations);
   return report;
 }
@@ -169,29 +195,28 @@ export function parseAppleHealthXmlText(text: string, importedAt = new Date().to
 export async function importAppleHealthXmlFile(
   file: File,
   onBatch: (observations: HealthObservation[]) => Promise<void> | void,
-  options: { batchSize?: number; onProgress?: (parsedTags: number) => void } = {},
+  options: { batchSize?: number; onProgress?: (parsedTags: number) => void; collectObservations?: boolean } = {},
 ): Promise<AppleHealthImportReport> {
   const importedAt = new Date().toISOString();
   const batchSize = Math.max(50, options.batchSize || 500);
-  const report: AppleHealthImportReport = { observations: [], parsedTags: 0, skippedTags: 0, unsupportedTypes: {}, warnings: [] };
+  const report = newReport();
   let buffer = '';
   let pending: HealthObservation[] = [];
+  const deliver = async (current: HealthObservation[]) => {
+    if (!current.length) return;
+    await onBatch(current);
+    if (options.collectObservations) report.observations.push(...current);
+  };
   const flush = async () => {
-    if (!pending.length) return;
     const current = pending;
     pending = [];
-    await onBatch(current);
-    report.observations.push(...current);
+    await deliver(current);
   };
   const process = async (fragment: string) => {
     const parsed: HealthObservation[] = [];
     parseCompleteXmlFragment(fragment, importedAt, report, parsed);
     pending.push(...parsed);
-    while (pending.length >= batchSize) {
-      const current = pending.splice(0, batchSize);
-      await onBatch(current);
-      report.observations.push(...current);
-    }
+    while (pending.length >= batchSize) await deliver(pending.splice(0, batchSize));
     options.onProgress?.(report.parsedTags);
   };
 
