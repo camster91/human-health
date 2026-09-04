@@ -95,6 +95,46 @@ async function writeRepositoryState(observations: HealthObservation[], sources: 
   notifyConnectedHealthUpdated();
 }
 
+function rawString(value: unknown, key: string) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const candidate = (value as Record<string, unknown>)[key];
+  return typeof candidate === 'string' && candidate.trim() ? candidate : undefined;
+}
+
+export function storedRowBelongsToSource(value: unknown, sourceId: string) {
+  const rowSourceId = rawString(value, 'sourceId');
+  if (rowSourceId === sourceId) return true;
+  const id = rawString(value, 'id');
+  return Boolean(id?.startsWith(`${sourceId}:`));
+}
+
+export function normalizeStoredObservationRows(values: unknown[], sourceId?: string) {
+  const observations: HealthObservation[] = [];
+  let invalidCount = 0;
+  const invalidSourceIds = new Set<string>();
+
+  for (const raw of values) {
+    const rawSourceId = rawString(raw, 'sourceId');
+    if (sourceId && rawSourceId && rawSourceId !== sourceId && !storedRowBelongsToSource(raw, sourceId)) continue;
+    const normalized = normalizeObservation(raw as HealthObservation);
+    if (!normalized) {
+      if (!sourceId || !rawSourceId || rawSourceId === sourceId || storedRowBelongsToSource(raw, sourceId)) {
+        invalidCount++;
+        if (rawSourceId) invalidSourceIds.add(rawSourceId);
+      }
+      continue;
+    }
+    if (!sourceId || normalized.sourceId === sourceId) observations.push(normalized);
+  }
+
+  return { observations, invalidCount, invalidSourceIds: [...invalidSourceIds].sort() };
+}
+
+function corruptRowsError(invalidCount: number, sourceIds: string[]) {
+  const sources = sourceIds.length ? ` Affected source IDs: ${sourceIds.join(', ')}.` : ' At least one invalid row has no trustworthy source ownership.';
+  return new Error(`Connected-health storage contains ${invalidCount} invalid observation row${invalidCount === 1 ? '' : 's'}. Invalid rows were not used as health context or exported.${sources} Delete the affected source or use complete local-data deletion before relying on connected-health summaries.`);
+}
+
 function observationIsNewer(current: HealthObservation, candidate: HealthObservation) {
   const currentVersion = current.provenance.externalVersion;
   const candidateVersion = candidate.provenance.externalVersion;
@@ -108,9 +148,13 @@ async function existingByIds(ids: string[]) {
   const transaction = database.transaction(OBSERVATIONS, 'readonly');
   const done = transactionDone(transaction);
   const store = transaction.objectStore(OBSERVATIONS);
-  const values = await Promise.all(ids.map(id => request(store.get(id)) as Promise<HealthObservation | undefined>));
+  const values = await Promise.all(ids.map(id => request(store.get(id)) as Promise<unknown>));
   await done;
-  return new Map(values.filter(Boolean).map(value => [value!.id, value!]));
+  const normalized = values.flatMap(value => {
+    const observation = normalizeObservation(value as HealthObservation);
+    return observation ? [observation] : [];
+  });
+  return new Map(normalized.map(value => [value.id, value]));
 }
 
 async function deleteObservationIds(ids: string[]) {
@@ -129,11 +173,17 @@ export const healthRepository = {
   },
 
   async listObservations(query: { metrics?: ConnectedMetric[]; sourceId?: string; startTime?: string; endTime?: string } = {}) {
-    const values = await getAll<HealthObservation>(OBSERVATIONS);
+    const rawValues = await getAll<unknown>(OBSERVATIONS);
+    const { observations, invalidCount, invalidSourceIds } = normalizeStoredObservationRows(rawValues, query.sourceId);
+    if (invalidCount) throw corruptRowsError(invalidCount, invalidSourceIds);
+
     const start = query.startTime ? Date.parse(query.startTime) : Number.NEGATIVE_INFINITY;
     const end = query.endTime ? Date.parse(query.endTime) : Number.POSITIVE_INFINITY;
-    return values
-      .filter(item => (!query.metrics || query.metrics.includes(item.metric)) && (!query.sourceId || item.sourceId === query.sourceId) && Date.parse(item.startTime) <= end && Date.parse(item.endTime || item.startTime) >= start)
+    if ((query.startTime && !Number.isFinite(start)) || (query.endTime && !Number.isFinite(end))) throw new Error('Connected-health observation query contains an invalid time boundary.');
+    if (start > end) throw new Error('Connected-health observation query start time is after its end time.');
+
+    return observations
+      .filter(item => (!query.metrics || query.metrics.includes(item.metric)) && Date.parse(item.startTime) <= end && Date.parse(item.endTime || item.startTime) >= start)
       .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime) || a.id.localeCompare(b.id));
   },
 
@@ -205,12 +255,17 @@ export const healthRepository = {
   },
 
   async deleteSource(sourceId: string) {
-    const observations = await healthRepository.listObservations({ sourceId });
+    const rawObservations = await getAll<unknown>(OBSERVATIONS);
+    const ids = rawObservations.flatMap(value => {
+      if (!storedRowBelongsToSource(value, sourceId)) return [];
+      const id = rawString(value, 'id');
+      return id ? [id] : [];
+    });
     const database = await openDatabase();
     const transaction = database.transaction([OBSERVATIONS, SOURCES], 'readwrite');
     const done = transactionDone(transaction);
     const observationStore = transaction.objectStore(OBSERVATIONS);
-    observations.forEach(item => observationStore.delete(item.id));
+    ids.forEach(id => observationStore.delete(id));
     transaction.objectStore(SOURCES).delete(sourceId);
     await done;
     notifyConnectedHealthUpdated();
