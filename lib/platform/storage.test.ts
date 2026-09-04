@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { platformStore } from './storage';
+import { platformStore, validatePlatformData } from './storage';
 
 class MemoryStorage {
   private values = new Map<string, string>();
@@ -8,24 +8,51 @@ class MemoryStorage {
   removeItem(key: string) { this.values.delete(key); }
 }
 
+function withMemoryStorage(run: (memory: MemoryStorage) => void) {
+  const previousWindow = (globalThis as { window?: unknown }).window;
+  const previousStorage = (globalThis as { localStorage?: unknown }).localStorage;
+  const memory = new MemoryStorage();
+  Object.defineProperty(globalThis, 'window', { value: globalThis, configurable: true });
+  Object.defineProperty(globalThis, 'localStorage', { value: memory, configurable: true });
+  try { run(memory); }
+  finally {
+    Object.defineProperty(globalThis, 'window', { value: previousWindow, configurable: true });
+    Object.defineProperty(globalThis, 'localStorage', { value: previousStorage, configurable: true });
+  }
+}
+
 describe('Phase 5 local platform storage', () => {
-  it('persists and deletes preventive records/reminders locally', () => {
-    const previousWindow = (globalThis as { window?: unknown }).window;
-    const previousStorage = (globalThis as { localStorage?: unknown }).localStorage;
-    const memory = new MemoryStorage();
-    Object.defineProperty(globalThis, 'window', { value: globalThis, configurable: true });
-    Object.defineProperty(globalThis, 'localStorage', { value: memory, configurable: true });
-    try {
-      platformStore.clear();
-      const recordData = platformStore.addRecord({ id: 'r1', title: 'Dental cleaning', category: 'dental', occurredAt: '2026-09-01T12:00:00Z', source: 'manual', createdAt: '2026-09-01T12:00:00Z' });
-      expect(recordData.records).toHaveLength(1);
-      const reminderData = platformStore.addReminder({ id: 'm1', title: 'Follow-up', category: 'checkup', dueOn: '2026-10-01', source: 'clinician-provided', enabled: true, createdAt: '2026-09-01T12:00:00Z' });
-      expect(reminderData.reminders).toHaveLength(1);
-      expect(platformStore.removeRecord('r1').records).toHaveLength(0);
-      expect(platformStore.removeReminder('m1').reminders).toHaveLength(0);
-    } finally {
-      Object.defineProperty(globalThis, 'window', { value: previousWindow, configurable: true });
-      Object.defineProperty(globalThis, 'localStorage', { value: previousStorage, configurable: true });
-    }
+  it('persists and deletes preventive records/reminders locally', () => withMemoryStorage(() => {
+    platformStore.clear();
+    const recordData = platformStore.addRecord({ id: 'r1', title: 'Dental cleaning', category: 'dental', occurredAt: '2026-09-01T12:00:00Z', source: 'manual', createdAt: '2026-09-01T12:00:00Z' });
+    expect(recordData.records).toHaveLength(1);
+    const reminderData = platformStore.addReminder({ id: 'm1', title: 'Follow-up', category: 'checkup', dueOn: '2026-10-01', provider: 'Clinic', source: 'clinician-provided', enabled: true, createdAt: '2026-09-01T12:00:00Z' });
+    expect(reminderData.reminders).toHaveLength(1);
+    expect(platformStore.removeRecord('r1').records).toHaveLength(0);
+    expect(platformStore.removeReminder('m1').reminders).toHaveLength(0);
+  }));
+
+  it('completes a reminder atomically and preserves clinician provenance', () => withMemoryStorage(() => {
+    platformStore.clear();
+    platformStore.addReminder({ id: 'm1', title: 'Follow-up', category: 'checkup', dueOn: '2026-10-01', repeatMonths: 6, provider: 'Clinic A', source: 'clinician-provided', enabled: true, createdAt: '2026-09-01T12:00:00Z' });
+    const next = platformStore.completeReminder('m1', new Date('2026-10-01T12:00:00Z'));
+    expect(next.records).toHaveLength(1);
+    expect(next.records[0].provider).toBe('Clinic A');
+    expect(next.records[0].source).toBe('clinician-provided');
+    expect(next.reminders).toHaveLength(1);
+    expect(next.reminders[0].dueOn).toBe('2027-04-01');
+  }));
+
+  it('supports strict replace/merge archive import and current local values win id conflicts', () => withMemoryStorage(() => {
+    platformStore.clear();
+    platformStore.addRecord({ id: 'same', title: 'Current title', category: 'other', occurredAt: '2026-09-01T12:00:00Z', source: 'manual', createdAt: '2026-09-01T12:00:00Z' });
+    const incoming = { schemaVersion: 1 as const, records: [{ id: 'same', title: 'Imported title', category: 'other' as const, occurredAt: '2026-08-01T12:00:00Z', source: 'manual' as const, createdAt: '2026-08-01T12:00:00Z' }], reminders: [] };
+    expect(platformStore.importData(incoming, 'merge').records[0].title).toBe('Current title');
+    expect(platformStore.importData(incoming, 'replace').records[0].title).toBe('Imported title');
+  }));
+
+  it('rejects malformed archives instead of coercing them', () => {
+    expect(() => validatePlatformData({ schemaVersion: 2, records: [], reminders: [] })).toThrow('Unsupported platform archive version');
+    expect(() => validatePlatformData({ schemaVersion: 1, records: [{ id: 'bad' }], reminders: [] })).toThrow();
   });
 });
