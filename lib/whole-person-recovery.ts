@@ -23,7 +23,7 @@ export function readinessDecision(input: ReadinessInput): ReadinessDecision {
   if (input.soreness === 'high') reasons.push('Soreness is high.');
   if (input.stress === 'high') reasons.push('Stress is high.');
   if (typeof input.subjective === 'number' && input.subjective <= 2) reasons.push('Subjective readiness is low.');
-  if (input.pain || input.illness) return { level: 'recovery', volumeMultiplier: 0.5, allowProgression: false, reasons };
+  if (input.pain || input.illness) return { level: 'recovery', volumeMultiplier: 0, allowProgression: false, reasons };
   const strain = [
     input.sleep === 'poor' || (typeof input.sleepHours === 'number' && input.sleepHours < 6),
     input.fatigue === 'high',
@@ -105,7 +105,7 @@ export type CardioSessionType = 'recovery' | 'steady' | 'intervals' | 'finisher'
 export type CardioOption = { type: CardioSessionType; name: string; minutes: number; effort: 'easy' | 'moderate' | 'hard'; description: string };
 export function cardioOptions(equivalent: number, target = 150, readiness: 'normal' | 'reduced' | 'recovery' = 'normal', available = 30): CardioOption[] {
   const remaining = Math.max(0, target - equivalent);
-  if (readiness === 'recovery') return [{ type: 'recovery', name: 'Recovery aerobic', minutes: Math.min(20, available), effort: 'easy', description: 'Easy conversational movement only.' }];
+  if (readiness === 'recovery') return [];
   const options: CardioOption[] = [
     { type: 'recovery', name: 'Easy aerobic', minutes: Math.min(25, available), effort: 'easy', description: 'Low-fatigue walking, cycling, rowing, or incline treadmill.' },
     { type: 'steady', name: 'Steady aerobic', minutes: Math.min(Math.max(10, Math.min(40, remaining || 30)), available), effort: 'moderate', description: 'Continuous work that builds weekly aerobic volume.' },
@@ -114,7 +114,8 @@ export function cardioOptions(equivalent: number, target = 150, readiness: 'norm
   if (readiness === 'normal' && available >= 15) options.push({ type: 'intervals', name: 'Short intervals', minutes: Math.min(20, available), effort: 'hard', description: 'Brief harder efforts with generous recovery.' });
   return options;
 }
-export function cardioPrescription(equivalent: number, target = 150, available = 30) {
+export function cardioPrescription(equivalent: number, target = 150, available = 30, readiness: 'normal' | 'reduced' | 'recovery' = 'normal') {
+  if (readiness === 'recovery') return { minutes: 0, effort: 'easy' as const, message: 'Pain or illness was flagged, so Human Health pauses automatic cardio suggestions. The app cannot determine whether exercise is safe or provide medical clearance.' };
   const remaining = Math.max(0, target - equivalent);
   if (!remaining) return { minutes: 0, effort: 'easy' as const, message: 'Weekly aerobic target is covered. Optional easy cardio can be used for enjoyment or recovery.' };
   const minutes = Math.min(available, Math.max(10, Math.min(40, remaining)));

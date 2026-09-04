@@ -13,7 +13,7 @@ export const coreSessions: CoreSession[] = [
 
 export function corePrescription(options: { session?: SessionId; equipment: Equipment[]; readiness: 'normal' | 'reduced' | 'recovery'; recentLowerBody?: boolean }): CoreSession[] {
   const available = coreSessions.filter(item => item.equipment.every(equipment => options.equipment.includes(equipment)));
-  if (options.readiness === 'recovery') return available.filter(item => item.fatigue === 'low').slice(0, 1);
+  if (options.readiness === 'recovery') return [];
   const avoidHipFlexion = options.recentLowerBody || options.session?.startsWith('lower');
   const preferred: CorePattern[] = options.session?.startsWith('upper')
     ? ['anti-extension', 'lateral-stability', 'carry', 'anti-rotation', 'flexion-hip-flexion']

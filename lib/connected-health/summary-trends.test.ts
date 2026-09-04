@@ -20,6 +20,17 @@ describe('connected-health summaries', () => {
     expect(summary.stepsToday.sourceName).toBe('Watch');
   });
 
+  it('uses the supplied summary clock instead of the machine clock for future evidence', () => {
+    const observations = [
+      makeObservation('resting-heart-rate', 60, { sourceId: 'watch', startTime: '2026-09-03T10:00:00Z', recordedAt: '2026-09-03T10:00:00Z' }),
+      makeObservation('resting-heart-rate', 95, { sourceId: 'watch', startTime: '2026-09-04T10:00:00Z', recordedAt: '2026-09-04T10:00:00Z', externalId: 'future-rhr' }),
+    ];
+    const source = makeSource('watch', { displayName: 'Watch', supportedMetrics: ['resting-heart-rate'], grantedMetrics: ['resting-heart-rate'], lastSuccessAt: '2026-09-03T12:00:00Z' });
+    const summary = summarizeConnectedHealth(observations, [source], defaultConnectedHealthPreferences, now);
+    expect(summary.restingHeartRate.value).toBe(60);
+    expect(summary.restingHeartRate.recordedAt).toBe('2026-09-03T10:00:00Z');
+  });
+
   it('summarizes detailed sleep stages without double-counting a general asleep record', () => {
     const observations = [
       makeObservation('sleep-stage', 480, { sourceId: 'sleep', startTime: '2026-09-02T22:00:00Z', endTime: '2026-09-03T06:00:00Z', recordedAt: '2026-09-03T06:00:00Z', tags: { stage: 'asleep' } }),
@@ -77,5 +88,24 @@ describe('connected-health trends', () => {
     expect(trend.currentAverage).toBeGreaterThan(trend.previousAverage || 0);
     expect(trend.direction).toBe('up');
     expect(connectedHealthTrends(observations, [source], defaultConnectedHealthPreferences, now)).toHaveLength(4);
+  });
+
+  it('excludes samples whose recorded timestamp is materially in the future', () => {
+    const now = new Date('2026-09-15T12:00:00Z');
+    const observations = Array.from({ length: 14 }, (_, index) => {
+      const date = new Date(now.getTime() - index * 86_400_000);
+      return makeObservation('steps', 1_000, { sourceId: 'watch', startTime: date.toISOString(), recordedAt: date.toISOString(), externalId: `stable-${index}` });
+    });
+    observations.push(makeObservation('steps', 100_000, {
+      sourceId: 'watch',
+      startTime: '2026-09-15T10:00:00Z',
+      recordedAt: '2026-09-16T10:00:00Z',
+      externalId: 'future-recorded',
+    }));
+    const source = makeSource('watch', { lastSuccessAt: now.toISOString(), staleAfterMs: 48 * 3_600_000 });
+    const trend = metricTrend(observations, [source], defaultConnectedHealthPreferences, 'steps', { now });
+    expect(trend.currentAverage).toBe(1_000);
+    expect(trend.previousAverage).toBe(1_000);
+    expect(trend.direction).toBe('stable');
   });
 });

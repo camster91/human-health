@@ -14,17 +14,18 @@ import {
   createFullHealthArchive,
   createHealthConnectAdapter,
   createManualObservation,
+  deleteConnectedHealthSource,
   disconnectAdapter,
   downloadJson,
   habitMetrics,
   habitTarget,
   healthRepository,
-  importAppleHealthXmlFile,
+  importAppleHealthXmlRecoverably,
   metricDefinitions,
+  observationFreshness,
   parseConnectedJson,
   refreshAdapterState,
   saveImportedSourceStates,
-  saveImportedSourceSummaries,
   sourceFreshness,
   syncAdapter,
 } from '@/lib/connected-health';
@@ -166,9 +167,10 @@ export function ConnectedHealthPanel() {
   async function deleteSource(sourceId: string, adapter?: HealthDataAdapter) {
     if (!window.confirm('Delete every connected-health observation stored from this source? Other sources and training history will remain.')) return;
     await run(`delete:${sourceId}`, async () => {
-      await adapter?.disconnect?.();
-      await healthRepository.deleteSource(sourceId);
-      return 'The selected source and its locally stored observations were deleted.';
+      const result = await deleteConnectedHealthSource(sourceId, adapter);
+      return result.disconnectWarning
+        ? `The selected source and its locally stored observations were deleted. The native/provider disconnect did not complete: ${result.disconnectWarning}`
+        : 'The selected source and its locally stored observations were deleted.';
     });
   }
 
@@ -177,12 +179,9 @@ export function ConnectedHealthPanel() {
     event.target.value = '';
     if (!file) return;
     await run('apple-import', async () => {
-      const report = await importAppleHealthXmlFile(file, async batch => {
-        const groups = new Map<string, HealthObservation[]>();
-        batch.forEach(observation => groups.set(observation.sourceId, [...(groups.get(observation.sourceId) || []), observation]));
-        for (const [sourceId, observations] of groups) await healthRepository.upsertBatch(sourceId, { observations, deletedExternalIds: [], complete: true });
-      }, { onProgress: parsedTags => { if (parsedTags > 0 && parsedTags % 5_000 === 0) setMessage(`Processed ${parsedTags.toLocaleString()} Apple Health record tags locally…`); } });
-      await saveImportedSourceSummaries(report.sourceSummaries);
+      const report = await importAppleHealthXmlRecoverably(file, {
+        onProgress: parsedTags => { if (parsedTags > 0 && parsedTags % 5_000 === 0) setMessage(`Processed ${parsedTags.toLocaleString()} Apple Health record tags locally…`); },
+      });
       return `Imported ${report.importedCount.toLocaleString()} supported Apple Health observations without retaining the complete parsed file in memory. ${report.warnings.join(' ')}`.trim();
     });
   }
@@ -236,7 +235,14 @@ export function ConnectedHealthPanel() {
     'fruit-vegetable-servings': snapshot.summary.fruitVegetablesToday,
     'meal-quality': snapshot.summary.mealQualityToday,
   };
-  const recent = [...snapshot.observations].sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt)).slice(0, 25);
+  const now = new Date();
+  const recent = snapshot.observations
+    .filter(observation => {
+      const freshness = observationFreshness(observation, now);
+      return freshness !== 'future' && freshness !== 'invalid';
+    })
+    .sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt))
+    .slice(0, 25);
   const workoutHeartRate = snapshot.summary.workoutHeartRate;
 
   return <>
@@ -270,7 +276,7 @@ export function ConnectedHealthPanel() {
 
     <section className="card" aria-labelledby="import-title">
       <h2 id="import-title">Private file import</h2>
-      <p className="muted">Files are parsed locally in the browser. Apple Health XML is processed in chunks and unsupported record types are reported rather than guessed.</p>
+      <p className="muted">Files are parsed locally in the browser. Apple Health XML is processed in chunks and unsupported record types are reported rather than guessed. If a streamed import fails after writing a batch, touched Apple Health sources are restored to their pre-import state before the failure is reported.</p>
       <div className="import-grid">
         <label className="file-button"><b>Import Apple Health XML</b><span>Choose export.xml</span><input type="file" accept=".xml,text/xml,application/xml" disabled={Boolean(busy)} onChange={event => void importApple(event)}/></label>
         <label className="file-button"><b>Import connected-health JSON</b><span>Merge a Human Health connected export</span><input type="file" accept=".json,application/json" disabled={Boolean(busy)} onChange={event => void importConnectedJson(event)}/></label>
@@ -305,7 +311,7 @@ export function ConnectedHealthPanel() {
 
     <section className="card" aria-labelledby="provenance-title">
       <h2 id="provenance-title">Recent observations and provenance</h2>
-      {recent.length === 0 ? <p>No connected-health observations have been imported or recorded yet.</p> : recent.map(observation => <details className="observation-detail" key={observation.id}><summary><span>{metricDefinitions[observation.metric].label}</span><b>{observationValue(observation)}</b><small>{observation.provenance.sourceName} · {formatDate(observation.recordedAt)}</small></summary><dl><div><dt>Provider</dt><dd>{title(observation.provenance.provider)}</dd></div><div><dt>Ingestion</dt><dd>{title(observation.provenance.ingestionMethod)}</dd></div><div><dt>Original type</dt><dd>{observation.provenance.originalType}</dd></div><div><dt>Original unit</dt><dd>{observation.provenance.originalUnit || 'Not supplied'}</dd></div><div><dt>Device</dt><dd>{observation.provenance.device || 'Not supplied'}</dd></div><div><dt>External ID</dt><dd>{observation.provenance.externalId}</dd></div><div><dt>Quality</dt><dd>{title(observation.quality)}</dd></div><div><dt>Time range</dt><dd>{formatDate(observation.startTime)}{observation.endTime ? ` → ${formatDate(observation.endTime)}` : ''}</dd></div></dl></details>)}
+      {recent.length === 0 ? <p>No current or historical connected-health observations have been imported or recorded yet.</p> : recent.map(observation => <details className="observation-detail" key={observation.id}><summary><span>{metricDefinitions[observation.metric].label}</span><b>{observationValue(observation)}</b><small>{observation.provenance.sourceName} · {formatDate(observation.recordedAt)}</small></summary><dl><div><dt>Provider</dt><dd>{title(observation.provenance.provider)}</dd></div><div><dt>Ingestion</dt><dd>{title(observation.provenance.ingestionMethod)}</dd></div><div><dt>Original type</dt><dd>{observation.provenance.originalType}</dd></div><div><dt>Original unit</dt><dd>{observation.provenance.originalUnit || 'Not supplied'}</dd></div><div><dt>Device</dt><dd>{observation.provenance.device || 'Not supplied'}</dd></div><div><dt>External ID</dt><dd>{observation.provenance.externalId}</dd></div><div><dt>Quality</dt><dd>{title(observation.quality)}</dd></div><div><dt>Time range</dt><dd>{formatDate(observation.startTime)}{observation.endTime ? ` → ${formatDate(observation.endTime)}` : ''}</dd></div></dl></details>)}
     </section>
   </>;
 }

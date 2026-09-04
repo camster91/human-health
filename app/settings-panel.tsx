@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { clearAllHumanHealthData, createFullHealthArchive, downloadJson } from '@/lib/connected-health';
 import { Equipment, GymProfile, SessionId } from '@/lib/domain';
 import { DomainPriority, UserPreferences } from '@/lib/preferences';
-import { store } from '@/lib/storage';
 import { CapabilityDomain } from '@/lib/whole-person';
 
 const domains: CapabilityDomain[] = ['strength', 'cardio', 'mobility', 'core', 'bodyweight', 'balance', 'power', 'movement', 'recovery', 'consistency'];
@@ -13,6 +13,11 @@ const sessions: SessionId[] = ['upper-a', 'lower-a', 'upper-b', 'lower-b'];
 
 function label(value: string) {
   return value.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+}
+
+function isFailureNotice(value: string) {
+  const message = value.toLowerCase();
+  return message.includes('failed') || message.includes('could not') || message.includes('invalid') || message.includes('unavailable') || message.includes('incomplete') || message.includes('error');
 }
 
 export function SettingsPanel({
@@ -27,6 +32,7 @@ export function SettingsPanel({
   onDataCleared: () => void;
 }) {
   const [notice, setNotice] = useState('');
+  const [dataBusy, setDataBusy] = useState(false);
   const [platesText, setPlatesText] = useState(preferences.availablePlatesKg.join(', '));
   useEffect(() => { setPlatesText(preferences.availablePlatesKg.join(', ')); }, [preferences.availablePlatesKg]);
 
@@ -60,27 +66,32 @@ export function SettingsPanel({
     setNotice(permission === 'granted' ? 'Rest notifications enabled.' : 'Notification permission was not granted.');
   }
 
-  function exportData() {
-    const data = JSON.stringify(store.exportData(), null, 2);
-    const url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `human-health-export-${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
-    setNotice('Local Human Health data exported as JSON.');
+  async function exportData() {
+    setDataBusy(true);
+    setNotice('');
+    try {
+      downloadJson(`human-health-full-${new Date().toISOString().slice(0, 10)}.json`, await createFullHealthArchive());
+      setNotice('Complete local archive prepared, including training, connected-health, and Phase 5 platform data.');
+    } catch (error) {
+      setNotice(error instanceof Error ? `Complete export failed: ${error.message}` : 'Complete export failed.');
+    } finally {
+      setDataBusy(false);
+    }
   }
 
-  function clearData() {
-    if (!window.confirm('Delete all Human Health data stored in this browser? This cannot be undone unless you exported a backup.')) return;
-    if (!store.clearAll()) {
-      setNotice('The browser did not allow all local Human Health data to be deleted. Your current in-memory view was left intact.');
-      return;
+  async function clearData() {
+    if (!window.confirm('Delete ALL Human Health data stored in this browser, including training, connected-health, and Phase 5 platform data? This cannot be undone unless you exported a complete backup.')) return;
+    setDataBusy(true);
+    setNotice('');
+    try {
+      await clearAllHumanHealthData();
+      setNotice('All local Human Health data was deleted.');
+      onDataCleared();
+    } catch (error) {
+      setNotice(error instanceof Error ? `Delete-all failed: ${error.message}` : 'Delete-all failed. Some local data may remain; the app will not report success until the complete deletion finishes.');
+    } finally {
+      setDataBusy(false);
     }
-    setNotice('Local Human Health data deleted.');
-    onDataCleared();
   }
 
   function toggleUnavailable(item: Equipment) {
@@ -88,8 +99,9 @@ export function SettingsPanel({
     update({ lastUnavailableEquipment: selected ? preferences.lastUnavailableEquipment.filter(value => value !== item) : [...preferences.lastUnavailableEquipment, item] });
   }
 
+  const noticeIsFailure = isFailureNotice(notice);
   return <>
-    {notice && <div className="connection-state" role="status" aria-live="polite">{notice}</div>}
+    {notice && <div className={noticeIsFailure ? 'connection-state storage-error' : 'connection-state'} role={noticeIsFailure ? 'alert' : 'status'} aria-live={noticeIsFailure ? 'assertive' : 'polite'}>{notice}</div>}
     <section className="card" aria-labelledby="training-settings-title">
       <h2 id="training-settings-title">Training settings</h2>
       <p className="muted">These settings change future recommendations. Existing workout history is never rewritten.</p>
@@ -125,8 +137,8 @@ export function SettingsPanel({
 
     <section className="card" aria-labelledby="data-controls-title">
       <h2 id="data-controls-title">Your local data</h2>
-      <p className="muted">Phase 2 stores data on this device. Export before clearing or moving to another browser. Cloud sync and restore/import are later phases.</p>
-      <div className="button-row"><button className="primary" onClick={exportData}>Export JSON backup</button><button className="danger" onClick={clearData}>Delete local data</button></div>
+      <p className="muted">Human Health stores training, connected-health, and Phase 5 platform data locally in this browser. Export a complete archive before clearing or moving devices. Delete-all attempts every local domain even if one store is corrupt or unavailable; any partial failure is reported and already-deleted domains are not recreated.</p>
+      <div className="button-row"><button className="primary" disabled={dataBusy} onClick={() => void exportData()}>{dataBusy ? 'Working…' : 'Export complete archive'}</button><button className="danger" disabled={dataBusy} onClick={() => void clearData()}>Delete all local data</button></div>
     </section>
   </>;
 }

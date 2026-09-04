@@ -1,3 +1,4 @@
+import { deviceLocalDayKey } from './local-day';
 import { convertToCanonical, metricDefinitions } from './metrics';
 import { observationId, stableHash } from './merge';
 import { ConnectedHealthPreferences, ConnectedMetric, HealthObservation } from './types';
@@ -46,12 +47,6 @@ export function habitTarget(metric: ConnectedMetric, preferences: ConnectedHealt
   return 5;
 }
 
-function localDayKey(value: string) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return '';
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
 export type HabitCoverage = {
   metric: ConnectedMetric;
   sourceId?: string;
@@ -71,7 +66,7 @@ export function habitCoverage(observations: HealthObservation[], metric: Connect
   const selected = observations.filter(item => item.metric === metric && (!options.sourceId || item.sourceId === options.sourceId) && Date.parse(item.startTime) >= cutoff.getTime() && Date.parse(item.startTime) <= now.getTime());
   const groups = new Map<string, number[]>();
   selected.forEach(item => {
-    const key = localDayKey(item.startTime);
+    const key = deviceLocalDayKey(item.startTime);
     if (key) groups.set(key, [...(groups.get(key) || []), item.value]);
   });
   const daily = new Map<string, number>();
@@ -80,7 +75,7 @@ export function habitCoverage(observations: HealthObservation[], metric: Connect
   for (let offset = 0; offset < days; offset++) {
     const date = new Date(cutoff);
     date.setDate(cutoff.getDate() + offset);
-    const key = localDayKey(date.toISOString());
+    const key = deviceLocalDayKey(date);
     dayValues.push({ key, value: daily.get(key) ?? null });
   }
   const values = dayValues.flatMap(day => day.value === null ? [] : [day.value]);
@@ -103,7 +98,7 @@ export function habitCoverage(observations: HealthObservation[], metric: Connect
     note: target <= 0
       ? 'This habit target is disabled.'
       : values.length === 0
-        ? `No ${metricDefinitions[metric].label.toLowerCase()} entries are recorded in the last ${days} days.`
-        : `${daysMeetingTarget}/${days} days met the target from the selected source; current streak ${currentStreak} day${currentStreak === 1 ? '' : 's'}. Missing days remain missing rather than being counted as zero.`,
+        ? `No ${metricDefinitions[metric].label.toLowerCase()} entries are recorded in the last ${days} device-local days.`
+        : `${daysMeetingTarget}/${days} device-local days met the target from the selected source; current streak ${currentStreak} day${currentStreak === 1 ? '' : 's'}. Missing days remain missing rather than being counted as zero.`,
   };
 }

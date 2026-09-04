@@ -1,38 +1,63 @@
-const CACHE_VERSION = 'human-health-v8';
+const CACHE_PREFIX = 'human-health-';
+const CACHE_VERSION = `${CACHE_PREFIX}v9`;
 const CORE = ['/', '/health/', '/coach/', '/platform/', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/offline.html'];
+
+async function fetchRequired(asset) {
+  const response = await fetch(asset, { cache: 'reload' });
+  if (!response.ok) throw new Error(`Required offline asset failed: ${asset} (${response.status})`);
+  return response;
+}
 
 async function precacheApplicationShell() {
   const cache = await caches.open(CACHE_VERSION);
-  for (const asset of CORE) {
-    try {
-      const response = await fetch(asset, { cache: 'reload' });
-      if (response.ok) await cache.put(asset, response.clone());
-    } catch {
-      // One optional route must not prevent installation of the offline fallback.
-    }
-  }
   try {
-    const response = await fetch('/', { cache: 'reload' });
-    if (!response.ok) return;
-    await cache.put('/', response.clone());
-    const html = await response.text();
+    for (const asset of CORE) {
+      const response = await fetchRequired(asset);
+      await cache.put(asset, response.clone());
+    }
+
+    const rootResponse = await cache.match('/');
+    if (!rootResponse) throw new Error('Required root shell was not cached.');
+    const html = await rootResponse.text();
     const assets = [...html.matchAll(/(?:src|href)=["']([^"']+)["']/g)]
       .map(match => new URL(match[1], self.location.origin))
       .filter(url => url.origin === self.location.origin)
-      .map(url => `${url.pathname}${url.search}`);
-    await Promise.allSettled([...new Set(assets)].map(asset => cache.add(asset)));
-  } catch {
-    // Core offline fallback remains available even if shell discovery fails.
+      .map(url => `${url.pathname}${url.search}`)
+      .filter(asset => !CORE.includes(asset));
+
+    for (const asset of [...new Set(assets)]) {
+      const response = await fetchRequired(asset);
+      await cache.put(asset, response.clone());
+    }
+  } catch (error) {
+    await caches.delete(CACHE_VERSION);
+    throw error;
   }
 }
 
+async function verifyNewCacheBeforeActivation() {
+  const cache = await caches.open(CACHE_VERSION);
+  const missing = [];
+  for (const asset of CORE) {
+    if (!(await cache.match(asset))) missing.push(asset);
+  }
+  if (missing.length) throw new Error(`Refusing activation with incomplete offline shell: ${missing.join(', ')}`);
+}
+
 self.addEventListener('install', event => {
+  // A rejected install leaves the currently active service worker and its known-good cache in place.
+  // Do not call skipWaiting automatically: activation is only requested explicitly after a complete install.
   event.waitUntil(precacheApplicationShell());
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_VERSION).map(key => caches.delete(key)))).then(() => self.clients.claim()));
+  event.waitUntil((async () => {
+    await verifyNewCacheBeforeActivation();
+    const keys = await caches.keys();
+    const staleHumanHealthCaches = keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE_VERSION);
+    await Promise.all(staleHumanHealthCaches.map(key => caches.delete(key)));
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener('message', event => {

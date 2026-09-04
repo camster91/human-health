@@ -19,26 +19,49 @@ describe('rolling schedule', () => {
     const partial = entry('ended-early', 4, 0);
     partial.exercises[1].deferred = true;
     expect(workoutCompletionRatio(partial)).toBe(0.5);
-    expect(nextRollingSession([partial]).repeating).toBe(true);
+    expect(nextRollingSession([partial], new Date('2026-09-03T12:00:00Z')).repeating).toBe(true);
   });
 
   it('advances complete work and repeats insufficient ended-early/abandoned work', () => {
-    expect(nextRollingSession([entry('completed', 4, 4)]).session).toBe('lower-a');
-    expect(nextRollingSession([entry('ended-early', 1, 0)]).repeating).toBe(true);
-    expect(nextRollingSession([entry('abandoned', 4, 4)]).repeating).toBe(true);
+    const now = new Date('2026-09-03T12:00:00Z');
+    expect(nextRollingSession([entry('completed', 4, 4)], now).session).toBe('lower-a');
+    expect(nextRollingSession([entry('ended-early', 1, 0)], now).repeating).toBe(true);
+    expect(nextRollingSession([entry('abandoned', 4, 4)], now).repeating).toBe(true);
   });
 
   it('advances a partial session only after enough work and all primaries are covered', () => {
-    expect(nextRollingSession([entry('ended-early', 4, 2)]).session).toBe('lower-a');
-    expect(nextRollingSession([entry('ended-early', 4, 0)]).session).toBe('upper-a');
+    const now = new Date('2026-09-03T12:00:00Z');
+    expect(nextRollingSession([entry('ended-early', 4, 2)], now).session).toBe('lower-a');
+    expect(nextRollingSession([entry('ended-early', 4, 0)], now).session).toBe('upper-a');
+  });
+
+  it('chooses the latest valid completion timestamp rather than trusting array order', () => {
+    const older = entry('completed', 4, 4);
+    older.session = 'upper-a';
+    older.completedAt = '2026-09-01T12:00:00Z';
+    const newer = entry('completed', 4, 4);
+    newer.session = 'lower-a';
+    newer.completedAt = '2026-09-03T12:00:00Z';
+    expect(nextRollingSession([newer, older], new Date('2026-09-04T12:00:00Z')).session).toBe('upper-b');
+  });
+
+  it('ignores implausibly future history for the current rolling decision', () => {
+    const current = entry('completed', 4, 4);
+    current.session = 'upper-a';
+    current.completedAt = '2026-09-03T12:00:00Z';
+    const future = entry('completed', 4, 4);
+    future.session = 'lower-b';
+    future.completedAt = '2027-01-01T12:00:00Z';
+    expect(nextRollingSession([current, future], new Date('2026-09-04T12:00:00Z')).session).toBe('lower-a');
   });
 
   it('applies explicit life modes and manual session overrides without rewriting history', () => {
     const history = [entry('completed', 4, 4)];
-    const travel = contextualRollingSession(history, 'travel');
+    const now = new Date('2026-09-03T12:00:00Z');
+    const travel = contextualRollingSession(history, 'travel', null, 'normal', now);
     expect(travel.adaptation).toBe('portable');
     expect(travel.progressionAllowed).toBe(false);
-    const manual = contextualRollingSession(history, 'normal', 'upper-b');
+    const manual = contextualRollingSession(history, 'normal', 'upper-b', 'normal', now);
     expect(manual.session).toBe('upper-b');
     expect(manual.manual).toBe(true);
     expect(history[0].session).toBe('upper-a');

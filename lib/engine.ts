@@ -7,9 +7,14 @@ export function workingLogs(exercise: WorkoutExercise) {
   return exercise.logs.filter(log => !log.warmup);
 }
 
+export function comparableStrengthLogs(exercise: WorkoutExercise) {
+  return workingLogs(exercise).filter(log => !log.pain && log.formQuality !== 'poor' && Number.isFinite(log.weight) && log.weight >= 0 && Number.isFinite(log.reps) && log.reps > 0);
+}
+
 export function applyVolumeMultiplier(items: WorkoutExercise[], multiplier: number, options: { preservePrimary?: boolean } = {}) {
   const clamped = Math.max(0, Math.min(1, Number.isFinite(multiplier) ? multiplier : 1));
   if (clamped >= 1) return { exercises: items.map(item => ({ ...item, logs: [...item.logs] })), changed: false };
+  if (clamped <= 0) return { exercises: [], changed: items.length > 0 };
   let changed = false;
   const exercises = items.map(item => {
     if (options.preservePrimary && item.priority === 'primary' && clamped > 0.6) return { ...item, logs: [...item.logs] };
@@ -49,11 +54,14 @@ export function adaptWorkout(items: WorkoutExercise[], context: AdaptContext): {
   if (multiplier < 1) {
     const scaled = applyVolumeMultiplier(exercises, multiplier, { preservePrimary: context.mode !== 'return' });
     exercises = scaled.exercises;
-    const label = context.mode === 'return' ? 'Return-to-training' : context.mode === 'maintenance' ? 'Maintenance' : context.mode === 'travel' ? 'Travel' : 'Recovery-aware';
-    if (scaled.changed) notes.push(`${label} mode reduced volume while preserving the session’s main movement intent.`);
+    if (multiplier <= 0) notes.push('Automatic exercise suggestions are paused because the current safety context does not support an app-generated workout.');
+    else {
+      const label = context.mode === 'return' ? 'Return-to-training' : context.mode === 'maintenance' ? 'Maintenance' : context.mode === 'travel' ? 'Travel' : 'Recovery-aware';
+      if (scaled.changed) notes.push(`${label} mode reduced volume while preserving the session’s main movement intent.`);
+    }
   }
 
-  if (context.minutes) {
+  if (context.minutes && exercises.length) {
     const budget = Math.max(10, context.minutes);
     const indexed = exercises.map((exercise, index) => ({ exercise, index }));
     const ranked = [...indexed].sort((a, b) => priorityRank[a.exercise.priority] - priorityRank[b.exercise.priority] || a.index - b.index);
@@ -70,7 +78,7 @@ export function adaptWorkout(items: WorkoutExercise[], context: AdaptContext): {
     exercises = indexed.filter(item => kept.has(item.index)).map(item => item.exercise);
   }
 
-  if (!exercises.length) notes.push('No compatible exercise remained. Change the equipment profile or choose a different session instead of improvising an unrelated movement.');
+  if (!exercises.length && !notes.some(note => note.includes('Automatic exercise suggestions are paused'))) notes.push('No compatible exercise remained. Change the equipment profile or choose a different session instead of improvising an unrelated movement.');
   return { exercises, notes };
 }
 
@@ -78,11 +86,11 @@ export type LoadRecommendation = { action: 'baseline' | 'increase' | 'reps' | 'h
 export function nextLoadRecommendation(exercise: WorkoutExercise, previous?: WorkoutExercise, context: { daysSincePrevious?: number; progressionAllowed?: boolean } = {}): LoadRecommendation {
   if (context.progressionAllowed === false) return { action: 'hold', message: 'Progression is paused for this session. Keep the load conservative and use clean reps.' };
   if (typeof context.daysSincePrevious === 'number' && context.daysSincePrevious > 21) return { action: 'reduce', message: 'A longer training gap was detected. Re-establish a comfortable baseline before resuming progression.' };
-  if (exercise.logs.some(log => log.pain)) return { action: 'hold', message: 'Pain or unusual discomfort was flagged. Stop progressing this exercise for now and reassess before continuing.' };
+  if (workingLogs(exercise).some(log => log.pain)) return { action: 'hold', message: 'Pain or unusual discomfort was flagged. Stop progressing this exercise for now and reassess before continuing.' };
+  if (workingLogs(exercise).some(log => log.formQuality === 'poor')) return { action: 'hold', message: 'A working set was marked with poor form. Keep or reduce the load and restore consistent technique before progressing.' };
 
-  const logs = workingLogs(exercise).filter(log => !log.pain);
+  const logs = comparableStrengthLogs(exercise);
   if (!logs.length) return { action: 'baseline', message: 'Establish a comfortable working-set baseline and leave 2–3 reps in reserve.' };
-  if (logs.some(log => log.formQuality === 'poor')) return { action: 'hold', message: 'A working set was marked with poor form. Keep or reduce the load and restore consistent technique before progressing.' };
 
   const [, high] = exercise.repRange;
   const sameWorkingLoad = new Set(logs.map(log => log.weight)).size === 1;
@@ -98,7 +106,7 @@ export function nextLoadRecommendation(exercise: WorkoutExercise, previous?: Wor
   }
 
   if (previous) {
-    const priorLogs = workingLogs(previous).filter(log => !log.pain);
+    const priorLogs = comparableStrengthLogs(previous);
     const sameLoadAsPrevious = logs.length > 0 && priorLogs.length > 0 && logs[0].weight === priorLogs[0].weight;
     if (sameLoadAsPrevious) {
       const currentReps = logs.reduce((sum, log) => sum + log.reps, 0);
@@ -120,8 +128,8 @@ export function summarizeWorkout(exercises: WorkoutExercise[], history: HistoryE
   let prs = 0;
   for (const exercise of exercises) {
     const prior = history.filter(entry => (entry.status || 'completed') !== 'abandoned').flatMap(entry => entry.exercises).filter(item => item.id === exercise.id);
-    const bestPrior = Math.max(0, ...prior.flatMap(item => workingLogs(item).filter(log => !log.pain).map(log => performanceScore(item, log.weight, log.reps))));
-    const bestNow = Math.max(0, ...workingLogs(exercise).filter(log => !log.pain).map(log => performanceScore(exercise, log.weight, log.reps)));
+    const bestPrior = Math.max(0, ...prior.flatMap(item => comparableStrengthLogs(item).map(log => performanceScore(item, log.weight, log.reps))));
+    const bestNow = Math.max(0, ...comparableStrengthLogs(exercise).map(log => performanceScore(exercise, log.weight, log.reps)));
     if (bestNow > bestPrior && bestPrior > 0) {
       prs++;
       messages.push(`${exercise.name}: new performance best.`);

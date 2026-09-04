@@ -134,13 +134,46 @@ export async function syncAdapter(
 }
 
 export async function disconnectAdapter(adapter: HealthDataAdapter, deleteImportedData = false, repository: HealthSyncRepository = healthRepository) {
-  await adapter.disconnect?.();
   if (deleteImportedData) {
-    await repository.deleteSource(adapter.sourceId);
-    return null;
+    return deleteConnectedHealthSource(adapter.sourceId, adapter, repository);
   }
+  await adapter.disconnect?.();
   const previous = await repository.getSource(adapter.sourceId);
   const next = { ...baseState(adapter, previous), status: 'not-connected' as const, grantedMetrics: [], cursor: undefined, error: undefined, partialReason: undefined };
   await repository.saveSource(next);
   return next;
+}
+
+export type DeleteConnectedHealthSourceResult = {
+  localDeleted: true;
+  disconnectWarning?: string;
+};
+
+/**
+ * Delete local connected-health data independently of a best-effort native/provider
+ * disconnect. A provider failure must never prevent an explicit local deletion.
+ */
+export async function deleteConnectedHealthSource(
+  sourceId: string,
+  adapter?: HealthDataAdapter,
+  repository: HealthSyncRepository = healthRepository,
+): Promise<DeleteConnectedHealthSourceResult> {
+  let disconnectWarning: string | undefined;
+  if (adapter?.disconnect) {
+    try {
+      await adapter.disconnect();
+    } catch (error) {
+      disconnectWarning = error instanceof Error ? error.message : 'Native/provider disconnect failed.';
+    }
+  }
+
+  try {
+    await repository.deleteSource(sourceId);
+  } catch (error) {
+    const localMessage = error instanceof Error ? error.message : 'Local connected-health source deletion failed.';
+    if (disconnectWarning) throw new Error(`${localMessage} Native/provider disconnect also failed: ${disconnectWarning}`);
+    throw error instanceof Error ? error : new Error(localMessage);
+  }
+
+  return { localDeleted: true, disconnectWarning };
 }
