@@ -122,6 +122,10 @@ function uniqueCompletedSessions(doses: ActivityDose[]) {
   return keys.size;
 }
 
+function drivesCatchUp(priority: DomainPriority) {
+  return priority === 'focus' || priority === 'maintain';
+}
+
 export function domainDeficits(
   activity: ActivityDose[],
   now = new Date(),
@@ -134,7 +138,7 @@ export function domainDeficits(
   const priorityOrder: Record<DomainPriority, number> = { focus: 0, maintain: 1, deprioritize: 2, off: 3 };
 
   return weeklyTargets
-    .filter(target => (options.priorities?.[target.domain] || 'maintain') !== 'off')
+    .filter(target => drivesCatchUp(options.priorities?.[target.domain] || 'maintain'))
     .map(target => {
       const recent = activity.filter(item => item.domain === target.domain && new Date(item.completedAt) >= start);
       const minutes = target.domain === 'cardio'
@@ -176,8 +180,8 @@ export function minimumEffectiveDay(options: {
       : mode === 'maintenance'
         ? ['strength', 'cardio', 'mobility']
         : deficits;
-  const needs = modeDomains.filter((domain, index, all) => all.indexOf(domain) === index && (options.priorities?.[domain] || 'maintain') !== 'off');
-  if (!needs.length) return { mode, minutes: 0, domains: [], message: 'No enabled domain is currently below its configured target. Choose optional easy work or keep the day free.', sessionIds: [] };
+  const needs = modeDomains.filter((domain, index, all) => all.indexOf(domain) === index && drivesCatchUp(options.priorities?.[domain] || 'maintain'));
+  if (!needs.length) return { mode, minutes: 0, domains: [], message: 'No focus/maintenance domain is currently below its configured target. Choose optional easy work or keep the day free.', sessionIds: [] };
 
   const candidates = minimumEffectiveOptions(availableMinutes, needs, equipment)
     .sort((a, b) => needs.indexOf(a.domain) - needs.indexOf(b.domain) || a.minutes - b.minutes);
