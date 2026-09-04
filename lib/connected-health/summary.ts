@@ -96,7 +96,7 @@ function nonOverlappingDurationMinutes(items: HealthObservation[]) {
 function dailyAggregate(metric: ConnectedMetric, observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences, now: Date, mode: 'sum' | 'average' = 'sum') {
   const source = sourceFor(observations, sources, metric, preferences, now);
   if (!source) return empty(metric);
-  const values = observationsForMetric(observations, metric, { sourceId: source.id }).filter(item => sameLocalDay(item.startTime, now));
+  const values = observationsForMetric(observations, metric, { sourceId: source.id, now }).filter(item => sameLocalDay(item.startTime, now));
   if (!values.length) return empty(metric, `No ${metricDefinitions[metric].label.toLowerCase()} observation exists for today from ${source.displayName}.`);
   const latest = values[0];
   const sum = values.reduce((total, item) => total + item.value, 0);
@@ -116,7 +116,7 @@ function dailyAggregate(metric: ConnectedMetric, observations: HealthObservation
 function latestValue(metric: ConnectedMetric, observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences, now: Date) {
   const source = sourceFor(observations, sources, metric, preferences, now);
   if (!source) return empty(metric);
-  const value = observationsForMetric(observations, metric, { sourceId: source.id })[0];
+  const value = observationsForMetric(observations, metric, { sourceId: source.id, now })[0];
   if (!value) return empty(metric);
   return {
     metric,
@@ -134,11 +134,11 @@ function latestValue(metric: ConnectedMetric, observations: HealthObservation[],
 function sleepSummary(observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences, now: Date) {
   const source = sourceFor(observations, sources, 'sleep-duration', preferences, now) || sourceFor(observations, sources, 'sleep-stage', preferences, now);
   if (!source) return empty('sleep-duration');
-  const sessions = observationsForMetric(observations, 'sleep-duration', { sourceId: source.id });
+  const sessions = observationsForMetric(observations, 'sleep-duration', { sourceId: source.id, now });
   const latestSession = sessions[0];
   if (latestSession) return { metric: 'sleep-duration' as const, label: 'Sleep', value: latestSession.value, unit: latestSession.unit, status: statusFor(source, observationFreshness(latestSession, now), now), sourceId: source.id, sourceName: source.displayName, recordedAt: latestSession.recordedAt, note: `Latest sleep session from ${source.displayName}.` };
 
-  const stages = observationsForMetric(observations, 'sleep-stage', { sourceId: source.id });
+  const stages = observationsForMetric(observations, 'sleep-stage', { sourceId: source.id, now });
   const latest = stages[0];
   if (!latest) return empty('sleep-duration');
   const anchor = Date.parse(latest.endTime || latest.startTime);
@@ -162,10 +162,10 @@ function sleepSummary(observations: HealthObservation[], sources: HealthSourceSt
 function workoutHeartRateSummary(observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences, now: Date): WorkoutHeartRateSummary {
   const source = sourceFor(observations, sources, 'heart-rate', preferences, now);
   if (!source) return { status: 'insufficient', average: null, minimum: null, maximum: null, sampleCount: 0, note: 'No heart-rate source is available.' };
-  const samples = observationsForMetric(observations, 'heart-rate', { sourceId: source.id });
+  const samples = observationsForMetric(observations, 'heart-rate', { sourceId: source.id, now });
   if (!samples.length) return { status: 'insufficient', average: null, minimum: null, maximum: null, sampleCount: 0, sourceId: source.id, sourceName: source.displayName, note: `No heart-rate samples are available from ${source.displayName}.` };
 
-  const workouts = observationsForMetric(observations, 'workout-duration', { sourceId: source.id });
+  const workouts = observationsForMetric(observations, 'workout-duration', { sourceId: source.id, now });
   const latestWorkout = workouts.find(workout => Boolean(workout.endTime));
   let included: HealthObservation[] = [];
   let workoutStart: string | undefined;
