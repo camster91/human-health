@@ -21,9 +21,15 @@ export function regulatoryGate(profile: FeatureRiskProfile): RegulatoryGateResul
     message: `Specialist regulatory, clinical-safety, privacy, security, and product review is required before implementation/release because the feature includes: ${review.join(', ')}. This gate is an internal escalation rule, not a legal determination.`,
     legalDetermination: false,
   };
+  if (profile.wellnessEducationOnly !== true) return {
+    decision: 'specialist-review-required',
+    triggers: ['intended use not explicitly characterized as wellness education'],
+    message: 'The feature does not declare a high-risk claim, but its intended use is not explicitly characterized as wellness education. Clarify intended use and complete specialist product/privacy/safety review before treating it as ordinary wellness scope. This is not a legal determination.',
+    legalDetermination: false,
+  };
   return {
     decision: 'wellness-scope', triggers: [],
-    message: 'No high-risk trigger is declared in this feature profile. Normal product, privacy, security, accessibility, and evidence review still applies. This is not a legal determination.',
+    message: 'The feature is explicitly characterized as wellness education and declares no high-risk trigger. Normal product, privacy, security, accessibility, and evidence review still applies. This is not a legal determination.',
     legalDetermination: false,
   };
 }
