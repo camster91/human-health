@@ -8,6 +8,7 @@ import {
   HealthSourceState,
   defaultConnectedHealthPreferences,
   healthRepository,
+  saveConnectedSleepContext,
   summarizeConnectedHealth,
 } from '@/lib/connected-health';
 
@@ -44,5 +45,8 @@ export function useConnectedHealthSnapshot() {
   }, [refresh]);
 
   const summary = useMemo(() => summarizeConnectedHealth(observations, sources, preferences), [observations, sources, preferences]);
+  useEffect(() => {
+    if (!loading) saveConnectedSleepContext(summary, preferences.useFreshSleepForReadiness);
+  }, [loading, preferences.useFreshSleepForReadiness, summary]);
   return { observations, sources, preferences, summary, loading, error, refresh };
 }

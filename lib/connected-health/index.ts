@@ -11,6 +11,7 @@ export * from './events';
 export * from './habits';
 export * from './summary';
 export * from './trends';
+export * from './connected-readiness';
 export * from './portability';
 export * from './import/apple-health-xml';
 export * from './import/canonical-json';

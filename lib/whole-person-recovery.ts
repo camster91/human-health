@@ -11,7 +11,7 @@ export type ReadinessInput = {
   pain?: boolean;
 };
 export type ReadinessDecision = { level: 'normal' | 'reduced' | 'recovery'; volumeMultiplier: number; allowProgression: boolean; reasons: string[] };
-export type ReadinessRecord = { recordedAt: string; input: ReadinessInput };
+export type ReadinessRecord = { recordedAt: string; input: ReadinessInput; source?: 'manual' | 'connected-sleep'; sourceName?: string };
 
 export function readinessDecision(input: ReadinessInput): ReadinessDecision {
   const reasons: string[] = [];
