@@ -46,7 +46,7 @@ This roadmap turns the long-term product vision into an incremental delivery pla
 
 ## Phase 3 — Connected health context
 
-Status: source implementation is in draft PR #62. Web/PWA and native-host verification remain separate release gates.
+Status: merged into `main`; executable/browser/native validation remains separately tracked.
 
 1. Health Connect adapter and explicit native bridge boundary
 2. Apple Health adapter plus local XML-export import
@@ -59,13 +59,15 @@ Status: source implementation is in draft PR #62. Web/PWA and native-host verifi
 
 ## Phase 4 — Coaching intelligence
 
-1. Explainable trend detection
-2. Plateau/deload logic
-3. Multi-goal balancing
-4. Context-aware recommendations
-5. AI-generated explanations layered on deterministic rules
-6. Optional conversational adaptation input
-7. Optional movement/video analysis only after reliability review
+Status: source implementation is on `phase-4-coaching-intelligence`; review/verification remain separate gates.
+
+1. Explainable trend detection with evidence/confidence/insufficient-data states
+2. Plateau/regression detection and conservative advisory deload logic
+3. Multi-goal balancing using Focus / Maintain / Deprioritize / Off without a health score
+4. Context-aware recommendations using readiness, recent workload, life mode, history, goals and current connected signals
+5. Optional AI-generated narrative constrained to explain deterministic actions rather than change them
+6. Conversational adaptation input for time, energy, gym/equipment and goal context
+7. Movement/video analysis reliability gate; camera/video analysis remains disabled until every reliability/privacy review passes
 
 ## Phase 5 — Long-horizon health platform
 
