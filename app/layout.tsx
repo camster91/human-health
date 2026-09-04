@@ -13,12 +13,7 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: 'Human Health', statusBarStyle: 'default' },
 };
 
-export const viewport: Viewport = {
-  themeColor: '#c84712',
-  width: 'device-width',
-  initialScale: 1,
-  viewportFit: 'cover',
-};
+export const viewport: Viewport = { themeColor: '#c84712', width: 'device-width', initialScale: 1, viewportFit: 'cover' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return <html lang="en"><body>{children}<GlobalHealthLink /><ServiceWorkerRegistration /></body></html>;

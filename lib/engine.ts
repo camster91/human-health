@@ -81,6 +81,9 @@ export function nextLoadRecommendation(exercise: WorkoutExercise, previous?: Wor
   const effortOk = logs.every(log => (log.rir ?? 2) >= 1);
   if (sameWorkingLoad && allTop && effortOk) {
     const current = logs[0].weight;
+    if (exercise.metadata?.loadType === 'bodyweight' && current <= 0) {
+      return { action: 'increase', message: 'All working sets reached the top of the range with reserve. Progress to the next controlled variation or add a small external load rather than inventing a machine-equivalent weight.' };
+    }
     const increment = current >= 60 ? 2.5 : 1;
     return { action: 'increase', message: `All working sets reached the top of the range with reserve and acceptable form. Try ${current + increment} kg next time.` };
   }
@@ -121,17 +124,31 @@ export function summarizeWorkout(exercises: WorkoutExercise[], history: HistoryE
   return { prs, messages };
 }
 
+/**
+ * Returns an exact per-side plate combination using the configured plate denominations.
+ * Denominations can be reused; physical pair quantities are intentionally not modelled in Phase 2.
+ */
 export function platePlan(target: number, bar = 20, plates = [25, 20, 15, 10, 5, 2.5, 1.25]) {
   if (!Number.isFinite(target) || !Number.isFinite(bar)) return null;
-  let perSide = (target - bar) / 2;
+  const perSide = (target - bar) / 2;
   if (perSide < 0) return null;
-  const usable = [...new Set(plates.filter(plate => Number.isFinite(plate) && plate > 0))].sort((a, b) => b - a);
-  const result: number[] = [];
-  for (const plate of usable) {
-    while (perSide + 1e-9 >= plate) {
-      result.push(plate);
-      perSide -= plate;
+  const scale = 100;
+  const targetUnits = Math.round(perSide * scale);
+  if (Math.abs(targetUnits / scale - perSide) > 0.0001) return null;
+  if (targetUnits === 0) return [];
+  const usable = [...new Set(plates.filter(plate => Number.isFinite(plate) && plate > 0).map(plate => Math.round(plate * scale)))]
+    .filter(plate => plate > 0)
+    .sort((a, b) => b - a);
+  if (!usable.length || targetUnits > 100_000) return null;
+
+  const best: (number[] | null)[] = Array.from({ length: targetUnits + 1 }, () => null);
+  best[0] = [];
+  for (let amount = 1; amount <= targetUnits; amount++) {
+    for (const plate of usable) {
+      if (plate > amount || !best[amount - plate]) continue;
+      const candidate = [...best[amount - plate]!, plate];
+      if (!best[amount] || candidate.length < best[amount]!.length) best[amount] = candidate;
     }
   }
-  return perSide < 0.001 ? result : null;
+  return best[targetUnits]?.map(plate => plate / scale).sort((a, b) => b - a) || null;
 }

@@ -15,6 +15,13 @@ describe('rolling schedule', () => {
     expect(workoutCompletionRatio(entry('ended-early', 4, 4, 5))).toBe(1);
   });
 
+  it('keeps explicitly deferred planned work in the required denominator', () => {
+    const partial = entry('ended-early', 4, 0);
+    partial.exercises[1].deferred = true;
+    expect(workoutCompletionRatio(partial)).toBe(0.5);
+    expect(nextRollingSession([partial]).repeating).toBe(true);
+  });
+
   it('advances complete work and repeats insufficient ended-early/abandoned work', () => {
     expect(nextRollingSession([entry('completed', 4, 4)]).session).toBe('lower-a');
     expect(nextRollingSession([entry('ended-early', 1, 0)]).repeating).toBe(true);

@@ -1,16 +1,13 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { assessmentDue, cardioCoverage, consistencyPattern, dueAssessments, normalizedStrengthTrend, recoveryPattern } from '@/lib/capability-trends';
 import { HistoryEntry } from '@/lib/domain';
 import { UserPreferences } from '@/lib/preferences';
-import { store } from '@/lib/storage';
 import { ActivityDose, Assessment, ReadinessRecord, capabilityMetrics } from '@/lib/whole-person';
 
 const assessmentMetricIds = ['pullups', 'dead-hang', 'ankle-mobility', 'single-leg-balance', 'jump', 'carry'];
 
-export function CapabilityTrendPanel({ history, activity, readinessRecords, preferences }: { history: HistoryEntry[]; activity: ActivityDose[]; readinessRecords: ReadinessRecord[]; preferences: UserPreferences }) {
-  const [assessments, setAssessments] = useState<Assessment[]>([]);
-  useEffect(() => { setAssessments(store.loadAssessments()); }, []);
+export function CapabilityTrendPanel({ history, activity, readinessRecords, assessments, preferences }: { history: HistoryEntry[]; activity: ActivityDose[]; readinessRecords: ReadinessRecord[]; assessments: Assessment[]; preferences: UserPreferences }) {
   const strength = useMemo(() => normalizedStrengthTrend(history), [history]);
   const cardio = useMemo(() => cardioCoverage(activity, preferences.cardioTargetMinutes), [activity, preferences.cardioTargetMinutes]);
   const recovery = useMemo(() => recoveryPattern(readinessRecords), [readinessRecords]);

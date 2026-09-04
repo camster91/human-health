@@ -10,4 +10,4 @@ Resolution strategy:
 4. Preserve Phase 2 workout finalization/deduplication and storage-failure handling while retaining Phase 3 connected-sleep context and full archive import/export.
 5. Keep native Health Connect/HealthKit bridges explicitly unverified until compatible hosts are available.
 
-The resulting reconciliation commit should have both the latest Phase 3 head and latest Phase 2 hardening head as parents.
+The resulting reconciliation commit has both the latest Phase 3 head and latest Phase 2 hardening head as parents.

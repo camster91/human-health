@@ -1,4 +1,5 @@
 import { Equipment, HistoryEntry } from './domain';
+import { plannedExercises } from './workout-accounting';
 import { ActivityDose } from './whole-person-foundation';
 import { microSessions } from './whole-person-skills';
 import type { CapabilityDomain } from './whole-person-types';
@@ -19,7 +20,7 @@ export function athleticPlan(assessments: Assessment[], readiness: 'normal' | 'r
   const plans: AthleticPlan[] = [];
   if (balance < 30 || options.highImpactAllowed === false) plans.push({ domain: 'balance', name: 'Balance foundation', items: ['Single-leg balance 3 × 20–30 sec/side', 'Step-down control 2 × 6/side', 'Heel-to-toe walk 2 × 10 steps'], reason: options.highImpactAllowed === false ? 'High-impact work is disabled, so athletic development stays with balance and coordination.' : 'Build repeatable single-leg control and coordination.', impact: 'low' });
   if (readiness === 'normal' && options.highImpactAllowed !== false) plans.push({ domain: 'power', name: 'Low-volume power', items: ['3–5 sets of 2–3 crisp jumps or explosive reps', 'Full recovery between sets'], reason: 'Train power without turning it into conditioning.', impact: 'moderate' });
-  plans.push({ domain: 'movement', name: 'Carry + locomotion', items: options.equipment?.includes('dumbbell') || options.equipment?.includes('barbell') ? ['Suitcase or farmer carry 3 × 20–40 m', 'Controlled backward walk or march'] : ['Loaded-object carry if appropriate and available', 'Controlled backward walk or march'], reason: 'Build practical work capacity, coordination, and trunk control.', impact: 'low' });
+  plans.push({ domain: 'movement', name: 'Carry + locomotion', items: options.equipment?.includes('dumbbell') || options.equipment?.includes('barbell') ? ['Suitcase or farmer carry 3 × 20–40 m', 'Controlled backward walk or march'] : ['Controlled loaded-object carry only if a safe object is available', 'Controlled backward walk or march'], reason: 'Build practical work capacity, coordination, and trunk control.', impact: 'low' });
   return plans;
 }
 
@@ -40,13 +41,14 @@ export function minimumEffectiveOptions(minutes: number, needs: CapabilityDomain
 
 export function workoutActivityDoses(entry: HistoryEntry): ActivityDose[] {
   if ((entry.status || 'completed') === 'abandoned') return [];
-  const requiredExercises = entry.exercises.filter(exercise => !exercise.optional);
+  const requiredExercises = plannedExercises(entry.exercises);
   const prescribedRequired = requiredExercises.reduce((sum, exercise) => sum + exercise.sets, 0);
   const completedRequired = requiredExercises.reduce((sum, exercise) => sum + Math.min(exercise.sets, exercise.logs.filter(log => !log.warmup).length), 0);
   const allWorkingSets = entry.exercises.reduce((sum, exercise) => sum + Math.min(exercise.sets, exercise.logs.filter(log => !log.warmup).length), 0);
   if (!allWorkingSets) return [];
   const quality = prescribedRequired > 0 ? Math.min(1, completedRequired / prescribedRequired) : 1;
-  const base = { completedAt: entry.completedAt, kind: 'planned' as const, source: 'workout' as const, quality };
+  const workoutId = entry.workoutId || (entry.startedAt ? `${entry.session}:${entry.startedAt}` : undefined);
+  const base = { workoutId, completedAt: entry.completedAt, kind: 'planned' as const, source: 'workout' as const, quality };
   const doses: ActivityDose[] = [{ ...base, domain: 'strength', sets: allWorkingSets, sessionId: `strength:${entry.session}` }];
   const coreSets = entry.exercises.filter(exercise => exercise.movement === 'core').reduce((sum, exercise) => sum + exercise.logs.filter(log => !log.warmup).length, 0);
   if (coreSets) doses.push({ ...base, domain: 'core', sets: coreSets, sessionId: `embedded-core:${entry.session}` });

@@ -19,6 +19,8 @@ export type ActivityDose = {
   sets?: number;
   effort?: 'easy' | 'moderate' | 'hard';
   sessionId?: string;
+  /** Stable active-workout id for idempotent finalization; manual/device doses may omit it. */
+  workoutId?: string;
   completedAt: string;
   kind?: ActivityKind;
   modality?: CardioModality;

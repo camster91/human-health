@@ -12,6 +12,7 @@ import {
   mobilityPrescription,
   nextSkillStep,
   readinessDecision,
+  readinessDecisionFromRecords,
   readinessTrend,
   skillTrees,
   targetProgress,
@@ -57,6 +58,17 @@ describe('whole-person fitness model', () => {
     ], new Date('2026-09-02T12:00:00Z'));
     expect(trend.reduced).toBe(2);
     expect(trend.message).toContain('common');
+  });
+
+  it('keeps progression conservative after repeated recent strain even when the latest check is normal', () => {
+    const records = [
+      { recordedAt: '2026-09-01T12:00:00Z', input: { sleep: 'poor' as const } },
+      { recordedAt: '2026-09-02T12:00:00Z', input: { fatigue: 'high' as const } },
+      { recordedAt: '2026-09-03T12:00:00Z', input: { sleep: 'good' as const, fatigue: 'low' as const } },
+    ];
+    const decision = readinessDecisionFromRecords(records, new Date('2026-09-03T13:00:00Z'));
+    expect(decision.level).toBe('reduced');
+    expect(decision.allowProgression).toBe(false);
   });
 
   it('distinguishes planned cardio from incidental movement', () => {

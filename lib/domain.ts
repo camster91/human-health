@@ -64,7 +64,10 @@ export type WorkoutExercise = Exercise & {
   sets: number;
   logs: SetLog[];
   originalId?: string;
+  /** Optional additions never reduce required-session completion. */
   optional?: boolean;
+  /** A planned exercise explicitly left unfinished; preserved for truthful partial-session accounting. */
+  deferred?: boolean;
 };
 
 export type SessionId = 'upper-a' | 'lower-a' | 'upper-b' | 'lower-b';
@@ -84,6 +87,10 @@ export type Workout = {
   unavailableEquipment?: Equipment[];
   exercises: WorkoutExercise[];
   pausedAt?: string;
+  /** Snapshot of whether automatic progression was allowed when this workout began. */
+  progressionAllowed?: boolean;
+  /** Human-readable evidence for a held progression decision. */
+  progressionReason?: string;
 };
 
 export type GymProfile = {
@@ -94,6 +101,8 @@ export type GymProfile = {
 };
 
 export type HistoryEntry = {
+  /** Stable id of the active workout that produced this history entry. Legacy entries may omit it. */
+  workoutId?: string;
   session: SessionId;
   completedAt: string;
   startedAt?: string;
@@ -112,6 +121,8 @@ export type AdaptContext = {
   unavailable?: Equipment[];
   volumeMultiplier?: number;
   mode?: TrainingMode;
+  /** Allow original set volume after a reduced-readiness check while still holding load progression. */
+  overrideRecoveryVolume?: boolean;
   /** Preferred replacement exercise by original exercise id for the active gym. */
   preferredSubstitutions?: Record<string, string>;
 };

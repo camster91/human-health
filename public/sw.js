@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'human-health-v5';
+const CACHE_VERSION = 'human-health-v6';
 const CORE = ['/', '/health/', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/offline.html'];
 
 async function precacheApplicationShell() {
@@ -8,7 +8,7 @@ async function precacheApplicationShell() {
       const response = await fetch(asset, { cache: 'reload' });
       if (response.ok) await cache.put(asset, response.clone());
     } catch {
-      // A failed optional route must not prevent the core offline fallback from installing.
+      // One optional route must not prevent installation of the offline fallback.
     }
   }
   try {
@@ -22,7 +22,7 @@ async function precacheApplicationShell() {
       .map(url => `${url.pathname}${url.search}`);
     await Promise.allSettled([...new Set(assets)].map(asset => cache.add(asset)));
   } catch {
-    // Offline fallback remains available even if shell discovery fails.
+    // Core offline fallback remains available even if shell discovery fails.
   }
 }
 
@@ -46,18 +46,26 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).then(response => {
-      if (response.ok) caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone()));
-      return response;
-    }).catch(async () => (await caches.match(request)) || (await caches.match(url.pathname)) || (await caches.match('/')) || (await caches.match('/offline.html'))));
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response.ok) caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone())).catch(() => {});
+          return response;
+        })
+        .catch(async () => (await caches.match(request)) || (await caches.match(url.pathname)) || (await caches.match('/')) || (await caches.match('/offline.html')) || new Response('Offline', { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } })),
+    );
     return;
   }
 
-  event.respondWith(caches.match(request).then(cached => {
-    const network = fetch(request).then(response => {
-      if (response.ok && response.type === 'basic') caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone()));
-      return response;
-    }).catch(() => cached);
-    return cached || network;
-  }));
+  event.respondWith(
+    caches.match(request).then(cached => {
+      const network = fetch(request)
+        .then(response => {
+          if (response.ok && response.type === 'basic') caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone())).catch(() => {});
+          return response;
+        })
+        .catch(() => cached || new Response('', { status: 504, statusText: 'Offline' }));
+      return cached || network;
+    }),
+  );
 });

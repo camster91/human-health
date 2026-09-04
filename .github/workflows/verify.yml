@@ -3,7 +3,7 @@ name: Verify
 on:
   pull_request:
   push:
-    branches: [main, phase-3-connected-health]
+    branches: [main, post-phase2-hardening, phase-3-connected-health]
   workflow_dispatch:
 
 permissions:

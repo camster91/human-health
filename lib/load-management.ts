@@ -71,9 +71,17 @@ export function powerAllowed(load: RecentTrainingLoad, readiness: 'normal' | 're
   return { allowed: true, reason: 'No recent lower-body or hard-cardio load currently requires power work to be deferred.' };
 }
 
-export function strengthLoadAdjustment(session: SessionId, load: RecentTrainingLoad, readiness: 'normal' | 'reduced' | 'recovery') {
-  if (readiness === 'recovery') return { reduce: true, volumeMultiplier: 0.5, pauseProgression: true, reason: 'Recovery-first readiness overrides normal strength progression.' };
-  if (session.startsWith('lower') && load.hoursSinceHardCardio !== null && load.hoursSinceHardCardio < 24 && load.hardCardioMinutes >= 20) return { reduce: true, volumeMultiplier: 0.8, pauseProgression: true, reason: `Recent hard cardio (${load.hardCardioMinutes} min) may add lower-body fatigue. Keep the lower session conservative and do not force progression.` };
-  if (readiness === 'reduced') return { reduce: true, volumeMultiplier: 0.8, pauseProgression: true, reason: 'Readiness is reduced; trim volume and hold load progression.' };
-  return { reduce: false, volumeMultiplier: 1, pauseProgression: false, reason: 'Current recent workload does not require an automatic strength reduction.' };
+export type StrengthLoadAdjustment = {
+  reduce: boolean;
+  volumeMultiplier: number;
+  pauseProgression: boolean;
+  source: 'none' | 'readiness' | 'hard-cardio';
+  reason: string;
+};
+
+export function strengthLoadAdjustment(session: SessionId, load: RecentTrainingLoad, readiness: 'normal' | 'reduced' | 'recovery'): StrengthLoadAdjustment {
+  if (readiness === 'recovery') return { reduce: true, volumeMultiplier: 0.5, pauseProgression: true, source: 'readiness', reason: 'Recovery-first readiness overrides normal strength progression.' };
+  if (session.startsWith('lower') && load.hoursSinceHardCardio !== null && load.hoursSinceHardCardio < 24 && load.hardCardioMinutes >= 20) return { reduce: true, volumeMultiplier: 0.8, pauseProgression: true, source: 'hard-cardio', reason: `Recent hard cardio (${load.hardCardioMinutes} min) may add lower-body fatigue. Keep the lower session conservative and do not force progression.` };
+  if (readiness === 'reduced') return { reduce: true, volumeMultiplier: 0.8, pauseProgression: true, source: 'readiness', reason: 'Readiness is reduced; trim volume and hold load progression.' };
+  return { reduce: false, volumeMultiplier: 1, pauseProgression: false, source: 'none', reason: 'Current recent workload does not require an automatic strength reduction.' };
 }

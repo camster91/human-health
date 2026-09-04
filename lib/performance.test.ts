@@ -11,10 +11,18 @@ describe('measured bodyweight progression', () => {
     expect(recommendSkillProgression('pull-up', 'assisted', assessments).stepId).toBe('strict');
   });
 
-  it('holds when assistance/test conditions differ or discomfort is reported', () => {
+  it('allows a meaningful decrease in recorded assistance when test conditions match', () => {
+    const assessments = [
+      { treeId: 'pull-up', stepId: 'assisted', passed: true, clean: true, pain: false, metric: 'reps' as const, value: 8, assistanceKg: 20, variation: 'assisted-machine', recordedAt: '2026-09-01T12:00:00Z' },
+      { treeId: 'pull-up', stepId: 'assisted', passed: true, clean: true, pain: false, metric: 'reps' as const, value: 8, assistanceKg: 15, variation: 'assisted-machine', recordedAt: '2026-09-02T12:00:00Z' },
+    ];
+    expect(recommendSkillProgression('pull-up', 'assisted', assessments).action).toBe('advance');
+  });
+
+  it('holds when assistance records/test conditions differ or discomfort is reported', () => {
     const mixed = [
-      { treeId: 'pull-up', stepId: 'assisted', passed: true, clean: true, pain: false, metric: 'reps' as const, value: 8, assistanceKg: 20, recordedAt: '2026-09-01T12:00:00Z' },
-      { treeId: 'pull-up', stepId: 'assisted', passed: true, clean: true, pain: false, metric: 'reps' as const, value: 8, assistanceKg: 30, recordedAt: '2026-09-02T12:00:00Z' },
+      { treeId: 'pull-up', stepId: 'assisted', passed: true, clean: true, pain: false, metric: 'reps' as const, value: 8, assistanceKg: 20, variation: 'band-blue', recordedAt: '2026-09-01T12:00:00Z' },
+      { treeId: 'pull-up', stepId: 'assisted', passed: true, clean: true, pain: false, metric: 'reps' as const, value: 8, variation: 'band-blue', recordedAt: '2026-09-02T12:00:00Z' },
     ];
     expect(recommendSkillProgression('pull-up', 'assisted', mixed).action).toBe('hold');
     expect(recommendSkillProgression('pull-up', 'assisted', [{ ...mixed[0], pain: true }]).action).toBe('hold');
