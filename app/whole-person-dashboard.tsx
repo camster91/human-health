@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { AthleticLevel, athleticLevelSession, recommendAthleticProgression } from '@/lib/athletic-progression';
 import { GymProfile, HistoryEntry, SessionId } from '@/lib/domain';
-import { powerAllowed, recentTrainingLoad } from '@/lib/load-management';
-import { availableSkillTrees, recommendSkillProgression, SkillAssessment } from '@/lib/performance';
+import { coordinateCardio, powerAllowed, recentTrainingLoad } from '@/lib/load-management';
+import { availableSkillTrees, minimumEffectiveDay, recommendSkillProgression, SkillAssessment } from '@/lib/performance';
 import { UserPreferences } from '@/lib/preferences';
 import { store } from '@/lib/storage';
 import {
@@ -13,13 +14,14 @@ import {
   ReadinessInput,
   ReadinessRecord,
   athleticPlan,
-  cardioCoverage as unavailableCardioCoverage,
-  cardioEquivalentMinutes,
+  capabilityMetrics,
   cardioOptions,
   cardioPrescription,
   corePrescription,
   latestAssessment,
+  microSessions,
   mobilityPrescription,
+  progressionTracks,
   readinessDecision,
   readinessTrend,
   skillTrees,
@@ -27,6 +29,7 @@ import {
 import { cardioCoverage } from '@/lib/capability-trends';
 
 const modalities: CardioModality[] = ['walk', 'run', 'cycle', 'row', 'incline-treadmill', 'other'];
+const assessmentMetricIds = ['pullups', 'dead-hang', 'ankle-mobility', 'single-leg-balance', 'jump', 'carry'];
 
 function title(value: string) {
   return value.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
@@ -36,6 +39,7 @@ export function WholePersonDashboard({
   history,
   activity,
   readinessRecords,
+  assessments,
   preferences,
   gym,
   nextSession,
@@ -45,6 +49,7 @@ export function WholePersonDashboard({
   history: HistoryEntry[];
   activity: ActivityDose[];
   readinessRecords: ReadinessRecord[];
+  assessments: Assessment[];
   preferences: UserPreferences;
   gym: GymProfile;
   nextSession: SessionId;
@@ -57,22 +62,44 @@ export function WholePersonDashboard({
   const [cardioEffort, setCardioEffort] = useState<'easy' | 'moderate' | 'hard'>('moderate');
   const [cardioModality, setCardioModality] = useState<CardioModality>('walk');
   const [cardioKind, setCardioKind] = useState<'planned' | 'incidental'>('planned');
+  const [availableMinutes, setAvailableMinutes] = useState(20);
+  const [progressions, setProgressions] = useState<Record<string, string>>({});
+
+  useEffect(() => { setProgressions(store.loadProgressions()); }, []);
+  useEffect(() => { if (latestInput) setCheck(latestInput); }, [latestInput]);
 
   const decision = readinessDecision(latestInput || {});
   const trend = readinessTrend(readinessRecords);
   const coverage = useMemo(() => cardioCoverage(activity, preferences.cardioTargetMinutes), [activity, preferences.cardioTargetMinutes]);
   const prescription = cardioPrescription(coverage.equivalentMinutes, preferences.cardioTargetMinutes, 30);
-  const load = recentTrainingLoad(history, activity);
-  const cardioChoices = useMemo(() => {
-    const base = cardioOptions(coverage.equivalentMinutes, preferences.cardioTargetMinutes, decision.level, 30);
-    if (load.lowerBodyRecent && load.lowerSets >= 6) return base.filter(option => option.type !== 'intervals');
-    return base;
-  }, [coverage.equivalentMinutes, preferences.cardioTargetMinutes, decision.level, load.lowerBodyRecent, load.lowerSets]);
+  const load = useMemo(() => recentTrainingLoad(history, activity), [history, activity]);
+  const cardioChoices = useMemo(
+    () => coordinateCardio(cardioOptions(coverage.equivalentMinutes, preferences.cardioTargetMinutes, decision.level, 30), load, decision.level),
+    [coverage.equivalentMinutes, preferences.cardioTargetMinutes, decision.level, load],
+  );
   const core = corePrescription({ session: nextSession, equipment: gym.equipment, readiness: decision.level, recentLowerBody: load.lowerBodyRecent });
   const preparation = mobilityPrescription(nextSession, 'prepare', 6);
   const restore = mobilityPrescription(nextSession, 'restore', 10);
   const power = powerAllowed(load, decision.level, preferences.highImpactAllowed);
-  const athletic = athleticPlan([], decision.level, { highImpactAllowed: power.allowed, equipment: gym.equipment }).filter(plan => plan.domain !== 'power' || power.allowed);
+  const athletic = athleticPlan(assessments, decision.level, { highImpactAllowed: power.allowed, equipment: gym.equipment }).filter(plan => plan.domain !== 'power' || power.allowed);
+  const minimumPlan = useMemo(() => minimumEffectiveDay({
+    availableMinutes,
+    activity,
+    readiness: decision,
+    mode: preferences.lifeMode,
+    cardioTargetMinutes: preferences.cardioTargetMinutes,
+    priorities: preferences.domainPriorities,
+    equipment: gym.equipment,
+  }), [availableMinutes, activity, decision.level, decision.volumeMultiplier, decision.allowProgression, preferences.lifeMode, preferences.cardioTargetMinutes, preferences.domainPriorities, gym.equipment]);
+
+  const athleticProgressions = (['single-leg-balance', 'jump'] as const).map(metricId => {
+    const level = (progressions[`athletic:${metricId}`] as AthleticLevel) || 'foundation';
+    return {
+      metricId,
+      level,
+      decision: recommendAthleticProgression({ metricId, assessments, currentLevel: level, readiness: decision.level, highImpactAllowed: preferences.highImpactAllowed }),
+    };
+  });
 
   function saveCheck() {
     const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: check }].slice(-90);
@@ -90,6 +117,30 @@ export function WholePersonDashboard({
     logDose({ domain: 'cardio', minutes: cardioMinutes, effort: cardioEffort, modality: cardioModality, kind: cardioKind, source: 'manual', sessionId: `cardio:${cardioModality}`, completedAt: new Date().toISOString() });
   }
 
+  function completeMinimumPlan() {
+    const completedAt = new Date().toISOString();
+    const doses = minimumPlan.sessionIds.flatMap(id => {
+      const session = microSessions.find(item => item.id === id);
+      return session ? [{ domain: session.domain, minutes: session.minutes, effort: 'easy' as const, kind: 'planned' as const, source: 'manual' as const, quality: 1, sessionId: `minimum:${preferences.lifeMode}:${id}`, completedAt }] : [];
+    });
+    if (!doses.length) return;
+    const next = [...activity, ...doses];
+    store.saveActivity(next);
+    onActivityChange(next);
+  }
+
+  function selectProgression(trackId: string, levelId: string) {
+    const next = { ...progressions, [trackId]: levelId };
+    store.saveProgressions(next);
+    setProgressions(next);
+  }
+
+  function applyAthleticProgression(metricId: 'single-leg-balance' | 'jump', level: AthleticLevel) {
+    const next = { ...progressions, [`athletic:${metricId}`]: level };
+    store.saveProgressions(next);
+    setProgressions(next);
+  }
+
   return <>
     <section className="card" aria-labelledby="readiness-title">
       <h2 id="readiness-title">Readiness</h2>
@@ -102,9 +153,17 @@ export function WholePersonDashboard({
         <label><b>Stress</b><select value={check.stress || 'moderate'} onChange={event => setCheck({ ...check, stress: event.target.value as ReadinessInput['stress'] })}><option value="low">Low</option><option value="moderate">Moderate</option><option value="high">High</option></select></label>
         <label><b>How ready do you feel?</b><select value={check.subjective || 3} onChange={event => setCheck({ ...check, subjective: Number(event.target.value) as ReadinessInput['subjective'] })}><option value="1">1 — very low</option><option value="2">2 — low</option><option value="3">3 — okay</option><option value="4">4 — good</option><option value="5">5 — excellent</option></select></label>
       </div>
-      <div className="toggle-grid"><button className={check.pain ? 'active warning' : ''} onClick={() => setCheck({ ...check, pain: !check.pain })}>Unusual pain {check.pain ? 'flagged' : 'not flagged'}</button><button className={check.illness ? 'active warning' : ''} onClick={() => setCheck({ ...check, illness: !check.illness })}>Illness {check.illness ? 'flagged' : 'not flagged'}</button><button className="primary" onClick={saveCheck}>Save check-in</button></div>
+      <div className="toggle-grid"><button className={check.pain ? 'active warning' : ''} aria-pressed={Boolean(check.pain)} onClick={() => setCheck({ ...check, pain: !check.pain })}>Unusual pain {check.pain ? 'flagged' : 'not flagged'}</button><button className={check.illness ? 'active warning' : ''} aria-pressed={Boolean(check.illness)} onClick={() => setCheck({ ...check, illness: !check.illness })}>Illness {check.illness ? 'flagged' : 'not flagged'}</button><button className="primary" onClick={saveCheck}>Save check-in</button></div>
       <div className="coach-note"><b>{decision.level === 'normal' ? 'Normal training available' : decision.level === 'reduced' ? 'Conservative training recommended' : 'Recovery-first recommendation'}</b><br/>{decision.reasons.join(' ') || 'No major recovery constraints are recorded in the latest check-in.'}</div>
       <p className="muted"><b>Seven-day pattern:</b> {trend.message}</p>
+    </section>
+
+    <section className="card" aria-labelledby="minimum-day-title">
+      <h2 id="minimum-day-title">Minimum-effective day</h2>
+      <p className="muted">Use a short fallback when life changes. It contributes to the relevant domains without pretending to equal the full planned workout.</p>
+      <label><b>Available minutes</b><input type="number" min="5" max="120" value={availableMinutes} onChange={event => setAvailableMinutes(Math.max(5, Number(event.target.value) || 5))}/></label>
+      <div className="coach-note"><b>{title(preferences.lifeMode)} plan · {minimumPlan.minutes} min</b><br/>{minimumPlan.message}{minimumPlan.sessionIds.length ? ` Suggested: ${minimumPlan.sessionIds.map(id => microSessions.find(item => item.id === id)?.name || title(id)).join(' + ')}.` : ''}</div>
+      {minimumPlan.sessionIds.length > 0 && <button className="primary" onClick={completeMinimumPlan}>Mark suggested work done</button>}
     </section>
 
     <section className="card" aria-labelledby="cardio-title">
@@ -129,6 +188,21 @@ export function WholePersonDashboard({
       {core.map(session => <div className="history" key={session.id}><b>{session.name}</b><span>{session.minutes} min</span><small>{session.items.join(' · ')}</small><button className="link" onClick={() => logDose({ domain: 'core', minutes: session.minutes, effort: session.fatigue === 'low' ? 'easy' : 'moderate', source: 'manual', kind: 'planned', sessionId: session.id, completedAt: new Date().toISOString() })}>Mark core done</button></div>)}
       {athletic.map(plan => <div className="history" key={plan.domain}><b>{plan.name}</b><span>{plan.impact} impact</span><small>{plan.items.join(' · ')} · {plan.reason}</small><button className="link" onClick={() => logDose({ domain: plan.domain, minutes: 10, effort: plan.impact === 'low' ? 'easy' : 'moderate', source: 'manual', kind: 'planned', sessionId: `athletic:${plan.domain}`, completedAt: new Date().toISOString() })}>Mark 10 min done</button></div>)}
       {!power.allowed && <div className="coach-note"><b>Power held today</b><br/>{power.reason}</div>}
+    </section>
+
+    <section className="card" aria-labelledby="progressions-title">
+      <h2 id="progressions-title">Core and mobility progressions</h2>
+      <p className="muted">Choose the highest level you can perform cleanly. Completion is logged separately from the selected level so history is not rewritten.</p>
+      {progressionTracks.map(track => {
+        const current = track.levels.find(level => level.id === progressions[track.id]) || track.levels[0];
+        return <div className="skill-block" key={track.id}><b>{track.name} · {current.name}</b><p className="muted">{current.target}</p><small>{current.items.join(' · ')}</small><div className="chip-grid">{track.levels.map(level => <button key={level.id} className={level.id === current.id ? 'active' : ''} aria-pressed={level.id === current.id} onClick={() => selectProgression(track.id, level.id)}>{level.name}</button>)}</div><button className="link" onClick={() => logDose({ domain: track.domain, minutes: 8, effort: 'easy', source: 'manual', kind: 'planned', quality: 1, sessionId: `${track.id}:${current.id}`, completedAt: new Date().toISOString() })}>Record current-level practice</button></div>;
+      })}
+    </section>
+
+    <section className="card" aria-labelledby="athletic-progression-title">
+      <h2 id="athletic-progression-title">Athletic progression</h2>
+      <p className="muted">Balance and jump difficulty changes only after repeated comparable benchmarks. Readiness and the high-impact preference can hold progression.</p>
+      {athleticProgressions.map(item => <div className="history" key={item.metricId}><b>{item.metricId === 'jump' ? 'Jump / power' : 'Single-leg balance'} · {title(item.level)}</b><span>{item.decision.evidenceCount} tests</span><small>{item.decision.message} Current work: {athleticLevelSession(item.metricId, item.level).join(' · ')}</small>{item.decision.action !== 'hold' && <button className="link" onClick={() => applyAthleticProgression(item.metricId, item.decision.nextLevel)}>Apply {item.decision.action}: {title(item.decision.nextLevel)}</button>}</div>)}
     </section>
   </>;
 }
@@ -174,7 +248,7 @@ export function SkillProgressPanel({ gym }: { gym: GymProfile }) {
       const input = inputs[tree.id] || { value: 0, assistanceKg: 0, variation: '', pain: false };
       return <div className="skill-block" key={tree.id}>
         <div className="exercise-title"><div><span className="pill">{tree.name}</span><h3>{step.name}</h3><p className="muted">Target: {step.target}</p></div><select aria-label={`${tree.name} level`} value={stepId} onChange={event => apply(tree.id, event.target.value)}>{tree.steps.filter(item => item.requiredEquipment.every(required => gym.equipment.includes(required))).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
-        <div className="settings-grid"><label><b>{step.metric === 'seconds' ? 'Seconds' : step.metric === 'external-load-kg' ? 'Added load (kg)' : 'Best clean reps'}</b><input type="number" min="0" step="0.5" value={input.value} onChange={event => setInputs({ ...inputs, [tree.id]: { ...input, value: Number(event.target.value) } })}/></label>{step.id === 'assisted' && <label><b>Assistance (kg)</b><input type="number" min="0" step="0.5" value={input.assistanceKg} onChange={event => setInputs({ ...inputs, [tree.id]: { ...input, assistanceKg: Number(event.target.value) } })}/></label>}<label><b>Test condition</b><input value={input.variation} placeholder="e.g. blue band" onChange={event => setInputs({ ...inputs, [tree.id]: { ...input, variation: event.target.value } })}/></label><button className={input.pain ? 'warning active' : ''} onClick={() => setInputs({ ...inputs, [tree.id]: { ...input, pain: !input.pain } })}>Discomfort {input.pain ? 'flagged' : 'not flagged'}</button></div>
+        <div className="settings-grid"><label><b>{step.metric === 'seconds' ? 'Seconds' : step.metric === 'external-load-kg' ? 'Added load (kg)' : 'Best clean reps'}</b><input type="number" min="0" step="0.5" value={input.value} onChange={event => setInputs({ ...inputs, [tree.id]: { ...input, value: Number(event.target.value) } })}/></label>{step.id === 'assisted' && <label><b>Assistance (kg)</b><input type="number" min="0" step="0.5" value={input.assistanceKg} onChange={event => setInputs({ ...inputs, [tree.id]: { ...input, assistanceKg: Number(event.target.value) } })}/></label>}<label><b>Test condition</b><input value={input.variation} placeholder="e.g. assisted machine" onChange={event => setInputs({ ...inputs, [tree.id]: { ...input, variation: event.target.value } })}/></label><button className={input.pain ? 'warning active' : ''} aria-pressed={input.pain} onClick={() => setInputs({ ...inputs, [tree.id]: { ...input, pain: !input.pain } })}>Discomfort {input.pain ? 'flagged' : 'not flagged'}</button></div>
         <button className="primary" onClick={() => record(tree.id)}>Record assessment</button>
         <div className="coach-note">{recommendation.message}</div>
         {recommendation.action !== 'hold' && <button className="link" onClick={() => apply(tree.id, recommendation.stepId)}>Apply {recommendation.action}: {tree.steps.find(item => item.id === recommendation.stepId)?.name}</button>}
@@ -183,19 +257,20 @@ export function SkillProgressPanel({ gym }: { gym: GymProfile }) {
   </section>;
 }
 
-export function CapabilityAssessmentPanel() {
-  const [assessments, setAssessments] = useState<Assessment[]>(() => typeof window === 'undefined' ? [] : store.loadAssessments());
+export function CapabilityAssessmentPanel({ assessments, onChange }: { assessments: Assessment[]; onChange: (next: Assessment[]) => void }) {
   const [metricId, setMetricId] = useState('pullups');
   const [value, setValue] = useState(0);
   const [note, setNote] = useState('');
-  const metrics = ['pullups', 'dead-hang', 'ankle-mobility', 'single-leg-balance', 'jump', 'carry'];
+  const metrics = capabilityMetrics.filter(metric => assessmentMetricIds.includes(metric.id));
+  const selected = metrics.find(metric => metric.id === metricId) || metrics[0];
 
   function record() {
-    const next = [...assessments, { metricId, value, note: note || undefined, recordedAt: new Date().toISOString() }];
+    if (!selected || !Number.isFinite(value)) return;
+    const next = [...assessments, { metricId: selected.id, value, note: note || undefined, recordedAt: new Date().toISOString() }];
     store.saveAssessments(next);
-    setAssessments(next);
+    onChange(next);
     setNote('');
   }
 
-  return <section className="card" aria-labelledby="assessment-title"><h2 id="assessment-title">Capability assessments</h2><p className="muted">Use the same test conditions each time. Each capability remains separate rather than becoming an arbitrary universal health score.</p><div className="settings-grid"><label><b>Assessment</b><select value={metricId} onChange={event => setMetricId(event.target.value)}>{metrics.map(item => <option key={item} value={item}>{title(item)}</option>)}</select></label><label><b>Value</b><input type="number" step="0.1" value={value} onChange={event => setValue(Number(event.target.value))}/></label><label><b>Conditions/note</b><input value={note} onChange={event => setNote(event.target.value)} placeholder="Keep conditions repeatable"/></label></div><button className="primary" onClick={record}>Record assessment</button>{metrics.map(item => { const latest = latestAssessment(assessments, item); return <div className="history" key={item}><b>{title(item)}</b><span>{latest ? latest.value : 'No baseline'}</span><small>{latest?.note || 'Record a consistent baseline when convenient.'}</small></div>; })}</section>;
+  return <section className="card" aria-labelledby="assessment-title"><h2 id="assessment-title">Capability assessments</h2><p className="muted">Use the same test conditions each time. Each capability remains separate rather than becoming an arbitrary universal health score.</p><div className="settings-grid"><label><b>Assessment</b><select value={metricId} onChange={event => setMetricId(event.target.value)}>{metrics.map(metric => <option key={metric.id} value={metric.id}>{metric.name}</option>)}</select></label><label><b>Value {selected ? `(${selected.unit})` : ''}</b><input type="number" step="0.1" value={value} onChange={event => setValue(Number(event.target.value))}/></label><label><b>Conditions/note</b><input value={note} onChange={event => setNote(event.target.value)} placeholder="Keep conditions repeatable"/></label></div><button className="primary" onClick={record}>Record assessment</button>{metrics.map(metric => { const latest = latestAssessment(assessments, metric.id); return <div className="history" key={metric.id}><b>{metric.name}</b><span>{latest ? `${latest.value} ${metric.unit}` : 'No baseline'}</span><small>{latest?.note || metric.description}</small></div>; })}</section>;
 }
