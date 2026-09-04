@@ -24,6 +24,7 @@ import {
   parseConnectedJson,
   refreshAdapterState,
   saveImportedSourceStates,
+  saveImportedSourceSummaries,
   sourceFreshness,
   syncAdapter,
 } from '@/lib/connected-health';
@@ -57,15 +58,7 @@ function formatDate(value?: string) {
   return Number.isFinite(date.getTime()) ? date.toLocaleString() : 'Unknown';
 }
 
-function SourceCard({
-  adapter,
-  source,
-  busy,
-  onConnect,
-  onSync,
-  onDisconnect,
-  onDelete,
-}: {
+function SourceCard({ adapter, source, busy, onConnect, onSync, onDisconnect, onDelete }: {
   adapter: HealthDataAdapter;
   source?: HealthSourceState;
   busy: boolean;
@@ -126,13 +119,13 @@ export function ConnectedHealthPanel() {
     return () => { cancelled = true; };
   }, [adapters, snapshot.refresh]);
 
-  async function run(label: string, action: () => Promise<unknown>) {
+  async function run(label: string, action: () => Promise<string | void>) {
     setBusy(label);
     setMessage('');
     try {
-      await action();
+      const result = await action();
       await snapshot.refresh();
-      setMessage('Completed. Source, freshness, and provenance details were updated locally.');
+      setMessage(result || 'Completed. Source, freshness, and provenance details were updated locally.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'The connected-health operation failed.');
     } finally {
@@ -141,15 +134,24 @@ export function ConnectedHealthPanel() {
   }
 
   async function connect(adapter: HealthDataAdapter) {
-    await run(adapter.sourceId, () => connectAdapter(adapter));
+    await run(adapter.sourceId, async () => {
+      const state = await connectAdapter(adapter);
+      return state.status === 'current' ? `${adapter.displayName} connected and synchronized.` : `${adapter.displayName}: ${title(state.status)}${state.error ? ` — ${state.error}` : ''}`;
+    });
   }
 
   async function sync(adapter: HealthDataAdapter) {
-    await run(adapter.sourceId, () => syncAdapter(adapter));
+    await run(adapter.sourceId, async () => {
+      const state = await syncAdapter(adapter);
+      return `${adapter.displayName} sync finished as ${title(state.status)}${state.partialReason ? ` — ${state.partialReason}` : state.error ? ` — ${state.error}` : ''}`;
+    });
   }
 
   async function disconnect(adapter: HealthDataAdapter) {
-    await run(adapter.sourceId, () => disconnectAdapter(adapter, false));
+    await run(adapter.sourceId, async () => {
+      await disconnectAdapter(adapter, false);
+      return `${adapter.displayName} disconnected. Locally imported observations remain until you delete the source data.`;
+    });
   }
 
   async function deleteSource(sourceId: string, adapter?: HealthDataAdapter) {
@@ -157,6 +159,7 @@ export function ConnectedHealthPanel() {
     await run(`delete:${sourceId}`, async () => {
       await adapter?.disconnect?.();
       await healthRepository.deleteSource(sourceId);
+      return 'The selected source and its locally stored observations were deleted.';
     });
   }
 
@@ -170,8 +173,8 @@ export function ConnectedHealthPanel() {
         batch.forEach(observation => groups.set(observation.sourceId, [...(groups.get(observation.sourceId) || []), observation]));
         for (const [sourceId, observations] of groups) await healthRepository.upsertBatch(sourceId, { observations, deletedExternalIds: [], complete: true });
       });
-      await saveImportedSourceStates(report.observations);
-      setMessage(`Imported ${report.observations.length.toLocaleString()} supported Apple Health observations. ${report.warnings.join(' ')}`.trim());
+      await saveImportedSourceSummaries(report.sourceSummaries);
+      return `Imported ${report.importedCount.toLocaleString()} supported Apple Health observations without retaining the complete parsed file in memory. ${report.warnings.join(' ')}`.trim();
     });
   }
 
@@ -181,27 +184,38 @@ export function ConnectedHealthPanel() {
     if (!file) return;
     await run('json-import', async () => {
       const data = parseConnectedJson(await file.text());
-      await healthRepository.importData(data, 'merge');
+      const result = await healthRepository.importData(data, 'merge');
+      return `Merged ${result.accepted.toLocaleString()} connected-health observations. ${result.rejected ? `${result.rejected} invalid observations were rejected.` : ''}`.trim();
     });
   }
 
   async function exportConnected() {
-    await run('connected-export', async () => downloadJson(`human-health-connected-${new Date().toISOString().slice(0, 10)}.json`, await createConnectedHealthJson()));
+    await run('connected-export', async () => {
+      downloadJson(`human-health-connected-${new Date().toISOString().slice(0, 10)}.json`, await createConnectedHealthJson());
+      return 'Connected-health data was prepared as a local JSON download.';
+    });
   }
 
   async function exportFull() {
-    await run('full-export', async () => downloadJson(`human-health-full-${new Date().toISOString().slice(0, 10)}.json`, await createFullHealthArchive()));
+    await run('full-export', async () => {
+      downloadJson(`human-health-full-${new Date().toISOString().slice(0, 10)}.json`, await createFullHealthArchive());
+      return 'The complete local Human Health archive was prepared.';
+    });
   }
 
   async function updatePreferences(patch: Partial<ConnectedHealthPreferences>) {
-    await run('preferences', () => healthRepository.savePreferences({ ...snapshot.preferences, ...patch }));
+    await run('preferences', async () => {
+      await healthRepository.savePreferences({ ...snapshot.preferences, ...patch });
+      return 'Connected-health preferences were saved locally.';
+    });
   }
 
   async function logHabit(metric: ConnectedMetric) {
-    const observation = createManualObservation(metric, habitValues[metric]);
     await run(`habit:${metric}`, async () => {
+      const observation = createManualObservation(metric, habitValues[metric]);
       await healthRepository.upsertBatch(observation.sourceId, { observations: [observation], deletedExternalIds: [], complete: true });
       await saveImportedSourceStates([observation]);
+      return `${metricDefinitions[metric].label} was recorded locally.`;
     });
   }
 
@@ -224,7 +238,7 @@ export function ConnectedHealthPanel() {
     </section>
 
     {snapshot.loading && <p className="connection-state" role="status">Loading connected-health storage…</p>}
-    {(snapshot.error || message) && <p className={snapshot.error || message.toLowerCase().includes('fail') || message.toLowerCase().includes('invalid') ? 'connection-state storage-error' : 'connection-state online'} role={snapshot.error ? 'alert' : 'status'}>{snapshot.error || message}</p>}
+    {(snapshot.error || message) && <p className={snapshot.error || message.toLowerCase().includes('fail') || message.toLowerCase().includes('invalid') || message.toLowerCase().includes('rejected') ? 'connection-state storage-error' : 'connection-state online'} role={snapshot.error ? 'alert' : 'status'}>{snapshot.error || message}</p>}
 
     <section className="card" aria-labelledby="connected-overview-title">
       <div className="section-heading"><div><span className="eyebrow">OBSERVE</span><h2 id="connected-overview-title">Current signals</h2></div><span className="muted">{snapshot.observations.length.toLocaleString()} observations</span></div>
