@@ -39,6 +39,18 @@ describe('native connected-health mapping', () => {
     expect(first.map(item => item.id).sort()).toEqual(second.map(item => item.id).sort());
   });
 
+  it('uses the same sample identity when a newer provider version corrects its value', () => {
+    const original = mapNativeRecord('health-connect', 'native:health-connect', {
+      id: 'hr-correction', version: 1, type: 'HeartRateRecord', startTime: '2026-09-03T10:00:00Z', samples: [{ value: 100, time: '2026-09-03T10:00:15Z', unit: 'bpm' }],
+    })[0];
+    const corrected = mapNativeRecord('health-connect', 'native:health-connect', {
+      id: 'hr-correction', version: 2, type: 'HeartRateRecord', startTime: '2026-09-03T10:00:00Z', samples: [{ value: 104, time: '2026-09-03T10:00:15Z', unit: 'bpm' }],
+    })[0];
+    expect(corrected.id).toBe(original.id);
+    expect(corrected.value).toBe(104);
+    expect(corrected.provenance.externalVersion).toBe(2);
+  });
+
   it('derives sleep-session and sleep-stage duration from time ranges', () => {
     const session = mapNativeRecord('health-connect', 'native:health-connect', { id: 'sleep-1', type: 'SleepSessionRecord', startTime: '2026-09-02T22:00:00Z', endTime: '2026-09-03T06:00:00Z' });
     const stage = mapNativeRecord('apple-health', 'native:apple-health', { id: 'stage-1', type: 'HKCategoryTypeIdentifierSleepAnalysis', startTime: '2026-09-03T01:00:00Z', endTime: '2026-09-03T02:00:00Z', metadata: { stage: 'deep' } });
