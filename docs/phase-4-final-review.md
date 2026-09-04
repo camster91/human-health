@@ -1,0 +1,84 @@
+# Phase 4 final source review — Coaching intelligence
+
+PR: pending
+Base: `main`
+Branch: `phase-4-coaching-intelligence`
+Tracking: #77; verification #78; runner #51
+
+## Review conclusion
+
+Phase 4 is **feature-scope complete and source-reviewed** for the deterministic-first coaching surface. It is not release-verified because automated verification and representative browser QA have not yet run on the final candidate.
+
+## Architecture review
+
+The new coaching layer does not replace Phase 1–3 engines. It consumes their persisted training history, activity, readiness, goal preferences and connected-health trends, then produces a separate evidence ledger, trends and reversible actions.
+
+The recommendation itself is deterministic. The optional AI contract receives the already-decided actions plus evidence and safety rules. It is intentionally unable to mutate workout history, preferences, confidence labels or deterministic action order.
+
+## Trend review
+
+- Strength uses repeated comparable primary-lift performance and keeps different exercise variants separate.
+- Cardio uses planned aerobic coverage against the configured target; incidental movement is not silently counted as planned cardio.
+- Consistency compares qualifying recent sessions with the preceding period.
+- Recovery uses explicit readiness check-ins.
+- Connected-health trends retain current/stale/partial/failed state. Only current connected signals are assigned usable coaching confidence; stale/partial/failed data remains visible as context but is not allowed to drive a current action.
+- No cross-domain universal health score is created.
+
+## Plateau / deload review
+
+A plateau is not inferred from one poor exposure. The implementation requires at least four comparable primary-lift exposures spanning at least 14 days. It compares early and recent repeated performance. Deload is advisory only and is suggested only when plateau/regression evidence aligns with repeated constrained recovery check-ins. The app does not automatically rewrite training history or permanently change the programme.
+
+## Multi-goal review
+
+Existing Focus / Maintain / Deprioritize / Off preferences are used as planning weights. Deprioritized/off domains do not drive catch-up recommendations. Recovery can temporarily take precedence without rewriting the user's durable goal preferences. Percentages shown in the Coach UI are planning allocation shares, not a health score.
+
+## Context-aware review
+
+Recommendations can account for:
+- current readiness level
+- recent lower-body working-set concentration
+- recent hard planned cardio
+- explicit travel, return-to-training and maintenance modes
+- training consistency
+- current goal priorities
+- plateau/deload evidence
+- current connected-health trend context
+
+Recent workload can cause the coach to advise against stacking another hard lower-body stressor. Life modes shape the coaching recommendation before deficit chasing.
+
+## Conversational adaptation review
+
+The parser recognizes bounded time limits, low-energy wording, travel/return/maintenance context, known gym profiles, unavailable equipment and goal hints. It returns a reversible structured suggestion; it does not silently change history or preferences.
+
+Symptom and treatment language is not interpreted as medical coaching. Pain, injury, dizziness, illness, glucose-adjacent warning language, insulin, medication, correction or carbohydrate-treatment wording routes to a safety boundary instead of diagnosis or dosing advice.
+
+## AI explanation review
+
+The optional `window.HumanHealthCoachAI` adapter is narrative-only. The request contains:
+- deterministic actions
+- evidence observations and confidence
+- the safety boundary
+- explicit rules prohibiting action changes, confidence upgrades, diagnosis, medication/insulin/carb dosing and universal health scoring
+
+No provider is bundled with credentials. Deterministic explanations remain available without AI.
+
+## Movement/video review
+
+Camera/video analysis is not enabled. The reliability gate requires explicit review of benchmark quality, false-positive risk, device performance, privacy flow, retention policy and accessibility. Even when those flags are complete, a separate reviewed runtime implementation and explicit user permission are still required.
+
+## UX/PWA review
+
+A dedicated `/coach/` route presents next actions, evidence, plateau/deload review, multi-goal planning, conversational adaptation, explanation-layer status and the movement/video gate. The global quick-route control exposes Coach and Health outside the focused live-workout screen. `/coach/` is included in the service-worker precache and static PWA check expectations.
+
+## Source-review risks / limits
+
+1. No executable TypeScript/test/build evidence exists yet for the final branch.
+2. No representative browser/accessibility QA exists yet for `/coach/`.
+3. The optional AI adapter is an integration boundary, not a bundled remote AI service.
+4. Connected-health source usefulness still depends on Phase 3 data quality and freshness.
+5. Movement/video remains deliberately unavailable.
+6. The self-hosted Actions runner issue remains external to Phase 4 source completeness.
+
+## Merge/deploy gate
+
+Keep the Phase 4 PR draft and unmerged until the source review is accepted and Cameron explicitly approves merge. Production deployment remains a separate approval and verification decision.
