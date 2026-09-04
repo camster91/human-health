@@ -100,8 +100,7 @@ export function normalizePreventiveReminder(value: PreventiveReminder, now = new
   };
 }
 
-export function completeReminder(reminder: PreventiveReminder, occurredAt = new Date()): { record: PreventiveRecord; nextReminder: PreventiveReminder | null } {
-  const now = new Date();
+export function completeReminder(reminder: PreventiveReminder, occurredAt = new Date(), now = new Date()): { record: PreventiveRecord; nextReminder: PreventiveReminder | null } {
   if (!Number.isFinite(occurredAt.getTime()) || occurredAt.getTime() > now.getTime() + FUTURE_TOLERANCE_MS) throw new Error('Preventive completion date is invalid or materially in the future.');
   const normalized = normalizePreventiveReminder(reminder, now);
   const createdAt = now.toISOString();
