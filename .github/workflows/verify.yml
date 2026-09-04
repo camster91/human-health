@@ -3,14 +3,14 @@ name: Verify
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, phase-3-connected-health]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: verify-${{ github.ref }}
+  group: verify-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
