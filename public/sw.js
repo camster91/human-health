@@ -1,5 +1,5 @@
-const CACHE_VERSION = 'human-health-v6';
-const CORE = ['/', '/health/', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/offline.html'];
+const CACHE_VERSION = 'human-health-v7';
+const CORE = ['/', '/health/', '/coach/', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/offline.html'];
 
 async function precacheApplicationShell() {
   const cache = await caches.open(CACHE_VERSION);
