@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Human Health</title>
+  <desc id="desc">A rounded orange app icon with an abstract human and heartbeat.</desc>
+  <rect width="512" height="512" rx="112" fill="#c84712"/>
+  <circle cx="256" cy="151" r="57" fill="#fff"/>
+  <path d="M149 360c17-88 61-132 107-132s90 44 107 132" fill="none" stroke="#fff" stroke-width="46" stroke-linecap="round"/>
+  <path d="M105 303h76l24-48 43 99 34-65 25 43h100" fill="none" stroke="#171a1f" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
