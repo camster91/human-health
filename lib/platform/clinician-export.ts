@@ -37,7 +37,7 @@ export function buildClinicianSummary(input: ClinicianExportInput): ClinicianFri
     primaryExerciseExposure[exercise.name] = (primaryExerciseExposure[exercise.name] || 0) + workingLogs(exercise).length;
   }));
 
-  // Keep providers/source ids separate. The clinician summary must never imply
+  // Keep provider/source ids separate. The clinician summary must never imply
   // that overlapping device/provider samples were combined into one truth.
   const metricGroups = new Map<string, typeof input.connectedObservations>();
   input.connectedObservations.forEach(observation => {
@@ -51,13 +51,14 @@ export function buildClinicianSummary(input: ClinicianExportInput): ClinicianFri
     const latest = sorted.at(-1)!;
     return {
       metric: latest.metric,
+      sourceId: latest.sourceId,
       sourceNames: [...new Set(observations.map(item => item.provenance.sourceName))],
       sampleCount: observations.length,
       latestAt: latest.endTime || latest.startTime,
       latestValue: latest.value,
       unit: latest.unit,
     };
-  }).sort((a, b) => a.metric.localeCompare(b.metric) || (a.sourceNames[0] || '').localeCompare(b.sourceNames[0] || ''));
+  }).sort((a, b) => a.metric.localeCompare(b.metric) || a.sourceId.localeCompare(b.sourceId));
 
   return {
     schemaVersion: 1,
@@ -103,13 +104,13 @@ export function clinicianSummaryMarkdown(summary: ClinicianFriendlySummary) {
   for (const [exercise, sets] of Object.entries(summary.training.primaryExerciseExposure)) lines.push(`- ${exercise}: ${sets} logged working sets`);
   lines.push('', '## Connected health');
   if (!summary.connectedHealth.metrics.length) lines.push('No connected metric samples in the selected lookback window.');
-  summary.connectedHealth.metrics.forEach(metric => lines.push(`- ${metric.metric}: ${metric.sampleCount} samples; latest ${metric.latestValue ?? 'n/a'} ${metric.unit || ''} at ${metric.latestAt || 'n/a'}; source: ${metric.sourceNames.join(', ') || 'unknown'}`));
+  summary.connectedHealth.metrics.forEach(metric => lines.push(`- ${metric.metric}: ${metric.sampleCount} samples; latest ${metric.latestValue ?? 'n/a'} ${metric.unit || ''} at ${metric.latestAt || 'n/a'}; source ${metric.sourceId}: ${metric.sourceNames.join(', ') || 'unknown'}`));
   lines.push('', '## Preventive records');
   if (!summary.preventive.records.length) lines.push('No preventive records entered.');
   summary.preventive.records.forEach(record => lines.push(`- ${record.title} — ${record.occurredAt.slice(0, 10)} (${record.source}${record.provider ? `; ${record.provider}` : ''})`));
   lines.push('', '## User/clinician-entered reminders');
   if (!summary.preventive.reminders.length) lines.push('No reminders entered.');
-  summary.preventive.reminders.forEach(reminder => lines.push(`- ${reminder.title} — due ${reminder.dueOn} (${reminder.source})`));
+  summary.preventive.reminders.forEach(reminder => lines.push(`- ${reminder.title} — due ${reminder.dueOn} (${reminder.source}${reminder.provider ? `; ${reminder.provider}` : ''})`));
   lines.push('', '## Data notes', ...summary.dataNotes.map(note => `- ${note}`));
   return lines.join('\n');
 }
