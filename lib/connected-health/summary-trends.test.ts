@@ -46,6 +46,23 @@ describe('connected-health summaries', () => {
     const source = makeSource('manual', { supportedMetrics: ['meal-quality'], grantedMetrics: ['meal-quality'], lastSuccessAt: '2026-09-03T17:00:00Z' });
     expect(summarizeConnectedHealth(observations, [source], defaultConnectedHealthPreferences, now).mealQualityToday.value).toBe(4);
   });
+
+  it('links heart-rate samples to the latest workout interval without medical interpretation', () => {
+    const observations = [
+      makeObservation('workout-duration', 45, { sourceId: 'watch', startTime: '2026-09-03T12:00:00Z', endTime: '2026-09-03T12:45:00Z', recordedAt: '2026-09-03T12:45:00Z' }),
+      makeObservation('heart-rate', 100, { sourceId: 'watch', startTime: '2026-09-03T12:05:00Z', recordedAt: '2026-09-03T12:05:00Z' }),
+      makeObservation('heart-rate', 140, { sourceId: 'watch', startTime: '2026-09-03T12:20:00Z', recordedAt: '2026-09-03T12:20:00Z' }),
+      makeObservation('heart-rate', 120, { sourceId: 'watch', startTime: '2026-09-03T12:40:00Z', recordedAt: '2026-09-03T12:40:00Z' }),
+      makeObservation('heart-rate', 70, { sourceId: 'watch', startTime: '2026-09-03T13:30:00Z', recordedAt: '2026-09-03T13:30:00Z' }),
+    ];
+    const source = makeSource('watch', { displayName: 'Watch', supportedMetrics: ['heart-rate', 'workout-duration'], grantedMetrics: ['heart-rate', 'workout-duration'], lastSuccessAt: '2026-09-03T13:30:00Z' });
+    const workout = summarizeConnectedHealth(observations, [source], defaultConnectedHealthPreferences, now).workoutHeartRate;
+    expect(workout.sampleCount).toBe(3);
+    expect(workout.average).toBe(120);
+    expect(workout.minimum).toBe(100);
+    expect(workout.maximum).toBe(140);
+    expect(workout.note).toContain('not a medical interpretation');
+  });
 });
 
 describe('connected-health trends', () => {
