@@ -59,7 +59,7 @@ Status: merged into `main`; executable/browser/native validation remains separat
 
 ## Phase 4 — Coaching intelligence
 
-Status: merged into `main`; release verification remains separately tracked in #78/#51.
+Status: merged into `main`; release verification remains separately tracked in GitHub.
 
 1. Explainable trend detection with evidence/confidence/insufficient-data states
 2. Plateau/regression detection and conservative advisory deload logic
@@ -71,7 +71,7 @@ Status: merged into `main`; release verification remains separately tracked in #
 
 ## Phase 5 — Long-horizon health platform
 
-Status: **source scope and final hardening complete** on draft PR #83. Executable/runtime verification, real external validation evidence and merge/deployment remain separate gates.
+Status: **source scope and Phase 5 hardening are merged into `main`**. Executable/runtime verification, real external validation evidence, independent whole-repository review, and production release remain separate gates tracked in GitHub.
 
 1. User/clinician-entered preventive-health reminders and records without invented clinical schedules
 2. Clinician-friendly local discussion export with provenance and explicit non-diagnostic framing
