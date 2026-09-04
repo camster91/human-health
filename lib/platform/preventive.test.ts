@@ -22,10 +22,17 @@ describe('preventive reminders', () => {
     expect(repeated.nextReminder?.dueOn).toBe('2027-02-28');
   });
 
-  it('rejects invalid reminder dates, repeat intervals, and impossible record dates', () => {
+  it('rejects invalid reminder dates, repeat intervals, enabled state, and impossible record dates', () => {
     expect(() => normalizePreventiveReminder({ ...reminder, dueOn: 'not-a-date' })).toThrow();
     expect(() => normalizePreventiveReminder({ ...reminder, dueOn: '2026-02-31' })).toThrow();
     expect(() => normalizePreventiveReminder({ ...reminder, repeatMonths: Number.NaN })).toThrow();
+    expect(() => normalizePreventiveReminder({ ...reminder, repeatMonths: 1.5 })).toThrow('repeat interval');
+    expect(() => normalizePreventiveReminder({ ...reminder, enabled: 'false' as unknown as boolean })).toThrow('enabled state');
     expect(() => normalizePreventiveRecord({ id: 'bad', title: 'Bad record', category: 'other', occurredAt: '2026-02-31T12:00:00Z', source: 'manual', createdAt: '2026-09-01T12:00:00Z' })).toThrow('dates are invalid');
+  });
+
+  it('fails closed on malformed optional text instead of coercing archive values', () => {
+    expect(() => normalizePreventiveRecord({ id: 'bad', title: 'Bad record', category: 'other', occurredAt: '2026-09-01T12:00:00Z', source: 'manual', createdAt: '2026-09-01T12:00:00Z', provider: 42 as unknown as string })).toThrow('provider');
+    expect(normalizePreventiveReminder({ ...reminder, note: '' }).note).toBeUndefined();
   });
 });
