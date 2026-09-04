@@ -84,6 +84,10 @@ export type Workout = {
   unavailableEquipment?: Equipment[];
   exercises: WorkoutExercise[];
   pausedAt?: string;
+  /** Snapshot of whether automatic progression was allowed when this workout began. */
+  progressionAllowed?: boolean;
+  /** Human-readable evidence for a held progression decision. */
+  progressionReason?: string;
 };
 
 export type GymProfile = {
