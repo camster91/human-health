@@ -16,6 +16,9 @@ function move(level: AthleticLevel, delta: number) {
   const index = levelOrder.indexOf(level);
   return levelOrder[Math.max(0, Math.min(levelOrder.length - 1, index + delta))];
 }
+function conditionKey(assessment: Assessment) {
+  return (assessment.note || '').trim().toLocaleLowerCase();
+}
 
 export function recommendAthleticProgression(options: {
   metricId: 'single-leg-balance' | 'jump';
@@ -34,6 +37,9 @@ export function recommendAthleticProgression(options: {
     return { metricId: options.metricId, action: 'hold', level, nextLevel: level, evidenceCount: values.length, message: options.highImpactAllowed === false && options.metricId === 'jump' ? 'High-impact progression is disabled in preferences.' : 'Hold athletic progression while recovery is reduced. Keep the current level and prioritize clean, low-fatigue practice.' };
   }
   if (values.length < 3) return { metricId: options.metricId, action: 'hold', level, nextLevel: level, evidenceCount: values.length, message: 'Keep the current level until at least three comparable benchmark results are available.' };
+  if (new Set(values.map(conditionKey)).size > 1) {
+    return { metricId: options.metricId, action: 'hold', level, nextLevel: level, evidenceCount: values.length, message: 'Recent benchmark notes describe different test conditions. Repeat the same test setup before changing athletic level.' };
+  }
 
   const baseline = values.slice(0, -2).reduce((sum, item) => sum + item.value, 0) / Math.max(1, values.length - 2);
   if (baseline <= 0) return { metricId: options.metricId, action: 'hold', level, nextLevel: level, evidenceCount: values.length, message: 'Benchmark values need a positive baseline before the app can compare progression.' };
@@ -46,11 +52,11 @@ export function recommendAthleticProgression(options: {
     const nextLevel = move(level, 1);
     return nextLevel === level
       ? { metricId: options.metricId, action: 'hold', level, nextLevel: level, evidenceCount: values.length, message: 'Repeated benchmark improvement is confirmed. Stay at the top level and progress quality or difficulty gradually rather than adding volume automatically.' }
-      : { metricId: options.metricId, action: 'advance', level, nextLevel, evidenceCount: values.length, message: 'Two recent benchmarks improved beyond the earlier baseline. Advance one athletic level while keeping volume low and technique crisp.' };
+      : { metricId: options.metricId, action: 'advance', level, nextLevel, evidenceCount: values.length, message: 'Two recent comparable benchmarks improved beyond the earlier baseline. Advance one athletic level while keeping volume low and technique crisp.' };
   }
   if (regressed) {
     const nextLevel = move(level, -1);
-    return { metricId: options.metricId, action: nextLevel === level ? 'hold' : 'regress', level, nextLevel, evidenceCount: values.length, message: 'Two recent benchmarks are meaningfully below the earlier baseline. Reduce complexity or impact temporarily and rebuild quality.' };
+    return { metricId: options.metricId, action: nextLevel === level ? 'hold' : 'regress', level, nextLevel, evidenceCount: values.length, message: 'Two recent comparable benchmarks are meaningfully below the earlier baseline. Reduce complexity or impact temporarily and rebuild quality.' };
   }
   return { metricId: options.metricId, action: 'hold', level, nextLevel: level, evidenceCount: values.length, message: 'The evidence is mixed or stable. Keep the current level and reassess after another comparable benchmark.' };
 }
