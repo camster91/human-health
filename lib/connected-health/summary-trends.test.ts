@@ -89,4 +89,23 @@ describe('connected-health trends', () => {
     expect(trend.direction).toBe('up');
     expect(connectedHealthTrends(observations, [source], defaultConnectedHealthPreferences, now)).toHaveLength(4);
   });
+
+  it('excludes samples whose recorded timestamp is materially in the future', () => {
+    const now = new Date('2026-09-15T12:00:00Z');
+    const observations = Array.from({ length: 14 }, (_, index) => {
+      const date = new Date(now.getTime() - index * 86_400_000);
+      return makeObservation('steps', 1_000, { sourceId: 'watch', startTime: date.toISOString(), recordedAt: date.toISOString(), externalId: `stable-${index}` });
+    });
+    observations.push(makeObservation('steps', 100_000, {
+      sourceId: 'watch',
+      startTime: '2026-09-15T10:00:00Z',
+      recordedAt: '2026-09-16T10:00:00Z',
+      externalId: 'future-recorded',
+    }));
+    const source = makeSource('watch', { lastSuccessAt: now.toISOString(), staleAfterMs: 48 * 3_600_000 });
+    const trend = metricTrend(observations, [source], defaultConnectedHealthPreferences, 'steps', { now });
+    expect(trend.currentAverage).toBe(1_000);
+    expect(trend.previousAverage).toBe(1_000);
+    expect(trend.direction).toBe('stable');
+  });
 });
