@@ -4,7 +4,7 @@ import { SkillAssessment } from './performance';
 import { defaultPreferences, normalizePreferences, UserPreferences } from './preferences';
 import { RestTimerState, sanitizeRestTimer, startRestTimer } from './rest-timer';
 import { ScheduleEvent } from './schedule';
-import { ActivityDose, Assessment, ReadinessInput, ReadinessRecord } from './whole-person';
+import { ActivityDose, Assessment, ReadinessRecord } from './whole-person';
 
 const PREFIX = 'human-health:';
 const ACTIVE = `${PREFIX}active`;
@@ -21,24 +21,37 @@ const PREFERENCES = `${PREFIX}preferences`;
 const SCHEDULE_EVENTS = `${PREFIX}schedule-events`;
 const STORAGE_PROBE = `${PREFIX}storage-probe`;
 
+let mutationFailure: string | null = null;
+
 function read<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
-  try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)) as T; } catch { return fallback; }
+  try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)) as T; }
+  catch { mutationFailure = 'Saved local data could not be read. The affected value was ignored.'; return fallback; }
 }
 
 function write(key: string, value: unknown) {
   if (typeof window === 'undefined') return false;
-  try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; }
+  try { localStorage.setItem(key, JSON.stringify(value)); mutationFailure = null; return true; }
+  catch { mutationFailure = 'Browser storage rejected the latest save. Keep this page open and export data before continuing.'; return false; }
 }
 
 function remove(key: string) {
-  if (typeof window === 'undefined') return;
-  try { localStorage.removeItem(key); } catch { /* browser storage can be unavailable */ }
+  if (typeof window === 'undefined') return false;
+  try { localStorage.removeItem(key); mutationFailure = null; return true; }
+  catch { mutationFailure = 'Browser storage rejected a local deletion.'; return false; }
 }
 
 function canPersist() {
   if (typeof window === 'undefined') return false;
-  try { localStorage.setItem(STORAGE_PROBE, '1'); localStorage.removeItem(STORAGE_PROBE); return true; } catch { return false; }
+  try {
+    localStorage.setItem(STORAGE_PROBE, '1');
+    localStorage.removeItem(STORAGE_PROBE);
+    if (mutationFailure === 'Browser storage is unavailable or full.') mutationFailure = null;
+    return true;
+  } catch {
+    mutationFailure = 'Browser storage is unavailable or full.';
+    return false;
+  }
 }
 
 function activeWorkout(value: unknown): Workout | null {
@@ -51,7 +64,7 @@ function activeWorkout(value: unknown): Workout | null {
 
 function storedReadiness(): ReadinessRecord[] {
   const value = read<unknown>(READINESS, []);
-  if (!Array.isArray(value)) return [];
+  if (!Array.isArray(value)) { mutationFailure = 'Saved readiness data was invalid and was ignored.'; return []; }
   return (value as ReadinessRecord[]).filter(record => record && record.source !== 'connected-sleep' && typeof record.recordedAt === 'string' && record.input && typeof record.input === 'object');
 }
 
@@ -121,8 +134,11 @@ function mergeUnique<T>(current: T[], incoming: T[], key: (value: T) => string) 
 
 export const store = {
   canPersist,
+  getMutationError() { return mutationFailure; },
+  clearMutationError() { mutationFailure = null; },
+
   loadActive(): Workout | null { return activeWorkout(read<unknown>(ACTIVE, null)); },
-  saveActive(value: Workout | null) { if (value) return write(ACTIVE, value); remove(ACTIVE); return true; },
+  saveActive(value: Workout | null) { return value ? write(ACTIVE, value) : remove(ACTIVE); },
 
   loadRestTimer(): RestTimerState | null {
     const current = sanitizeRestTimer(read<unknown>(REST_TIMER, null));
@@ -138,27 +154,30 @@ export const store = {
     remove(LEGACY_REST_UNTIL);
     return null;
   },
-  saveRestTimer(value: RestTimerState | null) { if (value) return write(REST_TIMER, value); remove(REST_TIMER); remove(LEGACY_REST_UNTIL); return true; },
+  saveRestTimer(value: RestTimerState | null) {
+    if (value) return write(REST_TIMER, value);
+    return remove(REST_TIMER) && remove(LEGACY_REST_UNTIL);
+  },
   loadRestUntil(): number | null { const timer = store.loadRestTimer(); return timer?.status === 'running' ? timer.endsAt : null; },
   saveRestUntil(value: number | null) { return store.saveRestTimer(value ? { status: 'running', endsAt: value, durationMs: Math.max(1, value - Date.now()) } : null); },
 
-  loadHistory(): HistoryEntry[] { const value = read<unknown>(HISTORY, []); return Array.isArray(value) ? value as HistoryEntry[] : []; },
+  loadHistory(): HistoryEntry[] { const value = read<unknown>(HISTORY, []); if (!Array.isArray(value)) { mutationFailure = 'Saved workout history was invalid and was ignored.'; return []; } return value as HistoryEntry[]; },
   saveHistory(value: HistoryEntry[]) { return write(HISTORY, value); },
-  loadActivity(): ActivityDose[] { const value = read<unknown>(ACTIVITY, []); return Array.isArray(value) ? value as ActivityDose[] : []; },
+  loadActivity(): ActivityDose[] { const value = read<unknown>(ACTIVITY, []); if (!Array.isArray(value)) { mutationFailure = 'Saved activity data was invalid and was ignored.'; return []; } return value as ActivityDose[]; },
   saveActivity(value: ActivityDose[]) { return write(ACTIVITY, value); },
   loadReadiness(): ReadinessRecord[] { return effectiveReadiness(); },
   saveReadiness(value: ReadinessRecord[]) { return write(READINESS, value.filter(record => record.source !== 'connected-sleep').slice(-90)); },
   loadSkills(): Record<string, string> { return read<Record<string, string>>(SKILLS, {}); },
   saveSkills(value: Record<string, string>) { return write(SKILLS, value); },
-  loadAssessments(): Assessment[] { const value = read<unknown>(ASSESSMENTS, []); return Array.isArray(value) ? value as Assessment[] : []; },
+  loadAssessments(): Assessment[] { const value = read<unknown>(ASSESSMENTS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved capability assessments were invalid and were ignored.'; return []; } return value as Assessment[]; },
   saveAssessments(value: Assessment[]) { return write(ASSESSMENTS, value); },
   loadProgressions(): Record<string, string> { return read<Record<string, string>>(PROGRESSIONS, {}); },
   saveProgressions(value: Record<string, string>) { return write(PROGRESSIONS, value); },
-  loadSkillAssessments(): SkillAssessment[] { const value = read<unknown>(SKILL_ASSESSMENTS, []); return Array.isArray(value) ? value as SkillAssessment[] : []; },
+  loadSkillAssessments(): SkillAssessment[] { const value = read<unknown>(SKILL_ASSESSMENTS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved skill assessments were invalid and were ignored.'; return []; } return value as SkillAssessment[]; },
   saveSkillAssessments(value: SkillAssessment[]) { return write(SKILL_ASSESSMENTS, value); },
   loadPreferences(): UserPreferences { return normalizePreferences(read<Partial<UserPreferences>>(PREFERENCES, defaultPreferences)); },
   savePreferences(value: UserPreferences) { return write(PREFERENCES, normalizePreferences(value)); },
-  loadScheduleEvents(): ScheduleEvent[] { const value = read<unknown>(SCHEDULE_EVENTS, []); return Array.isArray(value) ? value as ScheduleEvent[] : []; },
+  loadScheduleEvents(): ScheduleEvent[] { const value = read<unknown>(SCHEDULE_EVENTS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved schedule events were invalid and were ignored.'; return []; } return value as ScheduleEvent[]; },
   saveScheduleEvents(value: ScheduleEvent[]) { return write(SCHEDULE_EVENTS, value.slice(-100)); },
 
   exportData(): HumanHealthExport {
@@ -196,7 +215,7 @@ export const store = {
       preferences: current.preferences,
       scheduleEvents: mergeUnique(current.scheduleEvents, incoming.scheduleEvents, item => `${item.recordedAt}|${item.type}|${item.from}|${item.to}`),
     } satisfies HumanHealthExport;
-    if (mode === 'replace') store.clearAll();
+    if (mode === 'replace' && !store.clearAll()) throw new Error(store.getMutationError() || 'Existing local data could not be cleared safely.');
     const writes = [
       store.saveActive(next.activeWorkout),
       store.saveRestTimer(next.activeWorkout ? next.restTimer : null),
@@ -210,11 +229,11 @@ export const store = {
       store.savePreferences(next.preferences),
       store.saveScheduleEvents(next.scheduleEvents),
     ];
-    if (writes.some(result => !result)) throw new Error('The browser could not persist the complete training archive.');
+    if (writes.some(result => !result)) throw new Error(store.getMutationError() || 'The browser could not persist the complete training archive.');
     return next;
   },
 
   clearAll() {
-    [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS, CONNECTED_SLEEP_CONTEXT_KEY].forEach(remove);
+    return [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS, CONNECTED_SLEEP_CONTEXT_KEY].every(remove);
   },
 };
