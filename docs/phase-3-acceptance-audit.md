@@ -11,9 +11,15 @@ This audit records source-level acceptance checks that remain meaningful while C
 - Connected sleep can constrain readiness only when fresh and enabled; recent manual sleep input remains authoritative.
 - Apple Health XML import is local and batched, reports unsupported/malformed records, and does not require server upload.
 - Health Connect and HealthKit are explicit native-host bridge contracts; an ordinary browser reports them as unavailable instead of fabricating connectivity.
-- Connected-health archive parsing validates before replacement, and full archive operations retain rollback behaviour.
+- Connected-health archive parsing validates observations and source metadata before replacement.
+- Connected archive source provider/status/metric/freshness/timestamp metadata is rejected when malformed instead of silently coerced.
+- Unknown non-empty measurement units are rejected instead of being assumed canonical.
+- Native heart-rate sample IDs remain stable if a provider reorders samples or corrects a value at the same timestamp.
+- Full archive operations retain rollback behaviour and connected repository replacement is transactional.
 - Source-scoped deletion leaves unrelated sources and training history intact.
+- Batched localStorage cleanup/import retains the first storage failure even when later mutations succeed.
 - Phase 2 volume-scaling, progression, workout accounting, recovery trend, and minimum-effective-day behaviours remain preserved on the Phase 3 branch.
+- The Health route no longer references the removed runtime PWA icon generator; committed icon assets remain the source of truth.
 
 ## Still requires executable evidence
 
