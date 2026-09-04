@@ -1,5 +1,5 @@
 import { mergeObservationCollections, normalizeConnectedPreferences, normalizeSourceState } from '../merge';
-import { HealthObservation, HealthRepositoryExport, HealthSourceState } from '../types';
+import { HealthObservation, HealthRepositoryExport, HealthSourceState, connectedMetrics } from '../types';
 
 export type ConnectedJsonEnvelope = {
   format: 'human-health-connected-export';
@@ -19,7 +19,12 @@ function parseSourceState(value: unknown): HealthSourceState {
   if (!providers.has(String(source.provider))) throw new Error(`Connected-health archive source ${source.id} has an unsupported provider.`);
   if (!statuses.has(String(source.status))) throw new Error(`Connected-health archive source ${source.id} has an unsupported status.`);
   if (!Array.isArray(source.supportedMetrics) || !Array.isArray(source.grantedMetrics)) throw new Error(`Connected-health archive source ${source.id} has invalid metric permissions.`);
+  if (!source.supportedMetrics.every(metric => connectedMetrics.includes(metric)) || !source.grantedMetrics.every(metric => connectedMetrics.includes(metric) && source.supportedMetrics!.includes(metric))) throw new Error(`Connected-health archive source ${source.id} contains unsupported or inconsistent metrics.`);
   if (!Number.isFinite(source.staleAfterMs) || Number(source.staleAfterMs) <= 0) throw new Error(`Connected-health archive source ${source.id} has an invalid freshness window.`);
+  for (const [label, candidate] of [['last attempt', source.lastAttemptAt], ['last success', source.lastSuccessAt]] as const) {
+    if (candidate !== undefined && (!candidate || !Number.isFinite(Date.parse(candidate)))) throw new Error(`Connected-health archive source ${source.id} has an invalid ${label} timestamp.`);
+  }
+  if (source.recordCount !== undefined && (!Number.isFinite(source.recordCount) || source.recordCount < 0)) throw new Error(`Connected-health archive source ${source.id} has an invalid record count.`);
   return normalizeSourceState(source as HealthSourceState);
 }
 
