@@ -20,21 +20,35 @@ export function useConnectedHealthSnapshot() {
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
-    try {
-      const [nextObservations, nextSources, nextPreferences] = await Promise.all([
-        healthRepository.listObservations(),
-        healthRepository.listSources(),
-        healthRepository.getPreferences(),
-      ]);
-      setObservations(nextObservations);
-      setSources(nextSources);
-      setPreferences(nextPreferences);
-      setError('');
-    } catch (value) {
-      setError(value instanceof Error ? value.message : 'Connected health data could not be loaded.');
-    } finally {
-      setLoading(false);
+    const [observationResult, sourceResult, preferenceResult] = await Promise.allSettled([
+      healthRepository.listObservations(),
+      healthRepository.listSources(),
+      healthRepository.getPreferences(),
+    ]);
+
+    const errors: string[] = [];
+    if (observationResult.status === 'fulfilled') setObservations(observationResult.value);
+    else {
+      // Fail closed: do not continue showing previously trusted health observations
+      // after storage integrity becomes uncertain.
+      setObservations([]);
+      errors.push(observationResult.reason instanceof Error ? observationResult.reason.message : 'Connected-health observations could not be loaded.');
     }
+
+    if (sourceResult.status === 'fulfilled') setSources(sourceResult.value);
+    else {
+      setSources([]);
+      errors.push(sourceResult.reason instanceof Error ? sourceResult.reason.message : 'Connected-health sources could not be loaded.');
+    }
+
+    if (preferenceResult.status === 'fulfilled') setPreferences(preferenceResult.value);
+    else {
+      setPreferences(defaultConnectedHealthPreferences);
+      errors.push(preferenceResult.reason instanceof Error ? preferenceResult.reason.message : 'Connected-health preferences could not be loaded.');
+    }
+
+    setError(errors.join(' '));
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -46,7 +60,7 @@ export function useConnectedHealthSnapshot() {
 
   const summary = useMemo(() => summarizeConnectedHealth(observations, sources, preferences), [observations, sources, preferences]);
   useEffect(() => {
-    if (!loading) saveConnectedSleepContext(summary, preferences.useFreshSleepForReadiness);
-  }, [loading, preferences.useFreshSleepForReadiness, summary]);
+    if (!loading && !error) saveConnectedSleepContext(summary, preferences.useFreshSleepForReadiness);
+  }, [error, loading, preferences.useFreshSleepForReadiness, summary]);
   return { observations, sources, preferences, summary, loading, error, refresh };
 }
