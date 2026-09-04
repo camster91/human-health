@@ -24,21 +24,61 @@ export const capabilityModelRegistry: CapabilityModelDefinition[] = [
   },
 ];
 
+function nonEmpty(value?: string) {
+  return Boolean(value?.trim());
+}
+
+function validReviewedAt(value: string) {
+  return Number.isFinite(Date.parse(value));
+}
+
+function completeExternalEvidence(item: CapabilityEvidence) {
+  return item.kind === 'external-study'
+    && nonEmpty(item.id)
+    && nonEmpty(item.title)
+    && nonEmpty(item.reference)
+    && nonEmpty(item.population)
+    && nonEmpty(item.protocol)
+    && nonEmpty(item.outcome)
+    && validReviewedAt(item.reviewedAt);
+}
+
+function completeIndependentReplication(item: CapabilityEvidence) {
+  return item.kind === 'replication'
+    && item.independent === true
+    && nonEmpty(item.id)
+    && nonEmpty(item.title)
+    && nonEmpty(item.reference)
+    && nonEmpty(item.population)
+    && nonEmpty(item.protocol)
+    && nonEmpty(item.outcome)
+    && validReviewedAt(item.reviewedAt);
+}
+
 export function validationEvidenceSatisfiesClaim(evidence: CapabilityEvidence[]) {
-  const external = evidence.some(item => item.kind === 'external-study' && item.reference.trim().length > 0 && item.protocol?.trim());
-  const replication = evidence.some(item => item.kind === 'replication' && item.reference.trim().length > 0);
-  return Boolean(external && replication);
+  const ids = evidence.map(item => item.id.trim()).filter(Boolean);
+  if (new Set(ids).size !== ids.length) return false;
+  const external = evidence.find(completeExternalEvidence);
+  const replication = evidence.find(completeIndependentReplication);
+  if (!external || !replication) return false;
+  // A replication cannot be represented by the same reference as the original
+  // external study. This is still only a software claim gate; evidence quality
+  // and applicability require real specialist review outside the codebase.
+  return external.reference.trim() !== replication.reference.trim();
 }
 
 export function canClaimValidated(model: CapabilityModelDefinition) {
-  return model.validationStatus === 'validated-for-intended-use' && validationEvidenceSatisfiesClaim(model.evidence);
+  return model.medicalUseAllowed === false
+    && model.validationStatus === 'validated-for-intended-use'
+    && nonEmpty(model.intendedUse)
+    && validationEvidenceSatisfiesClaim(model.evidence);
 }
 
 export function withValidationStatus(model: CapabilityModelDefinition, status: CapabilityValidationStatus, evidence: CapabilityEvidence[]): CapabilityModelDefinition {
   if (status === 'validated-for-intended-use' && !validationEvidenceSatisfiesClaim(evidence)) {
-    throw new Error('Validated-for-intended-use status requires recorded external-study and replication evidence.');
+    throw new Error('Validated-for-intended-use status requires complete external-study evidence and a distinct independent replication record.');
   }
-  return { ...model, validationStatus: status, evidence: [...evidence] };
+  return { ...model, validationStatus: status, evidence: evidence.map(item => ({ ...item })) };
 }
 
 export function validationLabel(model: CapabilityModelDefinition) {
