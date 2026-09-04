@@ -11,7 +11,16 @@ describe('connected-health normalization and merge', () => {
     expect(convertToCanonical('distance', 1_500, 'm')).toEqual({ value: 1.5, unit: 'km' });
     expect(convertToCanonical('water', 1.25, 'L')).toEqual({ value: 1_250, unit: 'ml' });
     expect(convertToCanonical('protein', 25_000, 'mg')).toEqual({ value: 25, unit: 'g' });
+    expect(convertToCanonical('heart-rate', 72, 'count/min')).toEqual({ value: 72, unit: 'bpm' });
+    expect(convertToCanonical('cardio-fitness', 42, 'mL/min·kg')).toEqual({ value: 42, unit: 'ml/kg/min' });
     expect(convertToCanonical('heart-rate', Number.NaN, 'bpm')).toBeNull();
+  });
+
+  it('rejects unknown non-empty units instead of silently treating them as canonical', () => {
+    expect(convertToCanonical('distance', 5, 'furlong')).toBeNull();
+    expect(convertToCanonical('water', 2, 'bucket')).toBeNull();
+    expect(convertToCanonical('steps', 100, 'metres')).toBeNull();
+    expect(convertToCanonical('steps', 100)).toEqual({ value: 100, unit: 'count' });
   });
 
   it('derives observation identity from source ownership instead of trusting an imported ID', () => {
@@ -33,6 +42,7 @@ describe('connected-health normalization and merge', () => {
     expect(normalizeObservation({ ...base, quality: 'estimated' as never })).toBeNull();
     expect(normalizeObservation({ ...base, startTime: 'bad-date' })).toBeNull();
     expect(normalizeObservation({ ...base, value: -1 })).toBeNull();
+    expect(normalizeObservation({ ...base, unit: 'km' as never })).toBeNull();
   });
 
   it('upserts a newer provider version without duplicating the observation', () => {
