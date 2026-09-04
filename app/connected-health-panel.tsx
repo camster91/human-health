@@ -19,13 +19,12 @@ import {
   habitMetrics,
   habitTarget,
   healthRepository,
-  importAppleHealthXmlFile,
+  importAppleHealthXmlRecoverably,
   metricDefinitions,
   observationFreshness,
   parseConnectedJson,
   refreshAdapterState,
   saveImportedSourceStates,
-  saveImportedSourceSummaries,
   sourceFreshness,
   syncAdapter,
 } from '@/lib/connected-health';
@@ -178,49 +177,10 @@ export function ConnectedHealthPanel() {
     event.target.value = '';
     if (!file) return;
     await run('apple-import', async () => {
-      const backups = new Map<string, { observations: HealthObservation[]; source: HealthSourceState | null }>();
-      const ensureBackup = async (sourceId: string) => {
-        if (backups.has(sourceId)) return;
-        const [observations, source] = await Promise.all([
-          healthRepository.listObservations({ sourceId }),
-          healthRepository.getSource(sourceId),
-        ]);
-        backups.set(sourceId, { observations, source });
-      };
-      const rollback = async () => {
-        const failures: string[] = [];
-        for (const [sourceId, backup] of backups) {
-          try {
-            await healthRepository.deleteSource(sourceId);
-            if (backup.observations.length) await healthRepository.upsertBatch(sourceId, { observations: backup.observations, deletedExternalIds: [], complete: true });
-            if (backup.source) await healthRepository.saveSource(backup.source);
-          } catch (error) {
-            failures.push(`${sourceId}: ${error instanceof Error ? error.message : 'rollback failed'}`);
-          }
-        }
-        if (failures.length) throw new Error(failures.join(' | '));
-      };
-
-      try {
-        const report = await importAppleHealthXmlFile(file, async batch => {
-          const groups = new Map<string, HealthObservation[]>();
-          batch.forEach(observation => groups.set(observation.sourceId, [...(groups.get(observation.sourceId) || []), observation]));
-          for (const [sourceId, observations] of groups) {
-            await ensureBackup(sourceId);
-            await healthRepository.upsertBatch(sourceId, { observations, deletedExternalIds: [], complete: true });
-          }
-        }, { onProgress: parsedTags => { if (parsedTags > 0 && parsedTags % 5_000 === 0) setMessage(`Processed ${parsedTags.toLocaleString()} Apple Health record tags locally…`); } });
-        await saveImportedSourceSummaries(report.sourceSummaries);
-        return `Imported ${report.importedCount.toLocaleString()} supported Apple Health observations without retaining the complete parsed file in memory. ${report.warnings.join(' ')}`.trim();
-      } catch (error) {
-        const importMessage = error instanceof Error ? error.message : 'Apple Health import failed.';
-        try {
-          await rollback();
-        } catch (rollbackError) {
-          throw new Error(`${importMessage} Automatic rollback also failed: ${rollbackError instanceof Error ? rollbackError.message : 'unknown rollback error'}. Review the affected Apple Health sources before retrying.`);
-        }
-        throw new Error(`${importMessage} Any Apple Health batches written by this import were rolled back to their pre-import source state.`);
-      }
+      const report = await importAppleHealthXmlRecoverably(file, {
+        onProgress: parsedTags => { if (parsedTags > 0 && parsedTags % 5_000 === 0) setMessage(`Processed ${parsedTags.toLocaleString()} Apple Health record tags locally…`); },
+      });
+      return `Imported ${report.importedCount.toLocaleString()} supported Apple Health observations without retaining the complete parsed file in memory. ${report.warnings.join(' ')}`.trim();
     });
   }
 
