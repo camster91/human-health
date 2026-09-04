@@ -20,6 +20,7 @@ const REST_TIMER = `${PREFIX}rest-timer`;
 const LEGACY_REST_UNTIL = `${PREFIX}rest-until`;
 const PREFERENCES = `${PREFIX}preferences`;
 const SCHEDULE_EVENTS = `${PREFIX}schedule-events`;
+const FINALIZATION_JOURNAL = `${PREFIX}finalization-journal`;
 const STORAGE_PROBE = `${PREFIX}storage-probe`;
 
 let mutationFailure: string | null = null;
@@ -94,6 +95,45 @@ function activeWorkout(value: unknown): Workout | null {
   if (!candidate.id || !candidate.session || !candidate.startedAt || !candidate.gymId || !Array.isArray(candidate.exercises)) return null;
   if (!['active', 'paused', 'interrupted'].includes(candidate.status || '')) return null;
   return candidate as Workout;
+}
+
+type FinalizationJournal = {
+  version: 1;
+  workoutId: string;
+  history: HistoryEntry[];
+  activity: ActivityDose[] | null;
+};
+
+function finalizationJournal(value: unknown): FinalizationJournal | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Partial<FinalizationJournal>;
+  if (candidate.version !== 1 || typeof candidate.workoutId !== 'string' || !candidate.workoutId || !Array.isArray(candidate.history)) return null;
+  if (candidate.activity !== null && !Array.isArray(candidate.activity)) return null;
+  return {
+    version: 1,
+    workoutId: candidate.workoutId,
+    history: deduplicateHistory(candidate.history as HistoryEntry[]),
+    activity: candidate.activity === null ? null : deduplicateWorkoutActivity(candidate.activity as ActivityDose[]),
+  };
+}
+
+function loadFinalizationJournal() {
+  const raw = read<unknown>(FINALIZATION_JOURNAL, null);
+  if (raw === null) return null;
+  const journal = finalizationJournal(raw);
+  if (!journal) mutationFailure = 'A pending workout finalization record is invalid. The active workout was preserved instead of guessing.';
+  return journal;
+}
+
+function commitFinalizationJournal(journal: FinalizationJournal) {
+  if (!journal.activity) {
+    mutationFailure = 'Workout finalization is pending its derived activity data. The active workout remains available for retry.';
+    return false;
+  }
+  if (!write(HISTORY, journal.history)) return false;
+  if (!write(ACTIVITY, journal.activity)) return false;
+  if (!remove(FINALIZATION_JOURNAL)) return false;
+  return true;
 }
 
 function storedReadiness(): ReadinessRecord[] {
@@ -176,6 +216,18 @@ export const store = {
 
   loadActive(): Workout | null {
     const active = activeWorkout(read<unknown>(ACTIVE, null));
+    const journal = loadFinalizationJournal();
+    if (journal) {
+      if (active && journal.workoutId !== active.id) {
+        mutationFailure = 'A pending workout finalization belongs to a different workout. The current active workout was preserved for manual recovery.';
+        return active;
+      }
+      if (!journal.activity) return active;
+      if (!commitFinalizationJournal(journal)) return active;
+      runMutations([() => remove(ACTIVE), () => remove(REST_TIMER), () => remove(LEGACY_REST_UNTIL)], 'Finalized workout state could not be fully cleaned up.');
+      return null;
+    }
+
     const historyValue = read<unknown>(HISTORY, []);
     const history = Array.isArray(historyValue) ? deduplicateHistory(historyValue as HistoryEntry[]) : [];
     if (activeWorkoutWasFinalized(active, history)) {
@@ -211,13 +263,34 @@ export const store = {
     if (!Array.isArray(value)) { mutationFailure = 'Saved workout history was invalid and was ignored.'; return []; }
     return deduplicateHistory(value as HistoryEntry[]);
   },
-  saveHistory(value: HistoryEntry[]) { return write(HISTORY, deduplicateHistory(value)); },
+  saveHistory(value: HistoryEntry[]) {
+    const next = deduplicateHistory(value);
+    const active = activeWorkout(read<unknown>(ACTIVE, null));
+    if (active && activeWorkoutWasFinalized(active, next)) {
+      const currentJournal = loadFinalizationJournal();
+      const journal: FinalizationJournal = {
+        version: 1,
+        workoutId: active.id,
+        history: next,
+        activity: currentJournal?.workoutId === active.id ? currentJournal.activity : null,
+      };
+      return write(FINALIZATION_JOURNAL, journal);
+    }
+    return write(HISTORY, next);
+  },
   loadActivity(): ActivityDose[] {
     const value = read<unknown>(ACTIVITY, []);
     if (!Array.isArray(value)) { mutationFailure = 'Saved activity data was invalid and was ignored.'; return []; }
     return deduplicateWorkoutActivity(value as ActivityDose[]);
   },
-  saveActivity(value: ActivityDose[]) { return write(ACTIVITY, deduplicateWorkoutActivity(value)); },
+  saveActivity(value: ActivityDose[]) {
+    const next = deduplicateWorkoutActivity(value);
+    const journal = loadFinalizationJournal();
+    if (!journal) return write(ACTIVITY, next);
+    const complete: FinalizationJournal = { ...journal, activity: next };
+    if (!write(FINALIZATION_JOURNAL, complete)) return false;
+    return commitFinalizationJournal(complete);
+  },
   loadReadiness(): ReadinessRecord[] { return effectiveReadiness(); },
   saveReadiness(value: ReadinessRecord[]) { return write(READINESS, value.filter(record => record.source !== 'connected-sleep').slice(-90)); },
   loadSkills(): Record<string, string> { return read<Record<string, string>>(SKILLS, {}); },
@@ -288,7 +361,7 @@ export const store = {
   },
 
   clearAll() {
-    const keys = [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS, CONNECTED_SLEEP_CONTEXT_KEY];
+    const keys = [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS, CONNECTED_SLEEP_CONTEXT_KEY, FINALIZATION_JOURNAL];
     return runMutations(keys.map(key => () => remove(key)), 'Local Human Health data could not be fully deleted.');
   },
 };
