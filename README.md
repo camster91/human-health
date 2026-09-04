@@ -10,11 +10,12 @@ The current product foundation combines adaptive strength training, whole-person
 - **Phase 2:** whole-person fitness foundation and hardening — merged
 - **Phase 3:** connected-health context and local data portability — merged; automated/browser/native verification remains separately tracked
 - **Phase 4:** coaching intelligence — merged; release verification remains separately tracked
-- **Phase 5:** long-horizon health platform — source scope and final hardening complete on draft PR #83; executable/runtime verification and merge approval remain pending
+- **Phase 5:** long-horizon health platform — source scope and Phase 5 hardening merged to `main`; executable/runtime verification remains a separate gate
+- **Final repository review:** independent whole-repository hardening is active in draft PR #84; release remains blocked until its stated verification and review gates are satisfied
 
 Phase 5 adds user/clinician-entered preventive records/reminders, local clinician discussion exports, capability-model evidence/validation gates, on-device personal baselines, versioned scoped integration contracts, complete Phase 5 archive/delete coverage and regulatory escalation checkpoints. Current capability models remain explicitly experimental until real external validation and independent replication evidence are recorded.
 
-A final hardening pass added fail-closed handling for corrupt Phase 5 storage, source-separated clinician exports, atomic preventive reminder completion, strict calendar/month-end handling, enforced integration-share confirmation, stronger validation-evidence gates, and fail-closed regulatory classification for ambiguous intended use.
+A Phase 5 hardening pass added fail-closed handling for corrupt platform storage, source-separated clinician exports, atomic preventive reminder completion, strict calendar/month-end handling, enforced integration-share confirmation, stronger validation-evidence gates, and fail-closed regulatory classification for ambiguous intended use. The later independent repository review is tracked separately and must not be conflated with release verification.
 
 ## Safety and privacy
 
@@ -22,31 +23,49 @@ Human Health is a fitness/lifestyle product, not a medical authority. Connected 
 
 Connected-health and Phase 5 preventive data remain local to the device in the current architecture. Native permissions are user initiated, imported files do not require server upload, personal baselines are generated on-device, and clinician/integration exports require explicit user action. A connected integration host additionally requires an explicit confirmed share operation. No remote AI provider, integration provider, camera/video clinical analysis, medication-dosing feature or emergency-monitoring feature is bundled.
 
+## Start here
+
+For coding-agent execution rules, safety boundaries, verification expectations, and the documentation reading order, read `AGENTS.md` first. `docs/README.md` is the documentation index, while open GitHub issues and pull requests hold live implementation/release state.
+
 ## Development
+
+Node.js 22 is the CI target. The repository does not yet have a trustworthy committed lockfile, so use the current install path until dependency reproducibility is resolved:
 
 ```bash
 npm install
+npm run dev
+```
+
+Canonical merge-level source verification:
+
+```bash
+npm run verify
+```
+
+It runs TypeScript checking, the unit suite, the production build, and PWA static checks. Individual commands remain available for focused work:
+
+```bash
 npm run typecheck
 npm test
 npm run build
 npm run check:pwa
 ```
 
-The repository also exposes `npm run verify` for the consolidated source/build/PWA gate.
-
-GitHub Actions currently targets a self-hosted Ashbi runner. Human Health does not yet have a confirmed repository-eligible runner, so queued workflow runs are not evidence of a source failure or a successful verification. Issue #51 tracks that infrastructure dependency.
+GitHub Actions currently targets a self-hosted Ashbi runner. Human Health does not yet have a confirmed repository-eligible runner, so queued workflow runs are not evidence of a source failure or a successful verification. The active infrastructure issue/PR state in GitHub is authoritative.
 
 ## Key docs
 
+- `AGENTS.md` — durable coding-agent execution and safety contract
+- `docs/README.md` — current documentation index and reading guidance
 - `docs/implementation-roadmap.md` — phased product roadmap
 - `docs/10-year-lifecycle.md` — long-horizon lifecycle plan
-- `docs/phase-3-final-review.md` — Phase 3 source review
-- `docs/phase-4-final-review.md` — Phase 4 source review
-- `docs/phase-5-status.md` — current Phase 5 status
-- `docs/phase-5-final-review.md` — Phase 5 final hardening/source review
-- `docs/phase-5-completion-checklist.md` — Phase 5 evidence/release gates
-- `docs/phase-5-final-hardening-findings.md` — final hardening findings and resolutions
+- `docs/connected-health-architecture.md` — connected-health architecture
+- `docs/connected-health-privacy.md` — privacy/data ownership boundaries
+- `docs/phase-5-status.md` — Phase 5 source status and outstanding verification gates
+- `docs/deployment-and-rollback.md` — release, production and rollback boundary
 - `docs/end-to-end-code-review-agent-prompt.md` — independent whole-repository line-by-line review prompt
+
+Older phase reviews and completion checklists remain useful evidence/history, but they must not silently override the current roadmap, README, AGENTS rules, or live GitHub work.
 
 ## Delivery rules
 
