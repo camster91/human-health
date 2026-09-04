@@ -8,3 +8,7 @@ export * from './adapters';
 export * from './repository';
 export * from './sync';
 export * from './events';
+export * from './habits';
+export * from './summary';
+export * from './import/apple-health-xml';
+export * from './import/canonical-json';
