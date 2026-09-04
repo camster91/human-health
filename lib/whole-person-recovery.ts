@@ -37,12 +37,46 @@ export function readinessDecision(input: ReadinessInput): ReadinessDecision {
 
 export function readinessTrend(records: ReadinessRecord[], now = new Date()) {
   const cutoff = now.getTime() - 7 * 86_400_000;
-  const recent = records.filter(record => new Date(record.recordedAt).getTime() >= cutoff);
+  const recent = records.filter(record => {
+    const time = new Date(record.recordedAt).getTime();
+    return Number.isFinite(time) && time >= cutoff && time <= now.getTime();
+  });
   if (!recent.length) return { normal: 0, reduced: 0, recovery: 0, message: 'No readiness trend yet.' };
   const counts = { normal: 0, reduced: 0, recovery: 0 };
   recent.forEach(record => counts[readinessDecision(record.input).level]++);
   const constrained = counts.reduced + counts.recovery;
   return { ...counts, message: constrained >= Math.ceil(recent.length / 2) ? 'Recovery constraints have been common this week. Keep progression conservative and prioritize consistency over catching up.' : 'Recovery has been mostly supportive of normal training this week.' };
+}
+
+/**
+ * Uses the latest check-in first, then applies a conservative trend hold only when at
+ * least three recent check-ins exist and most were constrained. It never upgrades a
+ * recovery-first or reduced latest result.
+ */
+export function readinessDecisionFromRecords(records: ReadinessRecord[], now = new Date()): ReadinessDecision {
+  const latest = [...records]
+    .filter(record => {
+      const time = new Date(record.recordedAt).getTime();
+      return Number.isFinite(time) && time <= now.getTime();
+    })
+    .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())[0];
+  const current = readinessDecision(latest?.input || {});
+  if (current.level !== 'normal') return current;
+
+  const cutoff = now.getTime() - 7 * 86_400_000;
+  const recent = records.filter(record => {
+    const time = new Date(record.recordedAt).getTime();
+    return Number.isFinite(time) && time >= cutoff && time <= now.getTime();
+  });
+  if (recent.length < 3) return current;
+  const constrained = recent.filter(record => readinessDecision(record.input).level !== 'normal').length;
+  if (constrained < Math.ceil(recent.length / 2)) return current;
+  return {
+    level: 'reduced',
+    volumeMultiplier: 0.85,
+    allowProgression: false,
+    reasons: ['Most readiness check-ins from the last seven days were constrained, so progression stays conservative even though the latest check-in is normal.'],
+  };
 }
 
 export function cardioEquivalentMinutes(minutes: number, effort: 'easy' | 'moderate' | 'hard') {
