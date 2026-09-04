@@ -1,14 +1,15 @@
 {
   "name": "human-health",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
+    "start": "node scripts/serve-static.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:pwa": "node scripts/check-pwa.mjs",
+    "verify": "npm run typecheck && npm test && npm run build && npm run check:pwa"
   },
   "dependencies": {
     "next": "15.5.2",

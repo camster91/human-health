@@ -1,42 +1,57 @@
 # Human Health
 
-Human Health is a long-horizon adaptive health and performance coach designed for real human life: changing schedules, different gyms, limited time, variable recovery, evolving goals, and imperfect consistency.
+Human Health is a long-horizon, local-first health and performance PWA designed around one principle: **structured goals, flexible execution**.
 
-The product begins with a mobile-first adaptive training experience and expands over a 10-year lifecycle into a broader personal health operating system spanning strength, cardio, mobility, bodyweight skills, recovery, sleep, nutrition, preventive health, and long-term capability.
+The current product foundation combines adaptive strength training with whole-person fitness and an opt-in connected-health context layer. Workouts adapt to time, equipment, readiness, travel, interruptions and partial completion without pretending that different exercises or devices are directly equivalent.
 
-## Product principle
+## Current lifecycle state
 
-**Structured goals, flexible execution.**
+- **Phase 1:** adaptive training coach foundation
+- **Phase 2:** whole-person fitness foundation and hardening
+- **Phase 3:** connected-health context is source-complete/source-reviewed on draft PR #62; automated/browser/native verification remains pending
 
-The system should continuously answer three questions:
+Phase 3 adds a provider-neutral observation model, local IndexedDB storage, Health Connect/HealthKit bridge contracts, Apple Health XML import, freshness/provenance handling, selected-source aggregation, optional hydration/nutrition habits, connected trends and complete local data portability. Native APIs are never fabricated in a browser-only PWA.
 
-1. How am I doing?
-2. What should I do today?
-3. Am I improving over time?
+## Safety and privacy
 
-## Initial scope
+Human Health is a fitness/lifestyle product, not a medical authority. Connected observations are contextual inputs and must not be used to diagnose conditions, dose insulin or medication, perform emergency monitoring, provide injury clearance, or claim causal health conclusions.
 
-The first release focuses on:
+Phase 3 connected-health data remains local to the device in the current architecture. Native permissions are user initiated, imported files do not require server upload, and source provenance/freshness remains visible.
 
-- Adaptive upper/lower strength programming
-- Live workout tracking
-- Exercise substitution based on equipment and gym context
-- Barbell, rack, bench, cable, dumbbell, machine, and bodyweight equivalence
-- Core, mobility, cardio, and athleticism support
-- Progressive overload recommendations
-- Workout shortening and re-planning when life changes
-- Recovery-aware training suggestions
-- Offline-capable PWA experience
-- Transparent coaching explanations
+## Development
 
-## Long-term direction
+```bash
+npm install
+npm run typecheck
+npm test
+npm run build
+npm run check:pwa
+```
 
-See:
+The repository also exposes `npm run verify` for the consolidated source/build/PWA gate.
 
-- `docs/10-year-roadmap.md`
-- `docs/product-principles.md`
-- `docs/health-model.md`
-- `docs/architecture.md`
-- `docs/safety-and-clinical-boundaries.md`
+GitHub Actions currently targets a self-hosted Ashbi runner. Human Health does not yet have a confirmed repository-eligible runner, so queued workflow runs are not evidence of a source failure or a successful verification. Issue #51 tracks that infrastructure dependency.
 
-The roadmap intentionally separates product capability from medical authority. Human Health should help users observe, plan, train, recover, and understand trends without pretending to diagnose disease or replace qualified healthcare professionals.
+## Key docs
+
+- `docs/implementation-roadmap.md` — phased product roadmap
+- `docs/10-year-lifecycle.md` — long-horizon lifecycle plan
+- `docs/phase-2-final-review.md` — Phase 2 completion review
+- `docs/phase-3-status.md` — current Phase 3 status
+- `docs/phase-3-final-review.md` — Phase 3 source review
+- `docs/phase-3-completion-checklist.md` — remaining verification/native gates
+- `docs/connected-health-architecture.md` — Phase 3 architecture
+- `docs/connected-health-privacy.md` — privacy/data ownership model
+- `docs/native-health-bridge-contract.md` — Android/Apple native host contract
+
+## Delivery rules
+
+- Mobile-first and PWA-capable.
+- Keep historical workout data immutable wherever practical.
+- Make automatic recommendations explainable and reversible.
+- Prefer measured data and deterministic rules over opaque scoring.
+- Treat missing, stale, imported, inferred and manually entered data differently.
+- Never silently equate exercise loads across unlike equipment.
+- Safety and recovery override progression.
+- Do not call a phase verified without executable evidence for the applicable gates.
+- Production deployment requires separate explicit approval.

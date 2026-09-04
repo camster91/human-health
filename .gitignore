@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Next.js and static export
+.next/
+out/
+
+# Test and build artefacts
+coverage/
+tsconfig.tsbuildinfo
+*.log
+
+# Local environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
