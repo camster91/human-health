@@ -13,7 +13,13 @@ describe('regulatory review checkpoint', () => {
     expect(result.legalDetermination).toBe(false);
   });
 
-  it('keeps ordinary wellness education in normal review scope', () => {
+  it('fails closed when intended use is ambiguous', () => {
+    const result = regulatoryGate({ id: 'unknown', name: 'Uncharacterized feature' });
+    expect(result.decision).toBe('specialist-review-required');
+    expect(result.triggers).toContain('intended use not explicitly characterized as wellness education');
+  });
+
+  it('keeps explicitly declared ordinary wellness education in normal review scope', () => {
     expect(regulatoryGate({ id: 'wellness', name: 'Training education', wellnessEducationOnly: true }).decision).toBe('wellness-scope');
   });
 });
