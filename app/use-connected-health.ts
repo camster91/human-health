@@ -6,6 +6,7 @@ import {
   ConnectedHealthPreferences,
   HealthObservation,
   HealthSourceState,
+  clearConnectedSleepContext,
   defaultConnectedHealthPreferences,
   healthRepository,
   saveConnectedSleepContext,
@@ -29,8 +30,6 @@ export function useConnectedHealthSnapshot() {
     const errors: string[] = [];
     if (observationResult.status === 'fulfilled') setObservations(observationResult.value);
     else {
-      // Fail closed: do not continue showing previously trusted health observations
-      // after storage integrity becomes uncertain.
       setObservations([]);
       errors.push(observationResult.reason instanceof Error ? observationResult.reason.message : 'Connected-health observations could not be loaded.');
     }
@@ -60,7 +59,12 @@ export function useConnectedHealthSnapshot() {
 
   const summary = useMemo(() => summarizeConnectedHealth(observations, sources, preferences), [observations, sources, preferences]);
   useEffect(() => {
-    if (!loading && !error) saveConnectedSleepContext(summary, preferences.useFreshSleepForReadiness);
+    if (loading) return;
+    if (error) {
+      clearConnectedSleepContext();
+      return;
+    }
+    saveConnectedSleepContext(summary, preferences.useFreshSleepForReadiness);
   }, [error, loading, preferences.useFreshSleepForReadiness, summary]);
   return { observations, sources, preferences, summary, loading, error, refresh };
 }
