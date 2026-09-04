@@ -26,12 +26,14 @@ function withMemoryStorage(run: (memory: MemoryStorage) => void) {
 }
 
 describe('Phase 5 local platform storage', () => {
-  it('persists and deletes preventive records/reminders locally', () => withMemoryStorage(() => {
+  it('persists, enables/disables, and deletes preventive records/reminders locally', () => withMemoryStorage(() => {
     platformStore.clear();
     const recordData = platformStore.addRecord({ id: 'r1', title: 'Dental cleaning', category: 'dental', occurredAt: '2026-09-01T12:00:00Z', source: 'manual', createdAt: '2026-09-01T12:00:00Z' });
     expect(recordData.records).toHaveLength(1);
     const reminderData = platformStore.addReminder({ id: 'm1', title: 'Follow-up', category: 'checkup', dueOn: '2026-10-01', provider: 'Clinic', source: 'clinician-provided', enabled: true, createdAt: '2026-09-01T12:00:00Z' });
     expect(reminderData.reminders).toHaveLength(1);
+    expect(platformStore.setReminderEnabled('m1', false).reminders[0].enabled).toBe(false);
+    expect(platformStore.setReminderEnabled('m1', true).reminders[0].enabled).toBe(true);
     expect(platformStore.removeRecord('r1').records).toHaveLength(0);
     expect(platformStore.removeReminder('m1').reminders).toHaveLength(0);
   }));
@@ -62,6 +64,22 @@ describe('Phase 5 local platform storage', () => {
       expect(platformStore.getMutationError()).toContain('storage is unavailable');
     });
   });
+
+  it('does not overwrite partially corrupt platform storage through a normal mutation', () => withMemoryStorage(memory => {
+    memory.setItem('human-health:platform:v1', JSON.stringify({
+      schemaVersion: 1,
+      records: [
+        { id: 'good', title: 'Good record', category: 'other', occurredAt: '2026-09-01T12:00:00Z', source: 'manual', createdAt: '2026-09-01T12:00:00Z' },
+        { id: 'bad' },
+      ],
+      reminders: [],
+    }));
+    expect(platformStore.load().records.map(item => item.id)).toEqual(['good']);
+    expect(platformStore.getMutationError()).toContain('Mutations are blocked');
+    expect(() => platformStore.addRecord({ id: 'new', title: 'New', category: 'other', occurredAt: '2026-09-02T12:00:00Z', source: 'manual', createdAt: '2026-09-02T12:00:00Z' })).toThrow('Mutations are blocked');
+    const raw = JSON.parse(memory.getItem('human-health:platform:v1') || '{}') as { records: { id: string }[] };
+    expect(raw.records.map(item => item.id)).toEqual(['good', 'bad']);
+  }));
 
   it('rejects malformed archives instead of coercing them', () => {
     expect(() => validatePlatformData({ schemaVersion: 2, records: [], reminders: [] })).toThrow('Unsupported platform archive version');
