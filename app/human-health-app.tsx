@@ -1,15 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AdaptContext, GymProfile, HistoryEntry, SessionId, SetLog, Workout, WorkoutExercise } from '@/lib/domain';
+import { AdaptContext, HistoryEntry, SessionId, SetLog, Workout, WorkoutExercise } from '@/lib/domain';
 import { adaptWorkout, nextLoadRecommendation, platePlan, summarizeWorkout, workingLogs } from '@/lib/engine';
 import { recentTrainingLoad, strengthLoadAdjustment } from '@/lib/load-management';
 import { defaultPreferences, normalizePreferences, swapPreferenceKey, UserPreferences } from '@/lib/preferences';
-import { buildSession, gyms, rankedSubstitutions, starterProgramDefinition } from '@/lib/program';
+import { buildSession, exerciseIsAvailable, exercises, gyms, rankedSubstitutions, starterProgramDefinition } from '@/lib/program';
 import { extendRestTimer, pauseRestTimer, remainingRestSeconds, restartRestTimer, RestTimerState, resumeRestTimer, startRestTimer } from '@/lib/rest-timer';
 import { advanceSession, contextualRollingSession, createScheduleOverride, nextRollingSession } from '@/lib/schedule';
 import { store } from '@/lib/storage';
-import { ActivityDose, Assessment, ReadinessRecord, readinessDecision, workoutActivityDoses } from '@/lib/whole-person';
+import { ActivityDose, Assessment, ReadinessRecord, readinessDecisionFromRecords, workoutActivityDoses } from '@/lib/whole-person';
 import { CapabilityTrendPanel } from './capability-trend-panel';
 import { OfflineIndicator } from './offline-indicator';
 import { SettingsPanel } from './settings-panel';
@@ -28,6 +28,15 @@ function daysBetween(a?: string, b?: string) {
   if (!a || !b) return undefined;
   return Math.max(0, (new Date(a).getTime() - new Date(b).getTime()) / 86_400_000);
 }
+function formatSet(exercise: WorkoutExercise, set: SetLog, units: UserPreferences['unitSystem']) {
+  const unit = units === 'imperial' ? 'lb' : 'kg';
+  const displayed = kgToDisplay(set.weight, units);
+  if (exercise.metadata?.loadType === 'bodyweight') {
+    const load = set.weight > 0 ? `Bodyweight + ${displayed.toFixed(1)} ${unit}` : 'Bodyweight';
+    return `${load} × ${set.reps}`;
+  }
+  return `${displayed.toFixed(1)} ${unit} × ${set.reps}`;
+}
 
 export function HumanHealthApp() {
   const [hydrated, setHydrated] = useState(false);
@@ -43,10 +52,13 @@ export function HumanHealthApp() {
   const [notes, setNotes] = useState<string[]>([]);
   const [swapIndex, setSwapIndex] = useState<number | null>(null);
   const [saveSwap, setSaveSwap] = useState(false);
+  const [showAddExercise, setShowAddExercise] = useState(false);
   const [storageWarning, setStorageWarning] = useState('');
 
   useEffect(() => {
-    const savedPreferences = store.loadPreferences();
+    const loadedPreferences = store.loadPreferences();
+    const selectedGymId = gyms.some(item => item.id === loadedPreferences.selectedGymId) ? loadedPreferences.selectedGymId : gyms[0].id;
+    const savedPreferences = normalizePreferences({ ...loadedPreferences, selectedGymId });
     const savedActive = store.loadActive();
     const restoredActive = savedActive
       ? { ...savedActive, status: savedActive.status === 'active' ? 'interrupted' as const : savedActive.status }
@@ -139,16 +151,18 @@ export function HumanHealthApp() {
     };
   }, [active?.id, active?.status]);
 
-  const latestReadiness = readinessDecision(readinessRecords.at(-1)?.input || {});
+  const latestReadiness = readinessDecisionFromRecords(readinessRecords);
   const baseRolling = useMemo(() => nextRollingSession(history), [history]);
   const rolling = useMemo(() => contextualRollingSession(history, preferences.lifeMode, preferences.nextSessionOverride, latestReadiness.level), [history, preferences.lifeMode, preferences.nextSessionOverride, latestReadiness.level]);
   const gym = useMemo(() => gyms.find(item => item.id === preferences.selectedGymId) || gyms[0], [preferences.selectedGymId]);
   const recentLoad = useMemo(() => recentTrainingLoad(history, activity), [history, activity]);
   const activeGym = useMemo(() => active ? gyms.find(item => item.id === active.gymId) || gym : gym, [active, gym]);
   const restSeconds = remainingRestSeconds(restTimer, now);
+  const currentAdjustment = strengthLoadAdjustment(rolling.session, recentLoad, latestReadiness.level);
 
   function savePreferences(next: UserPreferences) {
-    const normalized = normalizePreferences(next);
+    const selectedGymId = gyms.some(item => item.id === next.selectedGymId) ? next.selectedGymId : gyms[0].id;
+    const normalized = normalizePreferences({ ...next, selectedGymId });
     const saved = store.savePreferences(normalized);
     setPreferences(normalized);
     if (!saved) setStorageWarning('Preferences changed in memory but could not be saved in this browser.');
@@ -160,6 +174,7 @@ export function HumanHealthApp() {
     const selectedSession = startDecision.session;
     const selectedGym = context.gym || gym;
     const workload = strengthLoadAdjustment(selectedSession, recentLoad, latestReadiness.level);
+    const volumeOverride = Boolean(context.overrideRecoveryVolume && latestReadiness.level === 'reduced' && workload.source === 'readiness');
     const preferredSubstitutions = Object.fromEntries(buildSession(selectedSession).flatMap(exercise => {
       const preference = preferences.swapPreferences[swapPreferenceKey(selectedGym.id, exercise.id)];
       return preference ? [[exercise.id, preference]] : [];
@@ -171,11 +186,16 @@ export function HumanHealthApp() {
       gym: selectedGym,
       mode: selectedMode,
       unavailable: context.unavailable || preferences.lastUnavailableEquipment,
-      volumeMultiplier: Math.min(context.volumeMultiplier ?? 1, latestReadiness.volumeMultiplier, workload.volumeMultiplier),
-      lowEnergy: context.lowEnergy ?? latestReadiness.level !== 'normal',
+      volumeMultiplier: Math.min(context.volumeMultiplier ?? 1, volumeOverride ? 1 : latestReadiness.volumeMultiplier, volumeOverride ? 1 : workload.volumeMultiplier),
+      lowEnergy: context.lowEnergy ?? (!volumeOverride && latestReadiness.level !== 'normal'),
       preferredSubstitutions,
     });
-    const explanations = [startDecision.reason, workload.reduce ? workload.reason : '', ...adapted.notes].filter(Boolean);
+    const explanations = [
+      startDecision.reason,
+      volumeOverride ? 'You chose the original set volume despite reduced readiness. Automatic load progression remains paused.' : '',
+      !volumeOverride && workload.reduce ? workload.reason : '',
+      ...adapted.notes,
+    ].filter(Boolean);
     setNotes(explanations);
     if (!adapted.exercises.length) {
       setTab('coach');
@@ -210,6 +230,7 @@ export function HumanHealthApp() {
     });
     setRestTimer(null);
     setSwapIndex(null);
+    setShowAddExercise(false);
   }
 
   function skipRecommendedSessionOnce() {
@@ -218,7 +239,7 @@ export function HumanHealthApp() {
     const events = [...store.loadScheduleEvents(), createScheduleOverride(from, target, 'skip')];
     store.saveScheduleEvents(events);
     savePreferences({ ...preferences, nextSessionOverride: target });
-    setNotes([`Skipped ${title(from)} for now. ${title(target)} is selected once; no workout was marked complete and the rolling recommendation remains recoverable.`]);
+    setNotes([`Skipped ${title(from)} for now. ${title(target)} is selected once; no workout was marked complete. You can select ${title(from)} again from Adjust plan.`]);
   }
 
   function updateActive(next: Workout) {
@@ -229,6 +250,10 @@ export function HumanHealthApp() {
 
   function logSet(exerciseIndex: number, log: SetLog) {
     if (!active || active.status !== 'active') return;
+    if (!Number.isFinite(log.weight) || log.weight < 0 || !Number.isFinite(log.reps) || log.reps <= 0) {
+      setStorageWarning('Enter a valid non-negative load and at least one rep or second before logging the set.');
+      return;
+    }
     const next = structuredClone(active);
     next.exercises[exerciseIndex].logs.push(log);
     if (log.pain) {
@@ -249,9 +274,9 @@ export function HumanHealthApp() {
     if (!option) return;
     const next = structuredClone(active);
     const originalId = current.originalId || current.id;
-    const replacementExercise: WorkoutExercise = { ...option.exercise, sets: remainingSets, logs: [], originalId };
+    const replacementExercise: WorkoutExercise = { ...option.exercise, sets: remainingSets, logs: [], originalId, optional: current.optional };
     if (current.logs.length) {
-      next.exercises[exerciseIndex] = { ...current, sets: workingCompleted, optional: workingCompleted === 0 };
+      next.exercises[exerciseIndex] = { ...current, sets: workingCompleted, optional: true };
       next.exercises.splice(exerciseIndex + 1, 0, replacementExercise);
     } else {
       next.exercises[exerciseIndex] = replacementExercise;
@@ -261,6 +286,30 @@ export function HumanHealthApp() {
     setSwapIndex(null);
     setSaveSwap(false);
     setNotes(previous => [...previous, option.reason]);
+  }
+
+  function toggleDeferred(exerciseIndex: number) {
+    if (!active || active.status !== 'active') return;
+    const current = active.exercises[exerciseIndex];
+    if (workingLogs(current).length >= current.sets) return;
+    const next = structuredClone(active);
+    next.exercises[exerciseIndex].deferred = !current.deferred;
+    updateActive(next);
+    setSwapIndex(null);
+    setNotes(previous => [...previous, next.exercises[exerciseIndex].deferred
+      ? `${current.name} was deferred. Completed sets remain recorded, and the session will be finalized as partial unless you restore and finish it.`
+      : `${current.name} was restored to the active workout.`]);
+  }
+
+  function addExercise(exerciseId: string) {
+    if (!active || active.status !== 'active') return;
+    const definition = exercises.find(item => item.id === exerciseId);
+    if (!definition || !exerciseIsAvailable(definition, activeGym, active.unavailableEquipment || [])) return;
+    const next = structuredClone(active);
+    next.exercises.push({ ...definition, sets: 2, logs: [], optional: true });
+    updateActive(next);
+    setShowAddExercise(false);
+    setNotes(previous => [...previous, `${definition.name} was added as two optional working sets. It will not make the original session appear incomplete if you leave it unfinished.`]);
   }
 
   function finishWorkout(status: 'completed' | 'ended-early' | 'abandoned') {
@@ -282,14 +331,14 @@ export function HumanHealthApp() {
     setActive(null);
     setRestTimer(null);
     setSwapIndex(null);
+    setShowAddExercise(false);
     setNotes(summarizeWorkout(entry.exercises, history).messages);
     setTab('coach');
   }
 
   function pauseWorkout() {
     if (!active) return;
-    const next = { ...active, status: 'paused' as const, pausedAt: new Date().toISOString() };
-    updateActive(next);
+    updateActive({ ...active, status: 'paused', pausedAt: new Date().toISOString() });
     setRestTimer(timer => pauseRestTimer(timer));
   }
 
@@ -315,36 +364,40 @@ export function HumanHealthApp() {
   if (!hydrated) return <main className="app-shell"><section className="card" role="status"><h1>Human Health</h1><p>Loading your local training data…</p></section></main>;
 
   if (active) {
-    const requiredComplete = active.exercises.filter(exercise => !exercise.optional).every(exercise => workingLogs(exercise).length >= exercise.sets);
+    const requiredHandled = active.exercises.filter(exercise => !exercise.optional).every(exercise => exercise.deferred || workingLogs(exercise).length >= exercise.sets);
+    const hasDeferredRequired = active.exercises.some(exercise => !exercise.optional && exercise.deferred);
+    const addOptions = exercises.filter(exercise => exerciseIsAvailable(exercise, activeGym, active.unavailableEquipment || []) && !active.exercises.some(item => item.id === exercise.id));
     return <main className="workout-shell">
       <OfflineIndicator />
       {storageWarning && <div className="connection-state storage-error" role="alert">{storageWarning}</div>}
-      <header className="workout-head"><div><span className="eyebrow">LIVE WORKOUT</span><h1>{title(active.session)}</h1><p className="muted">{title(active.mode || 'normal')} · {activeGym.name}</p></div><div className="header-actions">{active.status === 'active' ? <button className="ghost" onClick={pauseWorkout}>Pause</button> : <button className="primary" onClick={resumeWorkout}>Resume</button>}<button className="ghost" onClick={() => finishWorkout('ended-early')}>End early</button></div></header>
+      <header className="workout-head"><div><span className="eyebrow">LIVE WORKOUT</span><h1>{title(active.session)}</h1><p className="muted">{title(active.mode || 'normal')} · {activeGym.name}</p></div><div className="header-actions">{active.status === 'active' ? <button className="ghost" onClick={pauseWorkout}>Pause</button> : <button className="primary" onClick={resumeWorkout}>Resume</button>}<button className="ghost" disabled={active.status !== 'active'} onClick={() => setShowAddExercise(value => !value)}>Add exercise</button><button className="ghost" onClick={() => finishWorkout('ended-early')}>End early</button></div></header>
       {active.status !== 'active' && <section className="card paused-card"><h2>{active.status === 'interrupted' ? 'Workout restored' : 'Workout paused'}</h2><p>Your completed sets are still stored locally. Resume when ready; elapsed pause time does not mark exercises complete.</p><button className="primary" onClick={resumeWorkout}>Resume workout</button></section>}
+      {showAddExercise && active.status === 'active' && <section className="card"><h2>Add optional work</h2><p className="muted">Added work starts with two optional sets and does not change the completion requirement of the original session.</p><div className="choice-grid">{addOptions.map(exercise => <button key={exercise.id} onClick={() => addExercise(exercise.id)}><b>{exercise.name}</b><small>{title(exercise.movement)} · {exercise.repRange[0]}–{exercise.repRange[1]}</small></button>)}</div>{!addOptions.length && <p>No additional compatible exercise is available with the current equipment state.</p>}</section>}
       {notes.length > 0 && <div className="coach-note">{notes.join(' ')}</div>}
       {active.progressionAllowed === false && active.progressionReason && <div className="coach-note"><b>Progression held</b><br/>{active.progressionReason}</div>}
       {active.exercises.map((exercise, exerciseIndex) => {
         const previousEntry = [...history].reverse().flatMap(entry => entry.exercises.map(item => ({ item, completedAt: entry.completedAt }))).find(record => record.item.id === exercise.id);
         const previous = previousEntry?.item;
         const working = workingLogs(exercise);
+        const latestLoggedWeight = exercise.logs.at(-1)?.weight;
         const previousWorkingWeight = previous ? workingLogs(previous).at(-1)?.weight : undefined;
-        const defaultWeightKg = exercise.metadata?.loadType === 'bodyweight' ? 0 : working.at(-1)?.weight ?? previousWorkingWeight ?? 20;
+        const defaultWeightKg = exercise.metadata?.loadType === 'bodyweight' ? 0 : latestLoggedWeight ?? previousWorkingWeight ?? 20;
         const suggestion = nextLoadRecommendation(exercise, previous, { progressionAllowed: active.progressionAllowed ?? (latestReadiness.allowProgression && (active.mode || 'normal') === 'normal'), daysSincePrevious: daysBetween(active.startedAt, previousEntry?.completedAt) });
         const options = rankedSubstitutions(exercise, activeGym, { unavailable: active.unavailableEquipment || [], preferredId: preferences.swapPreferences[swapPreferenceKey(activeGym.id, exercise.originalId || exercise.id)] });
         const exerciseComplete = working.length >= exercise.sets;
-        return <section className="exercise" key={`${exercise.id}-${exerciseIndex}`}>
-          <div className="exercise-title"><div><span className="pill">{exercise.priority}</span><h2>{exercise.name}</h2><p>{exercise.sets} working sets · {exercise.repRange[0]}–{exercise.repRange[1]} {exercise.repRange[1] > 25 && exercise.movement === 'core' ? 'seconds' : 'reps'}</p>{exercise.originalId && <small>Temporary replacement for {title(exercise.originalId)}; progression remains separate.</small>}</div><button className="link" disabled={active.status !== 'active' || exerciseComplete} onClick={() => setSwapIndex(swapIndex === exerciseIndex ? null : exerciseIndex)}>Swap</button></div>
-          {previous && <div className="previous">Previous: {workingLogs(previous).map(set => `${kgToDisplay(set.weight, preferences.unitSystem).toFixed(set.weight % 1 ? 1 : 0)}${preferences.unitSystem === 'imperial' ? ' lb' : ' kg'} × ${set.reps}`).join(' · ') || 'No prior working sets'}</div>}
-          <div className="set-grid">{Array.from({ length: exercise.sets }).map((_, index) => <div className={index < working.length ? 'set done' : 'set'} key={index}><b>Set {index + 1}</b><span>{working[index] ? `${kgToDisplay(working[index].weight, preferences.unitSystem).toFixed(1)} ${preferences.unitSystem === 'imperial' ? 'lb' : 'kg'} × ${working[index].reps}${working[index].pain ? ' · discomfort' : ''}${working[index].formQuality === 'poor' ? ' · form issue' : ''}` : 'Ready'}</span></div>)}</div>
+        return <section className={exercise.deferred ? 'exercise deferred' : 'exercise'} key={`${exercise.id}-${exerciseIndex}`}>
+          <div className="exercise-title"><div><span className="pill">{exercise.deferred ? 'deferred' : exercise.optional ? 'optional' : exercise.priority}</span><h2>{exercise.name}</h2><p>{exercise.sets} working sets · {exercise.repRange[0]}–{exercise.repRange[1]} {exercise.repRange[1] > 25 && exercise.movement === 'core' ? 'seconds' : 'reps'}</p>{exercise.originalId && <small>Temporary replacement for {title(exercise.originalId)}; progression remains separate.</small>}</div><div className="exercise-tools"><button className="link" disabled={active.status !== 'active' || exerciseComplete || exercise.deferred} onClick={() => setSwapIndex(swapIndex === exerciseIndex ? null : exerciseIndex)}>Swap</button><button className="link" disabled={active.status !== 'active' || exerciseComplete} onClick={() => toggleDeferred(exerciseIndex)}>{exercise.deferred ? 'Restore' : exercise.optional ? 'Remove/stop' : 'Defer'}</button></div></div>
+          {previous && <div className="previous">Previous: {workingLogs(previous).map(set => formatSet(previous, set, preferences.unitSystem)).join(' · ') || 'No prior working sets'}</div>}
+          <div className="set-grid">{Array.from({ length: exercise.sets }).map((_, index) => <div className={index < working.length ? 'set done' : 'set'} key={index}><b>Set {index + 1}</b><span>{working[index] ? `${formatSet(exercise, working[index], preferences.unitSystem)}${working[index].pain ? ' · discomfort' : ''}${working[index].formQuality === 'poor' ? ' · form issue' : ''}` : exercise.deferred ? 'Deferred' : 'Ready'}</span></div>)}</div>
           {exercise.logs.some(set => set.warmup) && <p className="muted">Warm-ups logged: {exercise.logs.filter(set => set.warmup).length}</p>}
-          {active.status === 'active' && !exerciseComplete && <SetEntry key={`${exercise.id}-${exercise.logs.length}`} defaultWeightKg={defaultWeightKg} defaultReps={exercise.repRange[0]} units={preferences.unitSystem} loadType={exercise.metadata?.loadType} onLog={log => logSet(exerciseIndex, log)}/>} 
+          {active.status === 'active' && !exerciseComplete && !exercise.deferred && <SetEntry key={`${exercise.id}-${exercise.logs.length}`} defaultWeightKg={defaultWeightKg} defaultReps={exercise.repRange[0]} units={preferences.unitSystem} loadType={exercise.metadata?.loadType} onLog={log => logSet(exerciseIndex, log)}/>} 
           {exercise.equipment.includes('barbell') && <PlateHelper targetKg={working.at(-1)?.weight ?? previousWorkingWeight ?? preferences.plateBarKg} preferences={preferences}/>} 
-          <div className="coach-mini">Coach: {suggestion.message}</div>
+          <div className="coach-mini">Coach: {exercise.deferred ? 'This planned work remains visible and contributes to partial-session accounting.' : suggestion.message}</div>
           {swapIndex === exerciseIndex && <div className="swap-panel"><h3>Compatible replacements</h3>{options.length ? options.map(option => <button key={option.exercise.id} onClick={() => selectSwap(exerciseIndex, option.exercise.id)}><b>{option.exercise.name}{option.preferred ? ' · preferred' : ''}</b><small>{option.reason}</small></button>) : <p>No compatible replacement is available with this gym and temporary equipment state.</p>}<label className="checkbox-row"><input type="checkbox" checked={saveSwap} onChange={event => setSaveSwap(event.target.checked)}/> Remember selection for {activeGym.name}</label></div>}
         </section>;
       })}
-      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredComplete} title={!requiredComplete ? 'Use End early until every required working set is complete.' : undefined} onClick={() => finishWorkout('completed')}>Finish workout</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
-      {!requiredComplete && <p className="muted">Finish becomes available after all required working sets are logged. Use End early to preserve a partial session accurately.</p>}
+      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Complete or defer every required exercise, or use End early now.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>{hasDeferredRequired ? 'Finish partial workout' : 'Finish workout'}</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
+      {!requiredHandled && <p className="muted">Finish becomes available after required work is completed or explicitly deferred. End early remains available at any time.</p>}
       {restTimer && <div className="rest-dock" role="timer" aria-label={`Rest timer: ${restSeconds} seconds remaining`}><b>Rest</b><span>{Math.floor(restSeconds / 60)}:{String(restSeconds % 60).padStart(2, '0')}</span><div className="timer-actions">{restTimer.status === 'running' ? <button onClick={() => setRestTimer(timer => pauseRestTimer(timer))}>Pause</button> : <button onClick={() => setRestTimer(timer => resumeRestTimer(timer))}>Resume</button>}<button onClick={() => setRestTimer(timer => extendRestTimer(timer, 30))}>+30s</button><button onClick={() => setRestTimer(timer => restartRestTimer(timer, preferences.defaultRestSeconds))}>Restart</button><button onClick={() => setRestTimer(null)}>Skip</button></div></div>}
     </main>;
   }
@@ -352,10 +405,10 @@ export function HumanHealthApp() {
   return <main className="app-shell">
     <OfflineIndicator />
     {storageWarning && <div className="connection-state storage-error" role="alert">{storageWarning}</div>}
-    <header><div><span className="eyebrow">HUMAN HEALTH</span><h1>{title(tab)}</h1></div>{tab !== 'settings' && <select value={preferences.selectedGymId} onChange={event => savePreferences({ ...preferences, selectedGymId: event.target.value })} aria-label="Gym profile">{gyms.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</header>
+    <header><div><span className="eyebrow">HUMAN HEALTH</span><h1>{title(tab)}</h1></div>{tab !== 'settings' && <select value={gym.id} onChange={event => savePreferences({ ...preferences, selectedGymId: event.target.value })} aria-label="Gym profile">{gyms.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</header>
 
     {tab === 'today' && <>
-      <section className="hero"><span className="pill">{rolling.manual ? 'YOUR SESSION CHOICE' : rolling.repeating ? 'RECOMMENDED REPEAT' : 'NEXT SESSION'}</span><h2>{title(rolling.session)}</h2><p>{rolling.reason}</p><div className="hero-actions"><button className="primary" onClick={() => startWorkout()}>Start workout</button><button className="ghost" onClick={skipRecommendedSessionOnce}>Skip once</button><button className="ghost" onClick={() => setTab('settings')}>Adjust plan</button></div></section>
+      <section className="hero"><span className="pill">{rolling.manual ? 'YOUR SESSION CHOICE' : rolling.repeating ? 'RECOMMENDED REPEAT' : 'NEXT SESSION'}</span><h2>{title(rolling.session)}</h2><p>{rolling.reason}</p>{latestReadiness.level !== 'normal' && <div className="coach-note"><b>{latestReadiness.level === 'recovery' ? 'Recovery-first context' : 'Reduced-readiness context'}</b><br/>{latestReadiness.reasons.join(' ')}</div>}<div className="hero-actions"><button className="primary" onClick={() => startWorkout()}>Start recommended workout</button>{latestReadiness.level === 'reduced' && currentAdjustment.source === 'readiness' && <button className="ghost" onClick={() => startWorkout({ overrideRecoveryVolume: true })}>Use original set volume</button>}<button className="ghost" onClick={skipRecommendedSessionOnce}>Skip once</button><button className="ghost" onClick={() => setTab('settings')}>Adjust plan</button></div>{latestReadiness.level === 'reduced' && <p className="muted">Choosing original set volume does not re-enable automatic load progression. Pain/illness recovery-first constraints cannot be overridden here.</p>}</section>
       <section aria-labelledby="plans-changed-title"><h2 id="plans-changed-title">Plans changed?</h2><div className="quick-grid"><button onClick={() => startWorkout({ minutes: 20 })}>20 minutes</button><button onClick={() => startWorkout({ minutes: 30 })}>30 minutes</button><button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })}>Low energy</button><button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })}>Different gym</button></div></section>
       <WholePersonDashboard history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences} gym={gym} nextSession={rolling.session} onActivityChange={setActivity} onReadinessChange={setReadinessRecords}/>
       <SkillProgressPanel gym={gym}/>
@@ -384,7 +437,8 @@ function SetEntry({ defaultWeightKg, defaultReps, units, loadType, onLog }: { de
   const [formQuality, setFormQuality] = useState<'poor' | 'okay' | 'good'>('good');
   const [note, setNote] = useState('');
   const loadLabel = loadType === 'bodyweight' ? `Added load (${units === 'imperial' ? 'lb' : 'kg'})` : `Weight (${units === 'imperial' ? 'lb' : 'kg'})`;
-  return <div className="log-box"><label>{loadLabel}<input inputMode="decimal" type="number" min="0" step="0.5" value={weight} onChange={event => setWeight(Number(event.target.value))}/></label><label>{defaultReps > 25 ? 'Seconds' : 'Reps'}<input inputMode="numeric" type="number" min="0" value={reps} onChange={event => setReps(Number(event.target.value))}/></label><label>RIR<select value={rir} onChange={event => setRir(Number(event.target.value))}><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4+</option></select></label><label>Form<select value={formQuality} onChange={event => setFormQuality(event.target.value as typeof formQuality)}><option value="good">Good</option><option value="okay">Okay</option><option value="poor">Broke down</option></select></label><label className="checkbox-row"><input type="checkbox" checked={warmup} onChange={event => setWarmup(event.target.checked)}/> Warm-up</label><label className="checkbox-row"><input type="checkbox" checked={pain} onChange={event => setPain(event.target.checked)}/> Pain/discomfort</label><label className="wide-field">Set note<input value={note} onChange={event => setNote(event.target.value)} placeholder="Optional technique or context note"/></label><button className="primary" onClick={() => onLog({ weight: displayToKg(weight, units), reps, rir, warmup, pain, formQuality, note: note || undefined, completedAt: new Date().toISOString() })}>{warmup ? 'Log warm-up' : pain ? 'Log set + flag' : 'Log working set'}</button></div>;
+  const valid = Number.isFinite(weight) && weight >= 0 && Number.isFinite(reps) && reps > 0;
+  return <div className="log-box"><label>{loadLabel}<input inputMode="decimal" type="number" min="0" step="0.5" value={weight} onChange={event => setWeight(Number(event.target.value))}/></label><label>{defaultReps > 25 ? 'Seconds' : 'Reps'}<input inputMode="numeric" type="number" min="1" value={reps} onChange={event => setReps(Number(event.target.value))}/></label><label>RIR<select value={rir} onChange={event => setRir(Number(event.target.value))}><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4+</option></select></label><label>Form<select value={formQuality} onChange={event => setFormQuality(event.target.value as typeof formQuality)}><option value="good">Good</option><option value="okay">Okay</option><option value="poor">Broke down</option></select></label><label className="checkbox-row"><input type="checkbox" checked={warmup} onChange={event => setWarmup(event.target.checked)}/> Warm-up</label><label className="checkbox-row"><input type="checkbox" checked={pain} onChange={event => setPain(event.target.checked)}/> Pain/discomfort</label><label className="wide-field">Set note<input value={note} onChange={event => setNote(event.target.value)} placeholder="Optional technique or context note"/></label><button className="primary" disabled={!valid} onClick={() => onLog({ weight: displayToKg(weight, units), reps, rir, warmup, pain, formQuality, note: note.trim() || undefined, completedAt: new Date().toISOString() })}>{warmup ? 'Log warm-up' : pain ? 'Log set + flag' : 'Log working set'}</button></div>;
 }
 
 function PlateHelper({ targetKg, preferences }: { targetKg: number; preferences: UserPreferences }) {
