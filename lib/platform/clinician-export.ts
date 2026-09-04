@@ -37,24 +37,27 @@ export function buildClinicianSummary(input: ClinicianExportInput): ClinicianFri
     primaryExerciseExposure[exercise.name] = (primaryExerciseExposure[exercise.name] || 0) + workingLogs(exercise).length;
   }));
 
+  // Keep providers/source ids separate. The clinician summary must never imply
+  // that overlapping device/provider samples were combined into one truth.
   const metricGroups = new Map<string, typeof input.connectedObservations>();
   input.connectedObservations.forEach(observation => {
     const at = Date.parse(observation.endTime || observation.startTime);
     if (!Number.isFinite(at) || at < cutoff || at > now.getTime()) return;
-    metricGroups.set(observation.metric, [...(metricGroups.get(observation.metric) || []), observation]);
+    const key = `${observation.metric}|${observation.sourceId}`;
+    metricGroups.set(key, [...(metricGroups.get(key) || []), observation]);
   });
-  const metrics: ConnectedMetricSummary[] = [...metricGroups.entries()].map(([metric, observations]) => {
+  const metrics: ConnectedMetricSummary[] = [...metricGroups.values()].map(observations => {
     const sorted = [...observations].sort((a, b) => Date.parse(a.endTime || a.startTime) - Date.parse(b.endTime || b.startTime));
-    const latest = sorted.at(-1);
+    const latest = sorted.at(-1)!;
     return {
-      metric: metric as ConnectedMetricSummary['metric'],
+      metric: latest.metric,
       sourceNames: [...new Set(observations.map(item => item.provenance.sourceName))],
       sampleCount: observations.length,
-      latestAt: latest ? latest.endTime || latest.startTime : null,
-      latestValue: latest?.value ?? null,
-      unit: latest?.unit ?? null,
+      latestAt: latest.endTime || latest.startTime,
+      latestValue: latest.value,
+      unit: latest.unit,
     };
-  }).sort((a, b) => a.metric.localeCompare(b.metric));
+  }).sort((a, b) => a.metric.localeCompare(b.metric) || (a.sourceNames[0] || '').localeCompare(b.sourceNames[0] || ''));
 
   return {
     schemaVersion: 1,
@@ -78,7 +81,7 @@ export function buildClinicianSummary(input: ClinicianExportInput): ClinicianFri
     },
     dataNotes: [
       'Training values come from user-entered workout logs and may be incomplete.',
-      'Connected observations retain provider/source names and canonical units but may be stale, partial, imported, or device-derived.',
+      'Connected observations remain source-separated; overlapping providers are not silently combined. Sources may be stale, partial, imported, or device-derived.',
       'Preventive records/reminders are user-entered or clinician-provided; Human Health does not prescribe preventive intervals.',
       'Derived summaries are descriptive and should be interpreted alongside original clinical records where relevant.',
     ],
@@ -100,7 +103,7 @@ export function clinicianSummaryMarkdown(summary: ClinicianFriendlySummary) {
   for (const [exercise, sets] of Object.entries(summary.training.primaryExerciseExposure)) lines.push(`- ${exercise}: ${sets} logged working sets`);
   lines.push('', '## Connected health');
   if (!summary.connectedHealth.metrics.length) lines.push('No connected metric samples in the selected lookback window.');
-  summary.connectedHealth.metrics.forEach(metric => lines.push(`- ${metric.metric}: ${metric.sampleCount} samples; latest ${metric.latestValue ?? 'n/a'} ${metric.unit || ''} at ${metric.latestAt || 'n/a'}; sources: ${metric.sourceNames.join(', ') || 'unknown'}`));
+  summary.connectedHealth.metrics.forEach(metric => lines.push(`- ${metric.metric}: ${metric.sampleCount} samples; latest ${metric.latestValue ?? 'n/a'} ${metric.unit || ''} at ${metric.latestAt || 'n/a'}; source: ${metric.sourceNames.join(', ') || 'unknown'}`));
   lines.push('', '## Preventive records');
   if (!summary.preventive.records.length) lines.push('No preventive records entered.');
   summary.preventive.records.forEach(record => lines.push(`- ${record.title} — ${record.occurredAt.slice(0, 10)} (${record.source}${record.provider ? `; ${record.provider}` : ''})`));
