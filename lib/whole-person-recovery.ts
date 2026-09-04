@@ -11,7 +11,8 @@ export type ReadinessInput = {
   pain?: boolean;
 };
 export type ReadinessDecision = { level: 'normal' | 'reduced' | 'recovery'; volumeMultiplier: number; allowProgression: boolean; reasons: string[] };
-export type ReadinessRecord = { recordedAt: string; input: ReadinessInput };
+export type ReadinessRecord = { recordedAt: string; input: ReadinessInput; source?: 'manual' | 'connected-sleep'; sourceName?: string };
+export type EffectiveReadinessDecision = ReadinessDecision & { checkInCount: number; latestRecordedAt: string | null; source: 'default' | 'check-in' };
 
 export function readinessDecision(input: ReadinessInput): ReadinessDecision {
   const reasons: string[] = [];
@@ -35,48 +36,62 @@ export function readinessDecision(input: ReadinessInput): ReadinessDecision {
   return { level: 'normal', volumeMultiplier: 1, allowProgression: true, reasons };
 }
 
-export function readinessTrend(records: ReadinessRecord[], now = new Date()) {
-  const cutoff = now.getTime() - 7 * 86_400_000;
-  const recent = records.filter(record => {
-    const time = new Date(record.recordedAt).getTime();
-    return Number.isFinite(time) && time >= cutoff && time <= now.getTime();
-  });
-  if (!recent.length) return { normal: 0, reduced: 0, recovery: 0, message: 'No readiness trend yet.' };
-  const counts = { normal: 0, reduced: 0, recovery: 0 };
-  recent.forEach(record => counts[readinessDecision(record.input).level]++);
-  const constrained = counts.reduced + counts.recovery;
-  return { ...counts, message: constrained >= Math.ceil(recent.length / 2) ? 'Recovery constraints have been common this week. Keep progression conservative and prioritize consistency over catching up.' : 'Recovery has been mostly supportive of normal training this week.' };
+function validReadinessRecords(records: ReadinessRecord[], now = new Date()) {
+  return records
+    .filter(record => {
+      const timestamp = Date.parse(record.recordedAt);
+      return Number.isFinite(timestamp) && timestamp <= now.getTime() + 5 * 60_000 && record.input && typeof record.input === 'object';
+    })
+    .sort((a, b) => Date.parse(a.recordedAt) - Date.parse(b.recordedAt));
 }
 
 /**
- * Uses the latest check-in first, then applies a conservative trend hold only when at
- * least three recent check-ins exist and most were constrained. It never upgrades a
- * recovery-first or reduced latest result.
+ * Uses only recent records for the current decision, then keeps progression conservative
+ * when repeated constrained check-ins were recorded during the last week. Connected sleep
+ * can contribute through the same record model, but a recent manual sleep entry remains the
+ * authoritative override in storage.
  */
-export function readinessDecisionFromRecords(records: ReadinessRecord[], now = new Date()): ReadinessDecision {
-  const latest = [...records]
-    .filter(record => {
-      const time = new Date(record.recordedAt).getTime();
-      return Number.isFinite(time) && time <= now.getTime();
-    })
-    .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())[0];
-  const current = readinessDecision(latest?.input || {});
-  if (current.level !== 'normal') return current;
+export function readinessDecisionFromRecords(records: ReadinessRecord[], now = new Date()): EffectiveReadinessDecision {
+  const valid = validReadinessRecords(records, now);
+  const recent = valid.filter(record => now.getTime() - Date.parse(record.recordedAt) <= 36 * 3_600_000);
+  if (!recent.length) {
+    return {
+      ...readinessDecision({}),
+      checkInCount: 0,
+      latestRecordedAt: valid.at(-1)?.recordedAt || null,
+      source: 'default',
+      reasons: valid.length ? ['The latest readiness data is older than 36 hours, so normal readiness is not assumed from it.'] : [],
+    };
+  }
+
+  const latest = recent.at(-1)!;
+  const latestDecision = readinessDecision(latest.input);
+  if (latestDecision.level !== 'normal') return { ...latestDecision, checkInCount: recent.length, latestRecordedAt: latest.recordedAt, source: 'check-in' };
 
   const cutoff = now.getTime() - 7 * 86_400_000;
-  const recent = records.filter(record => {
-    const time = new Date(record.recordedAt).getTime();
-    return Number.isFinite(time) && time >= cutoff && time <= now.getTime();
-  });
-  if (recent.length < 3) return current;
-  const constrained = recent.filter(record => readinessDecision(record.input).level !== 'normal').length;
-  if (constrained < Math.ceil(recent.length / 2)) return current;
+  const weekly = valid.filter(record => Date.parse(record.recordedAt) >= cutoff);
+  if (weekly.length < 3) return { ...latestDecision, checkInCount: weekly.length, latestRecordedAt: latest.recordedAt, source: 'check-in' };
+  const constrained = weekly.filter(record => readinessDecision(record.input).level !== 'normal').length;
+  if (constrained < Math.ceil(weekly.length / 2)) return { ...latestDecision, checkInCount: weekly.length, latestRecordedAt: latest.recordedAt, source: 'check-in' };
   return {
     level: 'reduced',
     volumeMultiplier: 0.85,
     allowProgression: false,
     reasons: ['Most readiness check-ins from the last seven days were constrained, so progression stays conservative even though the latest check-in is normal.'],
+    checkInCount: weekly.length,
+    latestRecordedAt: latest.recordedAt,
+    source: 'check-in',
   };
+}
+
+export function readinessTrend(records: ReadinessRecord[], now = new Date()) {
+  const cutoff = now.getTime() - 7 * 86_400_000;
+  const recent = validReadinessRecords(records, now).filter(record => Date.parse(record.recordedAt) >= cutoff);
+  if (!recent.length) return { normal: 0, reduced: 0, recovery: 0, message: 'No readiness trend yet.' };
+  const counts = { normal: 0, reduced: 0, recovery: 0 };
+  recent.forEach(record => counts[readinessDecision(record.input).level]++);
+  const constrained = counts.reduced + counts.recovery;
+  return { ...counts, message: constrained >= Math.ceil(recent.length / 2) ? 'Recovery constraints have been common this week. Keep progression conservative and prioritize consistency over catching up.' : 'Recovery has been mostly supportive of normal training this week.' };
 }
 
 export function cardioEquivalentMinutes(minutes: number, effort: 'easy' | 'moderate' | 'hard') {

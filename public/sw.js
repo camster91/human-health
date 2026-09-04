@@ -1,9 +1,16 @@
-const CACHE_VERSION = 'human-health-v5';
-const CORE = ['/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/offline.html'];
+const CACHE_VERSION = 'human-health-v6';
+const CORE = ['/', '/health/', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/offline.html'];
 
 async function precacheApplicationShell() {
   const cache = await caches.open(CACHE_VERSION);
-  await cache.addAll(CORE);
+  for (const asset of CORE) {
+    try {
+      const response = await fetch(asset, { cache: 'reload' });
+      if (response.ok) await cache.put(asset, response.clone());
+    } catch {
+      // One optional route must not prevent installation of the offline fallback.
+    }
+  }
   try {
     const response = await fetch('/', { cache: 'reload' });
     if (!response.ok) return;
@@ -25,11 +32,7 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE_VERSION).map(key => caches.delete(key))))
-      .then(() => self.clients.claim()),
-  );
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_VERSION).map(key => caches.delete(key)))).then(() => self.clients.claim()));
 });
 
 self.addEventListener('message', event => {
@@ -49,7 +52,7 @@ self.addEventListener('fetch', event => {
           if (response.ok) caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone())).catch(() => {});
           return response;
         })
-        .catch(async () => (await caches.match(request)) || (await caches.match('/')) || (await caches.match('/offline.html')) || new Response('Offline', { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } })),
+        .catch(async () => (await caches.match(request)) || (await caches.match(url.pathname)) || (await caches.match('/')) || (await caches.match('/offline.html')) || new Response('Offline', { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } })),
     );
     return;
   }

@@ -46,13 +46,16 @@ This roadmap turns the long-term product vision into an incremental delivery pla
 
 ## Phase 3 — Connected health context
 
-1. Health Connect adapter
-2. Apple Health adapter where supported
+Status: source implementation is in draft PR #62. Web/PWA and native-host verification remain separate release gates.
+
+1. Health Connect adapter and explicit native bridge boundary
+2. Apple Health adapter plus local XML-export import
 3. Sleep and daily-movement ingestion
 4. Heart-rate and cardio trend support
-5. Nutrition/hydration habit support
-6. Data provenance and stale/sync-state handling
-7. Import/export and user-owned portability
+5. Optional nutrition/hydration habit support
+6. Data provenance and stale/partial/failed sync-state handling
+7. Connected-only and complete user-owned import/export
+8. Source-scoped deletion and explicit consent controls
 
 ## Phase 4 — Coaching intelligence
 
