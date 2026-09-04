@@ -4,6 +4,7 @@ import { defaultPreferences, normalizePreferences, UserPreferences } from './pre
 import { RestTimerState, sanitizeRestTimer, startRestTimer } from './rest-timer';
 import { ScheduleEvent } from './schedule';
 import { ActivityDose, Assessment, ReadinessInput } from './whole-person';
+import { activeWorkoutWasFinalized, deduplicateHistory, deduplicateWorkoutActivity } from './workout-finalization';
 
 const PREFIX = 'human-health:';
 const ACTIVE = `${PREFIX}active`;
@@ -86,7 +87,18 @@ export type HumanHealthExport = {
 
 export const store = {
   canPersist,
-  loadActive(): Workout | null { return activeWorkout(read<unknown>(ACTIVE, null)); },
+  loadActive(): Workout | null {
+    const active = activeWorkout(read<unknown>(ACTIVE, null));
+    const historyValue = read<unknown>(HISTORY, []);
+    const history = Array.isArray(historyValue) ? deduplicateHistory(historyValue as HistoryEntry[]) : [];
+    if (activeWorkoutWasFinalized(active, history)) {
+      remove(ACTIVE);
+      remove(REST_TIMER);
+      remove(LEGACY_REST_UNTIL);
+      return null;
+    }
+    return active;
+  },
   saveActive(value: Workout | null) { return value ? write(ACTIVE, value) : remove(ACTIVE); },
 
   loadRestTimer(): RestTimerState | null {
@@ -112,10 +124,16 @@ export const store = {
   loadRestUntil(): number | null { const timer = store.loadRestTimer(); return timer?.status === 'running' ? timer.endsAt : null; },
   saveRestUntil(value: number | null) { return store.saveRestTimer(value ? { status: 'running', endsAt: value, durationMs: Math.max(1, value - Date.now()) } : null); },
 
-  loadHistory(): HistoryEntry[] { const value = read<unknown>(HISTORY, []); return Array.isArray(value) ? value as HistoryEntry[] : []; },
-  saveHistory(value: HistoryEntry[]) { return write(HISTORY, value); },
-  loadActivity(): ActivityDose[] { const value = read<unknown>(ACTIVITY, []); return Array.isArray(value) ? value as ActivityDose[] : []; },
-  saveActivity(value: ActivityDose[]) { return write(ACTIVITY, value); },
+  loadHistory(): HistoryEntry[] {
+    const value = read<unknown>(HISTORY, []);
+    return Array.isArray(value) ? deduplicateHistory(value as HistoryEntry[]) : [];
+  },
+  saveHistory(value: HistoryEntry[]) { return write(HISTORY, deduplicateHistory(value)); },
+  loadActivity(): ActivityDose[] {
+    const value = read<unknown>(ACTIVITY, []);
+    return Array.isArray(value) ? deduplicateWorkoutActivity(value as ActivityDose[]) : [];
+  },
+  saveActivity(value: ActivityDose[]) { return write(ACTIVITY, deduplicateWorkoutActivity(value)); },
   loadReadiness(): { recordedAt: string; input: ReadinessInput }[] { const value = read<unknown>(READINESS, []); return Array.isArray(value) ? value as { recordedAt: string; input: ReadinessInput }[] : []; },
   saveReadiness(value: { recordedAt: string; input: ReadinessInput }[]) { return write(READINESS, value.slice(-90)); },
   loadSkills(): Record<string, string> { return read<Record<string, string>>(SKILLS, {}); },
