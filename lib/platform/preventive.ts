@@ -6,10 +6,20 @@ function validIso(value: string) {
   return Number.isFinite(Date.parse(value));
 }
 
+function validYmd(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
 export function reminderState(reminder: PreventiveReminder, now = new Date(), dueSoonDays = 30): ReminderState {
   if (!reminder.enabled) return 'disabled';
+  if (!validYmd(reminder.dueOn)) return 'invalid';
   const due = Date.parse(`${reminder.dueOn}T23:59:59`);
-  if (!Number.isFinite(due)) return 'invalid';
   const days = (due - now.getTime()) / 86_400_000;
   if (days < 0) return 'overdue';
   if (days <= dueSoonDays) return 'due-soon';
@@ -27,9 +37,10 @@ export function normalizePreventiveRecord(value: PreventiveRecord): PreventiveRe
 export function normalizePreventiveReminder(value: PreventiveReminder): PreventiveReminder {
   if (!value.id || !value.title.trim()) throw new Error('Preventive reminder requires an id and title.');
   if (!categories.includes(value.category)) throw new Error('Preventive reminder category is unsupported.');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value.dueOn) || !Number.isFinite(Date.parse(`${value.dueOn}T12:00:00`))) throw new Error('Preventive reminder due date is invalid.');
+  if (!validYmd(value.dueOn)) throw new Error('Preventive reminder due date is invalid.');
   if (!validIso(value.createdAt)) throw new Error('Preventive reminder created date is invalid.');
   if (!['manual', 'clinician-provided'].includes(value.source)) throw new Error('Preventive reminder source is invalid.');
+  if (value.repeatMonths !== undefined && (!Number.isFinite(value.repeatMonths) || value.repeatMonths <= 0)) throw new Error('Preventive reminder repeat interval is invalid.');
   const repeatMonths = value.repeatMonths === undefined ? undefined : Math.max(1, Math.min(120, Math.floor(value.repeatMonths)));
   return { ...value, title: value.title.trim(), note: value.note?.trim() || undefined, repeatMonths };
 }
