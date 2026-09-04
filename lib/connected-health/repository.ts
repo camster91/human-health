@@ -52,7 +52,11 @@ function openDatabase() {
       if (!database.objectStoreNames.contains(SOURCES)) database.createObjectStore(SOURCES, { keyPath: 'id' });
       if (!database.objectStoreNames.contains(META)) database.createObjectStore(META, { keyPath: 'key' });
     };
-    open.onsuccess = () => resolve(open.result);
+    open.onsuccess = () => {
+      const database = open.result;
+      database.onversionchange = () => { database.close(); databasePromise = null; };
+      resolve(database);
+    };
     open.onerror = () => { databasePromise = null; reject(open.error || new Error('Connected health database could not be opened.')); };
     open.onblocked = () => { databasePromise = null; reject(new Error('Connected health database upgrade is blocked by another tab.')); };
   });
@@ -68,9 +72,10 @@ async function putMany<T>(storeName: string, values: T[]) {
   if (!values.length) return;
   const database = await openDatabase();
   const transaction = database.transaction(storeName, 'readwrite');
+  const done = transactionDone(transaction);
   const store = transaction.objectStore(storeName);
   values.forEach(value => store.put(value));
-  await transactionDone(transaction);
+  await done;
 }
 
 function observationIsNewer(current: HealthObservation, candidate: HealthObservation) {
@@ -84,9 +89,10 @@ async function existingByIds(ids: string[]) {
   if (!ids.length) return new Map<string, HealthObservation>();
   const database = await openDatabase();
   const transaction = database.transaction(OBSERVATIONS, 'readonly');
+  const done = transactionDone(transaction);
   const store = transaction.objectStore(OBSERVATIONS);
   const values = await Promise.all(ids.map(id => request(store.get(id)) as Promise<HealthObservation | undefined>));
-  await transactionDone(transaction);
+  await done;
   return new Map(values.filter(Boolean).map(value => [value!.id, value!]));
 }
 
@@ -94,9 +100,10 @@ async function deleteObservationIds(ids: string[]) {
   if (!ids.length) return;
   const database = await openDatabase();
   const transaction = database.transaction(OBSERVATIONS, 'readwrite');
+  const done = transactionDone(transaction);
   const store = transaction.objectStore(OBSERVATIONS);
   ids.forEach(id => store.delete(id));
-  await transactionDone(transaction);
+  await done;
 }
 
 export const healthRepository = {
@@ -131,7 +138,7 @@ export const healthRepository = {
   async upsertBatch(sourceId: string, batch: HealthSyncBatch) {
     const normalized = batch.observations.flatMap(item => {
       const value = normalizeObservation(item);
-      return value ? [value] : [];
+      return value && value.sourceId === sourceId ? [value] : [];
     });
     const existing = await existingByIds(normalized.map(item => item.id));
     const accepted = normalized.filter(item => {
@@ -143,7 +150,7 @@ export const healthRepository = {
     let deleted = 0;
     if (batch.deletedExternalIds.length) {
       const sourceObservations = await healthRepository.listObservations({ sourceId });
-      const deletedSet = new Set(batch.deletedExternalIds);
+      const deletedSet = new Set(batch.deletedExternalIds.filter(value => typeof value === 'string' && value.length > 0));
       const ids = sourceObservations.filter(item => deletedSet.has(item.provenance.externalId) || [...deletedSet].some(externalId => item.provenance.externalId.startsWith(`${externalId}:`))).map(item => item.id);
       deleted = ids.length;
       await deleteObservationIds(ids);
@@ -156,10 +163,11 @@ export const healthRepository = {
     const merged = mergeObservationCollections([], observations);
     const database = await openDatabase();
     const transaction = database.transaction(OBSERVATIONS, 'readwrite');
+    const done = transactionDone(transaction);
     const store = transaction.objectStore(OBSERVATIONS);
     store.clear();
     merged.observations.forEach(item => store.put(item));
-    await transactionDone(transaction);
+    await done;
     notifyConnectedHealthUpdated();
     return merged;
   },
@@ -173,8 +181,9 @@ export const healthRepository = {
   async savePreferences(preferences: ConnectedHealthPreferences) {
     const database = await openDatabase();
     const transaction = database.transaction(META, 'readwrite');
+    const done = transactionDone(transaction);
     transaction.objectStore(META).put({ key: PREFERENCES_KEY, value: normalizeConnectedPreferences(preferences) });
-    await transactionDone(transaction);
+    await done;
     notifyConnectedHealthUpdated();
   },
 
@@ -182,20 +191,22 @@ export const healthRepository = {
     const observations = await healthRepository.listObservations({ sourceId });
     const database = await openDatabase();
     const transaction = database.transaction([OBSERVATIONS, SOURCES], 'readwrite');
+    const done = transactionDone(transaction);
     const observationStore = transaction.objectStore(OBSERVATIONS);
     observations.forEach(item => observationStore.delete(item.id));
     transaction.objectStore(SOURCES).delete(sourceId);
-    await transactionDone(transaction);
+    await done;
     notifyConnectedHealthUpdated();
   },
 
   async clearAll() {
     const database = await openDatabase();
     const transaction = database.transaction([OBSERVATIONS, SOURCES, META], 'readwrite');
+    const done = transactionDone(transaction);
     transaction.objectStore(OBSERVATIONS).clear();
     transaction.objectStore(SOURCES).clear();
     transaction.objectStore(META).clear();
-    await transactionDone(transaction);
+    await done;
     notifyConnectedHealthUpdated();
   },
 
