@@ -6,6 +6,11 @@ import { availableSkillTrees, recommendSkillProgression, SkillAssessment } from 
 import { store } from '@/lib/storage';
 import { skillTrees } from '@/lib/whole-person';
 
+function noticeIsFailure(value: string) {
+  const message = value.toLowerCase();
+  return message.includes('valid') || message.includes('could not') || message.includes('no longer') || message.includes('choose') || message.includes('not available') || message.includes('failed');
+}
+
 export function SkillProgressPanel({ gym }: { gym: GymProfile }) {
   const [skills, setSkills] = useState<Record<string, string>>({});
   const [assessments, setAssessments] = useState<SkillAssessment[]>([]);
@@ -67,10 +72,11 @@ export function SkillProgressPanel({ gym }: { gym: GymProfile }) {
     setNotice('Skill level saved.');
   }
 
+  const noticeFailure = noticeIsFailure(notice);
   return <section className="card" aria-labelledby="skills-title">
     <h2 id="skills-title">Bodyweight skills</h2>
     <p className="muted">Progressions are equipment-aware and require two clean, comparable assessments. Assistance and external load are tracked rather than discarded.</p>
-    {notice && <div className="connection-state" role="status" aria-live="polite">{notice}</div>}
+    {notice && <div className={noticeFailure ? 'connection-state storage-error' : 'connection-state'} role={noticeFailure ? 'alert' : 'status'} aria-live={noticeFailure ? 'assertive' : 'polite'}>{notice}</div>}
     {trees.length === 0 && <p>No compatible bodyweight skill tree is available in this equipment profile.</p>}
     {trees.map(tree => {
       const resolved = resolveStep(tree.id);
@@ -79,7 +85,7 @@ export function SkillProgressPanel({ gym }: { gym: GymProfile }) {
       if (!step) {
         return <div className="skill-block" key={tree.id}>
           <div className="exercise-title"><div><span className="pill">{tree.name}</span><h3>Saved progression needs review</h3><p className="muted">{blockedReason}</p></div><select aria-label={`${tree.name} level`} value="" onChange={event => apply(tree.id, event.target.value)}><option value="">Choose current level</option>{available.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
-          <div className="coach-note">Automatic assessment and progression are paused until you explicitly choose a valid level.</div>
+          <div className="coach-note" role="alert">Automatic assessment and progression are paused until you explicitly choose a valid level.</div>
         </div>;
       }
       const recommendation = recommendSkillProgression(tree.id, step.id, assessments);
