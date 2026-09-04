@@ -1,4 +1,5 @@
 import { HistoryEntry, SessionId, TrainingMode } from './domain';
+import { plannedExercises } from './workout-accounting';
 
 const sequence: SessionId[] = ['upper-a', 'lower-a', 'upper-b', 'lower-b'];
 
@@ -15,7 +16,7 @@ export function advanceSession(session: SessionId) {
 }
 
 export function workoutCompletionRatio(entry: HistoryEntry) {
-  const required = entry.exercises.filter(exercise => !exercise.optional);
+  const required = plannedExercises(entry.exercises);
   const prescribed = required.reduce((sum, exercise) => sum + exercise.sets, 0);
   const completed = required.reduce((sum, exercise) => sum + Math.min(exercise.logs.filter(log => !log.warmup).length, exercise.sets), 0);
   return prescribed > 0 ? completed / prescribed : 0;
@@ -28,8 +29,9 @@ export function nextRollingSession(history: HistoryEntry[]): RollingDecision {
   if (status === 'completed') return { session: advanceSession(last.session), reason: 'Previous session was completed; continue the rolling sequence.', repeating: false };
   if (status === 'abandoned') return { session: last.session, reason: 'The previous session was abandoned, so it remains the next session. You can manually reorder it without marking it complete.', repeating: true };
 
+  const required = plannedExercises(last.exercises);
   const ratio = workoutCompletionRatio(last);
-  const primary = last.exercises.filter(exercise => !exercise.optional && exercise.priority === 'primary');
+  const primary = required.filter(exercise => exercise.priority === 'primary');
   const primaryCovered = primary.length > 0 && primary.every(exercise => exercise.logs.some(log => !log.warmup));
   if (ratio >= 0.6 && primaryCovered) {
     return { session: advanceSession(last.session), reason: `Ended early after ${Math.round(ratio * 100)}% of prescribed working sets with primary work covered; continue the sequence rather than repeating the whole session.`, repeating: false };
