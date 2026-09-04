@@ -9,36 +9,44 @@ import {
 } from './types';
 import { convertToCanonical } from './metrics';
 
+/** Deterministic 64-bit FNV-1a hash; compact, synchronous, and substantially safer than the previous 32-bit key. */
 export function stableHash(input: string) {
-  let hash = 0x811c9dc5;
+  let hash = 0xcbf29ce484222325n;
   for (let index = 0; index < input.length; index++) {
-    hash ^= input.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
+    hash ^= BigInt(input.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
   }
-  return (hash >>> 0).toString(36);
+  return hash.toString(36).padStart(13, '0');
 }
 
 export function observationId(sourceId: string, externalId: string) {
-  return `${sourceId}:${stableHash(externalId)}`;
+  return `${sourceId}:${stableHash(`${sourceId}\u0000${externalId}`)}`;
 }
+
+const providers: HealthProvider[] = ['health-connect', 'apple-health', 'manual', 'human-health-import'];
+const statuses: HealthSourceStatus[] = ['not-connected', 'unavailable', 'permission-required', 'syncing', 'current', 'partial', 'stale', 'failed'];
+const ingestionMethods = ['native-sync', 'file-import', 'manual', 'archive-import'] as const;
+const qualities = ['direct', 'derived'] as const;
 
 export function normalizeObservation(observation: HealthObservation): HealthObservation | null {
   if (!observation || typeof observation !== 'object' || !connectedMetrics.includes(observation.metric)) return null;
   const provenance = observation.provenance;
   if (!provenance || typeof provenance !== 'object') return null;
+  if (!providers.includes(provenance.provider) || !ingestionMethods.includes(provenance.ingestionMethod) || !qualities.includes(observation.quality)) return null;
   const normalized = convertToCanonical(observation.metric, Number(observation.value), observation.unit || provenance.originalUnit);
   const start = Date.parse(observation.startTime);
   const end = observation.endTime ? Date.parse(observation.endTime) : start;
   const recorded = Date.parse(observation.recordedAt);
   const imported = Date.parse(provenance.importedAt);
   if (!normalized || !Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(recorded) || !Number.isFinite(imported) || end < start) return null;
-  if (!observation.sourceId || !provenance.externalId || !provenance.sourceName || !provenance.provider || !provenance.ingestionMethod || !provenance.originalType) return null;
+  if (typeof observation.sourceId !== 'string' || !observation.sourceId.trim() || typeof provenance.externalId !== 'string' || !provenance.externalId.trim() || typeof provenance.sourceName !== 'string' || !provenance.sourceName.trim() || typeof provenance.originalType !== 'string' || !provenance.originalType.trim()) return null;
   const tags = observation.tags && typeof observation.tags === 'object'
     ? Object.fromEntries(Object.entries(observation.tags).filter(([, value]) => ['string', 'number', 'boolean'].includes(typeof value))) as Record<string, string | number | boolean>
     : undefined;
   return {
     ...observation,
-    id: observation.id || observationId(observation.sourceId, provenance.externalId),
+    // Never trust an imported ID. Ownership is always derived from sourceId + provider externalId.
+    id: observationId(observation.sourceId, provenance.externalId),
     value: normalized.value,
     unit: normalized.unit,
     startTime: new Date(start).toISOString(),
@@ -86,9 +94,6 @@ export function mergeObservationCollections(existing: HealthObservation[], incom
   const observations = [...map.values()].sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime) || a.id.localeCompare(b.id));
   return { observations, accepted, rejected, deleted: deletedCount };
 }
-
-const providers: HealthProvider[] = ['health-connect', 'apple-health', 'manual', 'human-health-import'];
-const statuses: HealthSourceStatus[] = ['not-connected', 'unavailable', 'permission-required', 'syncing', 'current', 'partial', 'stale', 'failed'];
 
 export function normalizeSourceState(value: HealthSourceState): HealthSourceState {
   const supportedMetrics = Array.isArray(value?.supportedMetrics) ? [...new Set(value.supportedMetrics.filter(metric => connectedMetrics.includes(metric)))] : [];
