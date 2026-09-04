@@ -33,11 +33,34 @@ export function createIntegrationBundle(options: {
 }
 
 export function integrationBundleContainsOnlyScopes(bundle: IntegrationBundle) {
+  if (bundle.schemaVersion !== 1 || !Array.isArray(bundle.scopes) || !bundle.scopes.length) return false;
+  const normalized = normalizeScopes(bundle.scopes);
+  if (normalized.length !== bundle.scopes.length || normalized.some((scope, index) => scope !== bundle.scopes[index])) return false;
+  if (!Number.isFinite(Date.parse(bundle.generatedAt)) || !bundle.safety?.trim()) return false;
   if (bundle.training && !bundle.scopes.includes('training:read')) return false;
   if (bundle.connectedHealth && !bundle.scopes.includes('connected-health:read')) return false;
   if (bundle.preventive && !bundle.scopes.includes('preventive:read')) return false;
   if (bundle.coaching && !bundle.scopes.includes('coaching:read')) return false;
+  if (bundle.scopes.includes('training:read') && !bundle.training) return false;
+  if (bundle.scopes.includes('connected-health:read') && !bundle.connectedHealth) return false;
+  if (bundle.scopes.includes('preventive:read') && !bundle.preventive) return false;
+  if (bundle.scopes.includes('coaching:read') && !bundle.coaching) return false;
   return true;
+}
+
+function sanitizeBundleForShare(bundle: IntegrationBundle): IntegrationBundle {
+  if (!integrationBundleContainsOnlyScopes(bundle)) throw new Error('Integration bundle is malformed or contains data outside its declared scopes.');
+  const safe: IntegrationBundle = {
+    schemaVersion: 1,
+    generatedAt: bundle.generatedAt,
+    scopes: [...bundle.scopes],
+    safety: bundle.safety,
+  };
+  if (safe.scopes.includes('training:read')) safe.training = bundle.training;
+  if (safe.scopes.includes('connected-health:read')) safe.connectedHealth = bundle.connectedHealth;
+  if (safe.scopes.includes('preventive:read')) safe.preventive = bundle.preventive;
+  if (safe.scopes.includes('coaching:read')) safe.coaching = bundle.coaching;
+  return safe;
 }
 
 export interface HumanHealthIntegrationHost {
@@ -56,18 +79,13 @@ export function getIntegrationHost(): HumanHealthIntegrationHost | null {
   return window.HumanHealthIntegrationHost || null;
 }
 
-/**
- * External sharing requires a positive confirmation from the immediate user
- * action. Callers cannot rely on a comment or UI convention alone.
- */
 export async function shareIntegrationBundle(bundle: IntegrationBundle, options: { confirmed: boolean }) {
   if (options.confirmed !== true) throw new Error('Explicit user confirmation is required before sharing Human Health data.');
-  if (!integrationBundleContainsOnlyScopes(bundle)) throw new Error('Integration bundle contains data outside its declared scopes.');
-  if (!bundle.scopes.length) throw new Error('Integration bundle has no declared scopes.');
+  const safeBundle = sanitizeBundleForShare(bundle);
   const host = getIntegrationHost();
   if (!host) throw new Error('No Human Health integration host is connected.');
   const description = await host.describe();
-  const unsupported = bundle.scopes.filter(scope => !description.supportedScopes.includes(scope));
+  const unsupported = safeBundle.scopes.filter(scope => !description.supportedScopes.includes(scope));
   if (unsupported.length) throw new Error(`Connected integration does not support scope(s): ${unsupported.join(', ')}.`);
-  return host.share(bundle);
+  return host.share(safeBundle);
 }
