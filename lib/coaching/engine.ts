@@ -2,6 +2,7 @@ import { cardioCoverage, consistencyPattern, normalizedStrengthTrend, recoveryPa
 import { workingLogs } from '../engine';
 import { recentTrainingLoad } from '../load-management';
 import { domainDeficits } from '../performance';
+import type { DomainPriority } from '../preferences';
 import { readinessDecisionFromRecords } from '../whole-person';
 import type { CapabilityDomain } from '../whole-person';
 import type { CoachAction, CoachEvidence, CoachTrend, CoachingInput, CoachingSnapshot, GoalAllocation, PlateauAssessment } from './types';
@@ -58,9 +59,10 @@ export function assessPlateaus(history: CoachingInput['history'], readiness: Coa
 
 export function balanceGoals(input: CoachingInput, readinessLevel: 'normal' | 'reduced' | 'recovery'): GoalAllocation[] {
   const deficits = new Set(domainDeficits(input.activity, input.now || new Date(), { cardioTargetMinutes: input.preferences.cardioTargetMinutes, priorities: input.preferences.domainPriorities }));
-  const weights: Record<string, number> = { focus: 4, maintain: 2, deprioritize: 0, off: 0 };
-  const domains = Object.entries(input.preferences.domainPriorities)
-    .map(([domain, priority]) => ({ domain: domain as CapabilityDomain, priority, weight: weights[priority] + (deficits.has(domain as CapabilityDomain) ? 1 : 0) }))
+  const weights: Record<DomainPriority, number> = { focus: 4, maintain: 2, deprioritize: 0, off: 0 };
+  const entries = Object.entries(input.preferences.domainPriorities) as [CapabilityDomain, DomainPriority][];
+  const domains = entries
+    .map(([domain, priority]) => ({ domain, priority, weight: weights[priority] + (deficits.has(domain) ? 1 : 0) }))
     .filter(item => item.weight > 0 && item.priority !== 'off' && item.priority !== 'deprioritize');
   if (readinessLevel === 'recovery') {
     domains.forEach(item => { if (item.domain !== 'recovery' && item.domain !== 'mobility') item.weight = Math.max(1, item.weight - 2); });
