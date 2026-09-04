@@ -85,17 +85,11 @@ export function PlatformPanel() {
     if (!recordTitle.trim() || !recordDate) return setNotice('Enter a title and date first.');
     try {
       const next = platformStore.addRecord({
-        id: crypto.randomUUID(),
-        title: recordTitle,
-        category: recordCategory,
-        occurredAt: new Date(`${recordDate}T12:00:00Z`).toISOString(),
-        source: recordSource,
-        provider: recordProvider,
-        note: recordNote,
-        createdAt: new Date().toISOString(),
+        id: crypto.randomUUID(), title: recordTitle, category: recordCategory,
+        occurredAt: new Date(`${recordDate}T12:00:00Z`).toISOString(), source: recordSource,
+        provider: recordProvider, note: recordNote, createdAt: new Date().toISOString(),
       });
-      setData(next);
-      setRecordTitle(''); setRecordDate(''); setRecordProvider(''); setRecordNote('');
+      setData(next); setRecordTitle(''); setRecordDate(''); setRecordProvider(''); setRecordNote('');
       setNotice('Preventive record saved locally.');
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Could not save record.'); }
   }
@@ -104,29 +98,24 @@ export function PlatformPanel() {
     if (!reminderTitle.trim() || !reminderDue) return setNotice('Enter a reminder title and due date first.');
     try {
       const next = platformStore.addReminder({
-        id: crypto.randomUUID(),
-        title: reminderTitle,
-        category: reminderCategory,
-        dueOn: reminderDue,
-        repeatMonths: repeatMonths.trim() ? Number(repeatMonths) : undefined,
-        source: reminderSource,
-        provider: reminderProvider,
-        note: reminderNote,
-        enabled: true,
-        createdAt: new Date().toISOString(),
+        id: crypto.randomUUID(), title: reminderTitle, category: reminderCategory, dueOn: reminderDue,
+        repeatMonths: repeatMonths.trim() ? Number(repeatMonths) : undefined, source: reminderSource,
+        provider: reminderProvider, note: reminderNote, enabled: true, createdAt: new Date().toISOString(),
       });
-      setData(next);
-      setReminderTitle(''); setReminderDue(''); setReminderProvider(''); setReminderNote(''); setRepeatMonths('');
+      setData(next); setReminderTitle(''); setReminderDue(''); setReminderProvider(''); setReminderNote(''); setRepeatMonths('');
       setNotice('Reminder saved locally. Human Health did not choose the date or interval.');
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Could not save reminder.'); }
   }
 
   function completePreventiveReminder(id: string) {
     if (!window.confirm('Mark this reminder complete today? If you explicitly entered a repeat interval, the next reminder will be created from today.')) return;
-    try {
-      setData(platformStore.completeReminder(id, new Date()));
-      setNotice('Reminder marked complete and recorded locally.');
-    } catch (error) { setNotice(error instanceof Error ? error.message : 'Could not complete reminder.'); }
+    try { setData(platformStore.completeReminder(id, new Date())); setNotice('Reminder marked complete and recorded locally.'); }
+    catch (error) { setNotice(error instanceof Error ? error.message : 'Could not complete reminder.'); }
+  }
+
+  function toggleReminderEnabled(id: string, enabled: boolean) {
+    try { setData(platformStore.setReminderEnabled(id, enabled)); setNotice(enabled ? 'Reminder enabled.' : 'Reminder disabled.'); }
+    catch (error) { setNotice(error instanceof Error ? error.message : 'Could not update reminder.'); }
   }
 
   function deleteRecord(id: string) {
@@ -141,30 +130,20 @@ export function PlatformPanel() {
     catch (error) { setNotice(error instanceof Error ? error.message : 'Could not delete reminder.'); }
   }
 
-  function toggleScope(scope: IntegrationScope) {
-    setScopes(current => current.includes(scope) ? current.filter(item => item !== scope) : [...current, scope]);
-  }
-
+  function toggleScope(scope: IntegrationScope) { setScopes(current => current.includes(scope) ? current.filter(item => item !== scope) : [...current, scope]); }
   function createSelectedBundle() {
     if (!training) throw new Error('Training data is still loading.');
     return createIntegrationBundle({ scopes, training, connectedObservations: connected.observations, connectedSources: connected.sources, preventiveRecords: data.records, preventiveReminders: data.reminders });
   }
-
   function exportIntegration() {
-    try {
-      const bundle = createSelectedBundle();
-      download('human-health-integration.json', JSON.stringify(bundle, null, 2));
-      setNotice('Scoped integration bundle exported locally. No background sharing occurred.');
-    } catch (error) { setNotice(error instanceof Error ? error.message : 'Could not create integration bundle.'); }
+    try { const bundle = createSelectedBundle(); download('human-health-integration.json', JSON.stringify(bundle, null, 2)); setNotice('Scoped integration bundle exported locally. No background sharing occurred.'); }
+    catch (error) { setNotice(error instanceof Error ? error.message : 'Could not create integration bundle.'); }
   }
-
   async function shareIntegration() {
     try {
-      const bundle = createSelectedBundle();
-      const destination = integrationHostName || 'the connected integration';
+      const bundle = createSelectedBundle(); const destination = integrationHostName || 'the connected integration';
       if (!window.confirm(`Share the selected scope(s) (${bundle.scopes.join(', ')}) with ${destination}? This sends the included data outside this browser.`)) return;
-      setSharing(true);
-      const result = await shareIntegrationBundle(bundle, { confirmed: true });
+      setSharing(true); const result = await shareIntegrationBundle(bundle, { confirmed: true });
       setNotice(result.accepted ? `Shared with ${destination}${result.receipt ? ` · receipt ${result.receipt}` : ''}.` : result.message || `${destination} did not accept the bundle.`);
     } catch (error) { setNotice(error instanceof Error ? error.message : 'Could not share integration bundle.'); }
     finally { setSharing(false); }
@@ -196,7 +175,7 @@ export function PlatformPanel() {
       </div></div>
     </div><div className={styles.grid}>
       {data.records.map(record=><article className={styles.item} key={record.id}><span className="pill">{record.category}</span><h3>{record.title}</h3><p>{record.occurredAt.slice(0,10)} · {record.source}{record.provider ? ` · ${record.provider}` : ''}</p>{record.note&&<p className={styles.muted}>{record.note}</p>}<button className="link" onClick={()=>deleteRecord(record.id)}>Delete</button></article>)}
-      {data.reminders.map(reminder=><article className={styles.item} key={reminder.id}><span className="pill">{reminderState(reminder)}</span><h3>{reminder.title}</h3><p>Due {reminder.dueOn} · {reminder.source}{reminder.provider ? ` · ${reminder.provider}` : ''}{reminder.repeatMonths ? ` · every ${reminder.repeatMonths} month${reminder.repeatMonths===1?'':'s'}` : ''}</p>{reminder.note&&<p className={styles.muted}>{reminder.note}</p>}<div className={styles.actions}><button className="primary" onClick={()=>completePreventiveReminder(reminder.id)}>Complete today</button><button className="link" onClick={()=>deleteReminder(reminder.id)}>Delete</button></div></article>)}
+      {data.reminders.map(reminder=><article className={styles.item} key={reminder.id}><span className="pill">{reminderState(reminder)}</span><h3>{reminder.title}</h3><p>Due {reminder.dueOn} · {reminder.source}{reminder.provider ? ` · ${reminder.provider}` : ''}{reminder.repeatMonths ? ` · every ${reminder.repeatMonths} month${reminder.repeatMonths===1?'':'s'}` : ''}</p>{reminder.note&&<p className={styles.muted}>{reminder.note}</p>}<div className={styles.actions}><button className="primary" disabled={!reminder.enabled} onClick={()=>completePreventiveReminder(reminder.id)}>Complete today</button><button className="ghost" onClick={()=>toggleReminderEnabled(reminder.id,!reminder.enabled)}>{reminder.enabled?'Disable':'Enable'}</button><button className="link" onClick={()=>deleteReminder(reminder.id)}>Delete</button></div></article>)}
     </div></section>
 
     <section className="card" aria-labelledby="clinician-title"><h2 id="clinician-title">Clinician discussion export</h2><p>Generated locally with source/provenance notes and explicit non-diagnostic framing.</p><div className={styles.actions}><button className="primary" disabled={!clinician} onClick={()=>clinician&&download('human-health-clinician-summary.md', clinicianSummaryMarkdown(clinician), 'text/markdown')}>Export Markdown summary</button><button className="ghost" disabled={!clinician} onClick={()=>clinician&&download('human-health-clinician-summary.json', JSON.stringify(clinician,null,2))}>Export JSON summary</button></div>{clinician&&<div className="metrics"><span><b>Training sessions</b>{clinician.training.sessions}</span><span><b>Source-separated metrics</b>{clinician.connectedHealth.metrics.length}</span><span><b>Preventive records</b>{clinician.preventive.records.length}</span></div>}</section>
