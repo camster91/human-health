@@ -22,7 +22,7 @@ import {
   microSessions,
   mobilityPrescription,
   progressionTracks,
-  readinessDecision,
+  readinessDecisionFromRecords,
   readinessTrend,
   skillTrees,
 } from '@/lib/whole-person';
@@ -64,11 +64,12 @@ export function WholePersonDashboard({
   const [cardioKind, setCardioKind] = useState<'planned' | 'incidental'>('planned');
   const [availableMinutes, setAvailableMinutes] = useState(20);
   const [progressions, setProgressions] = useState<Record<string, string>>({});
+  const [persistenceNotice, setPersistenceNotice] = useState('');
 
   useEffect(() => { setProgressions(store.loadProgressions()); }, []);
   useEffect(() => { if (latestInput) setCheck(latestInput); }, [latestInput]);
 
-  const decision = readinessDecision(latestInput || {});
+  const decision = readinessDecisionFromRecords(readinessRecords);
   const trend = readinessTrend(readinessRecords);
   const coverage = useMemo(() => cardioCoverage(activity, preferences.cardioTargetMinutes), [activity, preferences.cardioTargetMinutes]);
   const prescription = cardioPrescription(coverage.equivalentMinutes, preferences.cardioTargetMinutes, 30);
@@ -103,14 +104,17 @@ export function WholePersonDashboard({
 
   function saveCheck() {
     const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: check }].slice(-90);
-    store.saveReadiness(next);
+    if (!store.saveReadiness(next)) { setPersistenceNotice('The readiness check could not be saved in this browser.'); return; }
+    setPersistenceNotice('Readiness check saved.');
     onReadinessChange(next);
   }
 
   function logDose(dose: ActivityDose) {
     const next = [...activity, dose];
-    store.saveActivity(next);
+    if (!store.saveActivity(next)) { setPersistenceNotice('The activity could not be saved in this browser.'); return false; }
+    setPersistenceNotice('Activity saved.');
     onActivityChange(next);
+    return true;
   }
 
   function logCardio() {
@@ -121,27 +125,38 @@ export function WholePersonDashboard({
     const completedAt = new Date().toISOString();
     const doses = minimumPlan.sessionIds.flatMap(id => {
       const session = microSessions.find(item => item.id === id);
-      return session ? [{ domain: session.domain, minutes: session.minutes, effort: 'easy' as const, kind: 'planned' as const, source: 'manual' as const, quality: 1, sessionId: `minimum:${preferences.lifeMode}:${id}`, completedAt }] : [];
+      return session ? [{
+        domain: session.domain,
+        minutes: session.minutes,
+        effort: 'easy' as const,
+        kind: 'planned' as const,
+        source: 'manual' as const,
+        quality: session.domain === 'strength' ? 0.35 : 1,
+        sessionId: `minimum:${preferences.lifeMode}:${id}`,
+        completedAt,
+      }] : [];
     });
     if (!doses.length) return;
     const next = [...activity, ...doses];
-    store.saveActivity(next);
+    if (!store.saveActivity(next)) { setPersistenceNotice('The minimum-effective work could not be saved in this browser.'); return; }
+    setPersistenceNotice('Minimum-effective work saved. A short strength dose is recorded as partial and does not count as a full strength session.');
     onActivityChange(next);
   }
 
   function selectProgression(trackId: string, levelId: string) {
     const next = { ...progressions, [trackId]: levelId };
-    store.saveProgressions(next);
+    if (!store.saveProgressions(next)) { setPersistenceNotice('The progression level could not be saved.'); return; }
     setProgressions(next);
   }
 
   function applyAthleticProgression(metricId: 'single-leg-balance' | 'jump', level: AthleticLevel) {
     const next = { ...progressions, [`athletic:${metricId}`]: level };
-    store.saveProgressions(next);
+    if (!store.saveProgressions(next)) { setPersistenceNotice('The athletic progression could not be saved.'); return; }
     setProgressions(next);
   }
 
   return <>
+    {persistenceNotice && <div className="connection-state" role="status" aria-live="polite">{persistenceNotice}</div>}
     <section className="card" aria-labelledby="readiness-title">
       <h2 id="readiness-title">Readiness</h2>
       <p className="muted">This optional check adjusts training demand. It does not diagnose illness, injury, or glucose-related concerns.</p>
@@ -208,9 +223,11 @@ export function WholePersonDashboard({
 }
 
 export function SkillProgressPanel({ gym }: { gym: GymProfile }) {
-  const [skills, setSkills] = useState<Record<string, string>>(() => typeof window === 'undefined' ? {} : store.loadSkills());
-  const [assessments, setAssessments] = useState<SkillAssessment[]>(() => typeof window === 'undefined' ? [] : store.loadSkillAssessments());
+  const [skills, setSkills] = useState<Record<string, string>>({});
+  const [assessments, setAssessments] = useState<SkillAssessment[]>([]);
   const [inputs, setInputs] = useState<Record<string, { value: number; assistanceKg: number; variation: string; pain: boolean }>>({});
+  const [notice, setNotice] = useState('');
+  useEffect(() => { setSkills(store.loadSkills()); setAssessments(store.loadSkillAssessments()); }, []);
   const trees = availableSkillTrees(gym.equipment);
 
   function currentStepId(treeId: string) {
@@ -225,21 +242,23 @@ export function SkillProgressPanel({ gym }: { gym: GymProfile }) {
     const step = tree?.steps.find(item => item.id === stepId);
     if (!tree || !step) return;
     const input = inputs[treeId] || { value: 0, assistanceKg: 0, variation: '', pain: false };
-    const entry: SkillAssessment = { treeId, stepId, passed: input.value >= (step.targetValue || 0), clean: !input.pain, pain: input.pain, metric: step.metric, value: input.value, assistanceKg: step.id === 'assisted' ? input.assistanceKg : undefined, externalLoadKg: step.metric === 'external-load-kg' ? input.value : undefined, variation: input.variation, recordedAt: new Date().toISOString() };
+    const entry: SkillAssessment = { treeId, stepId, passed: input.value >= (step.targetValue || 0), clean: !input.pain, pain: input.pain, metric: step.metric, value: input.value, assistanceKg: step.id === 'assisted' ? input.assistanceKg : undefined, externalLoadKg: step.metric === 'external-load-kg' ? input.value : undefined, variation: input.variation.trim(), recordedAt: new Date().toISOString() };
     const next = [...assessments, entry];
-    store.saveSkillAssessments(next);
+    if (!store.saveSkillAssessments(next)) { setNotice('The skill assessment could not be saved.'); return; }
     setAssessments(next);
+    setNotice('Skill assessment saved.');
   }
 
   function apply(treeId: string, stepId: string) {
     const next = { ...skills, [treeId]: stepId };
-    store.saveSkills(next);
+    if (!store.saveSkills(next)) { setNotice('The selected skill level could not be saved.'); return; }
     setSkills(next);
   }
 
   return <section className="card" aria-labelledby="skills-title">
     <h2 id="skills-title">Bodyweight skills</h2>
     <p className="muted">Progressions are equipment-aware and require two clean, comparable assessments. Assistance and external load are tracked rather than discarded.</p>
+    {notice && <div className="connection-state" role="status" aria-live="polite">{notice}</div>}
     {trees.length === 0 && <p>No compatible bodyweight skill tree is available in this equipment profile.</p>}
     {trees.map(tree => {
       const stepId = currentStepId(tree.id);
@@ -261,16 +280,18 @@ export function CapabilityAssessmentPanel({ assessments, onChange }: { assessmen
   const [metricId, setMetricId] = useState('pullups');
   const [value, setValue] = useState(0);
   const [note, setNote] = useState('');
+  const [notice, setNotice] = useState('');
   const metrics = capabilityMetrics.filter(metric => assessmentMetricIds.includes(metric.id));
   const selected = metrics.find(metric => metric.id === metricId) || metrics[0];
 
   function record() {
     if (!selected || !Number.isFinite(value)) return;
-    const next = [...assessments, { metricId: selected.id, value, note: note || undefined, recordedAt: new Date().toISOString() }];
-    store.saveAssessments(next);
+    const next = [...assessments, { metricId: selected.id, value, note: note.trim() || undefined, recordedAt: new Date().toISOString() }];
+    if (!store.saveAssessments(next)) { setNotice('The capability assessment could not be saved.'); return; }
     onChange(next);
     setNote('');
+    setNotice('Capability assessment saved. Use the same test conditions next time.');
   }
 
-  return <section className="card" aria-labelledby="assessment-title"><h2 id="assessment-title">Capability assessments</h2><p className="muted">Use the same test conditions each time. Each capability remains separate rather than becoming an arbitrary universal health score.</p><div className="settings-grid"><label><b>Assessment</b><select value={metricId} onChange={event => setMetricId(event.target.value)}>{metrics.map(metric => <option key={metric.id} value={metric.id}>{metric.name}</option>)}</select></label><label><b>Value {selected ? `(${selected.unit})` : ''}</b><input type="number" step="0.1" value={value} onChange={event => setValue(Number(event.target.value))}/></label><label><b>Conditions/note</b><input value={note} onChange={event => setNote(event.target.value)} placeholder="Keep conditions repeatable"/></label></div><button className="primary" onClick={record}>Record assessment</button>{metrics.map(metric => { const latest = latestAssessment(assessments, metric.id); return <div className="history" key={metric.id}><b>{metric.name}</b><span>{latest ? `${latest.value} ${metric.unit}` : 'No baseline'}</span><small>{latest?.note || metric.description}</small></div>; })}</section>;
+  return <section className="card" aria-labelledby="assessment-title"><h2 id="assessment-title">Capability assessments</h2><p className="muted">Use the same test conditions each time. Each capability remains separate rather than becoming an arbitrary universal health score.</p>{notice && <div className="connection-state" role="status" aria-live="polite">{notice}</div>}<div className="settings-grid"><label><b>Assessment</b><select value={metricId} onChange={event => setMetricId(event.target.value)}>{metrics.map(metric => <option key={metric.id} value={metric.id}>{metric.name}</option>)}</select></label><label><b>Value {selected ? `(${selected.unit})` : ''}</b><input type="number" step="0.1" value={value} onChange={event => setValue(Number(event.target.value))}/></label><label><b>Test conditions</b><input value={note} onChange={event => setNote(event.target.value)} placeholder="e.g. same shoes and surface"/></label></div><button className="primary" onClick={record}>Record assessment</button>{metrics.map(metric => { const latest = latestAssessment(assessments, metric.id); return <div className="history" key={metric.id}><b>{metric.name}</b><span>{latest ? `${latest.value} ${metric.unit}` : 'No baseline'}</span><small>{latest?.note || metric.description}</small></div>; })}</section>;
 }
