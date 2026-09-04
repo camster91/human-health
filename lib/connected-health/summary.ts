@@ -1,5 +1,6 @@
 import { ReadinessInput } from '../whole-person';
 import { chooseSourceForMetric, observationFreshness, observationsForMetric, sourceFreshness } from './freshness';
+import { sameDeviceLocalDay } from './local-day';
 import { metricDefinitions } from './metrics';
 import { ConnectedHealthPreferences, ConnectedMetric, HealthObservation, HealthSourceState, ObservationFreshness } from './types';
 
@@ -46,11 +47,6 @@ export type ConnectedHealthSummary = {
   mealQualityToday: ConnectedMetricSummary;
 };
 
-function sameLocalDay(value: string, target: Date) {
-  const date = new Date(value);
-  return date.getFullYear() === target.getFullYear() && date.getMonth() === target.getMonth() && date.getDate() === target.getDate();
-}
-
 function statusFor(source: HealthSourceState | null, freshness: ObservationFreshness | null, now: Date) {
   if (!source || !freshness) return 'insufficient' as const;
   const state = sourceFreshness(source, now);
@@ -75,8 +71,6 @@ function nonOverlappingDurationMinutes(items: HealthObservation[]) {
     const end = Date.parse(item.endTime || '');
     return Number.isFinite(start) && Number.isFinite(end) && end > start ? [[start, end] as [number, number]] : [];
   });
-  // If a provider omitted interval boundaries for any stage, fall back to its canonical
-  // stage durations rather than silently dropping records from the sleep summary.
   if (intervals.length !== items.length) return items.reduce((sum, item) => sum + item.value, 0);
   intervals.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   let total = 0;
@@ -96,7 +90,7 @@ function nonOverlappingDurationMinutes(items: HealthObservation[]) {
 function dailyAggregate(metric: ConnectedMetric, observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences, now: Date, mode: 'sum' | 'average' = 'sum') {
   const source = sourceFor(observations, sources, metric, preferences, now);
   if (!source) return empty(metric);
-  const values = observationsForMetric(observations, metric, { sourceId: source.id, now }).filter(item => sameLocalDay(item.startTime, now));
+  const values = observationsForMetric(observations, metric, { sourceId: source.id, now }).filter(item => sameDeviceLocalDay(item.startTime, now));
   if (!values.length) return empty(metric, `No ${metricDefinitions[metric].label.toLowerCase()} observation exists for today from ${source.displayName}.`);
   const latest = values[0];
   const sum = values.reduce((total, item) => total + item.value, 0);
@@ -109,7 +103,7 @@ function dailyAggregate(metric: ConnectedMetric, observations: HealthObservation
     sourceId: source.id,
     sourceName: source.displayName,
     recordedAt: latest.recordedAt,
-    note: `Uses ${values.length} observation${values.length === 1 ? '' : 's'} from one selected source; other providers are not added automatically to avoid duplicate totals.`,
+    note: `Uses ${values.length} observation${values.length === 1 ? '' : 's'} from one selected source on the current device-local calendar day; other providers are not added automatically to avoid duplicate totals.`,
   };
 }
 
@@ -136,7 +130,7 @@ function sleepSummary(observations: HealthObservation[], sources: HealthSourceSt
   if (!source) return empty('sleep-duration');
   const sessions = observationsForMetric(observations, 'sleep-duration', { sourceId: source.id, now });
   const latestSession = sessions[0];
-  if (latestSession) return { metric: 'sleep-duration' as const, label: 'Sleep', value: latestSession.value, unit: latestSession.unit, status: statusFor(source, observationFreshness(latestSession, now), now), sourceId: source.id, sourceName: source.displayName, recordedAt: latestSession.recordedAt, note: `Latest sleep session from ${source.displayName}.` };
+  if (latestSession) return { metric: 'sleep-duration' as const, label: 'Sleep', value: latestSession.value, unit: latestSession.unit, status: statusFor(source, observationFreshness(latestSession, now), now), sourceId: source.id, sourceName: source.displayName, recordedAt: latestSession.recordedAt, note: `Latest sleep session from ${source.displayName}. Sleep sessions are grouped by period rather than forced into same-calendar-day habit totals.` };
 
   const stages = observationsForMetric(observations, 'sleep-stage', { sourceId: source.id, now });
   const latest = stages[0];
