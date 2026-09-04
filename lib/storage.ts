@@ -58,6 +58,24 @@ function remove(key: string) {
   }
 }
 
+/**
+ * Execute a related group of localStorage mutations while preserving the first
+ * failure message. Individual successful writes/removals clear mutationFailure,
+ * so batch operations must not let a later success hide an earlier failure.
+ */
+function runMutations(operations: (() => boolean)[], fallback: string) {
+  let firstFailure: string | null = null;
+  let succeeded = true;
+  mutationFailure = null;
+  for (const operation of operations) {
+    if (operation()) continue;
+    succeeded = false;
+    firstFailure ||= mutationFailure || fallback;
+  }
+  if (!succeeded) mutationFailure = firstFailure || fallback;
+  return succeeded;
+}
+
 function canPersist() {
   if (typeof window === 'undefined') return false;
   try {
@@ -161,9 +179,7 @@ export const store = {
     const historyValue = read<unknown>(HISTORY, []);
     const history = Array.isArray(historyValue) ? deduplicateHistory(historyValue as HistoryEntry[]) : [];
     if (activeWorkoutWasFinalized(active, history)) {
-      remove(ACTIVE);
-      remove(REST_TIMER);
-      remove(LEGACY_REST_UNTIL);
+      runMutations([() => remove(ACTIVE), () => remove(REST_TIMER), () => remove(LEGACY_REST_UNTIL)], 'Finalized workout state could not be fully cleaned up.');
       return null;
     }
     return active;
@@ -180,15 +196,12 @@ export const store = {
       remove(LEGACY_REST_UNTIL);
       return migrated;
     }
-    remove(REST_TIMER);
-    remove(LEGACY_REST_UNTIL);
+    runMutations([() => remove(REST_TIMER), () => remove(LEGACY_REST_UNTIL)], 'Expired rest timer data could not be fully cleaned up.');
     return null;
   },
   saveRestTimer(value: RestTimerState | null) {
     if (value) return write(REST_TIMER, value);
-    const currentRemoved = remove(REST_TIMER);
-    const legacyRemoved = remove(LEGACY_REST_UNTIL);
-    return currentRemoved && legacyRemoved;
+    return runMutations([() => remove(REST_TIMER), () => remove(LEGACY_REST_UNTIL)], 'Rest timer data could not be fully deleted.');
   },
   loadRestUntil(): number | null { const timer = store.loadRestTimer(); return timer?.status === 'running' ? timer.endsAt : null; },
   saveRestUntil(value: number | null) { return store.saveRestTimer(value ? { status: 'running', endsAt: value, durationMs: Math.max(1, value - Date.now()) } : null); },
@@ -257,25 +270,25 @@ export const store = {
     };
 
     if (mode === 'replace' && !store.clearAll()) throw new Error(store.getMutationError() || 'Existing local data could not be cleared safely.');
-    const writes = [
-      store.saveActive(next.activeWorkout),
-      store.saveRestTimer(next.activeWorkout ? next.restTimer : null),
-      store.saveHistory(next.history),
-      store.saveActivity(next.activity),
-      store.saveReadiness(next.readiness),
-      store.saveSkills(next.skills),
-      store.saveAssessments(next.assessments),
-      store.saveProgressions(next.progressions),
-      store.saveSkillAssessments(next.skillAssessments),
-      store.savePreferences(next.preferences),
-      store.saveScheduleEvents(next.scheduleEvents),
-    ];
-    if (writes.some(result => !result)) throw new Error(store.getMutationError() || 'The browser could not persist the complete training archive.');
+    const saved = runMutations([
+      () => store.saveActive(next.activeWorkout),
+      () => store.saveRestTimer(next.activeWorkout ? next.restTimer : null),
+      () => store.saveHistory(next.history),
+      () => store.saveActivity(next.activity),
+      () => store.saveReadiness(next.readiness),
+      () => store.saveSkills(next.skills),
+      () => store.saveAssessments(next.assessments),
+      () => store.saveProgressions(next.progressions),
+      () => store.saveSkillAssessments(next.skillAssessments),
+      () => store.savePreferences(next.preferences),
+      () => store.saveScheduleEvents(next.scheduleEvents),
+    ], 'The browser could not persist the complete training archive.');
+    if (!saved) throw new Error(store.getMutationError() || 'The browser could not persist the complete training archive.');
     return next;
   },
 
   clearAll() {
     const keys = [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS, CONNECTED_SLEEP_CONTEXT_KEY];
-    return keys.map(remove).every(Boolean);
+    return runMutations(keys.map(key => () => remove(key)), 'Local Human Health data could not be fully deleted.');
   },
 };
