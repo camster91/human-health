@@ -5,6 +5,7 @@ import { defaultPreferences, normalizePreferences, UserPreferences } from './pre
 import { RestTimerState, sanitizeRestTimer, startRestTimer } from './rest-timer';
 import { ScheduleEvent } from './schedule';
 import { ActivityDose, Assessment, ReadinessRecord } from './whole-person';
+import { activeWorkoutWasFinalized, deduplicateHistory, deduplicateWorkoutActivity } from './workout-finalization';
 
 const PREFIX = 'human-health:';
 const ACTIVE = `${PREFIX}active`;
@@ -25,20 +26,36 @@ let mutationFailure: string | null = null;
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
-  try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)) as T; }
-  catch { mutationFailure = 'Saved local data could not be read. The affected value was ignored.'; return fallback; }
+  try {
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)) as T;
+  } catch {
+    mutationFailure = 'Saved local data could not be read. The affected value was ignored.';
+    return fallback;
+  }
 }
 
 function write(key: string, value: unknown) {
   if (typeof window === 'undefined') return false;
-  try { localStorage.setItem(key, JSON.stringify(value)); mutationFailure = null; return true; }
-  catch { mutationFailure = 'Browser storage rejected the latest save. Keep this page open and export data before continuing.'; return false; }
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    mutationFailure = null;
+    return true;
+  } catch {
+    mutationFailure = 'Browser storage rejected the latest save. Keep this page open and export data before continuing.';
+    return false;
+  }
 }
 
 function remove(key: string) {
   if (typeof window === 'undefined') return false;
-  try { localStorage.removeItem(key); mutationFailure = null; return true; }
-  catch { mutationFailure = 'Browser storage rejected a local deletion.'; return false; }
+  try {
+    localStorage.removeItem(key);
+    mutationFailure = null;
+    return true;
+  } catch {
+    mutationFailure = 'Browser storage rejected a local deletion.';
+    return false;
+  }
 }
 
 function canPersist() {
@@ -46,7 +63,6 @@ function canPersist() {
   try {
     localStorage.setItem(STORAGE_PROBE, '1');
     localStorage.removeItem(STORAGE_PROBE);
-    if (mutationFailure === 'Browser storage is unavailable or full.') mutationFailure = null;
     return true;
   } catch {
     mutationFailure = 'Browser storage is unavailable or full.';
@@ -64,7 +80,10 @@ function activeWorkout(value: unknown): Workout | null {
 
 function storedReadiness(): ReadinessRecord[] {
   const value = read<unknown>(READINESS, []);
-  if (!Array.isArray(value)) { mutationFailure = 'Saved readiness data was invalid and was ignored.'; return []; }
+  if (!Array.isArray(value)) {
+    mutationFailure = 'Saved readiness data was invalid and was ignored.';
+    return [];
+  }
   return (value as ReadinessRecord[]).filter(record => record && record.source !== 'connected-sleep' && typeof record.recordedAt === 'string' && record.input && typeof record.input === 'object');
 }
 
@@ -113,8 +132,8 @@ export function validateTrainingExport(value: unknown): HumanHealthExport {
     exportedAt: typeof candidate.exportedAt === 'string' ? candidate.exportedAt : new Date().toISOString(),
     activeWorkout: active,
     restTimer: sanitizeRestTimer(candidate.restTimer) || null,
-    history: candidate.history as HistoryEntry[],
-    activity: candidate.activity as ActivityDose[],
+    history: deduplicateHistory(candidate.history as HistoryEntry[]),
+    activity: deduplicateWorkoutActivity(candidate.activity as ActivityDose[]),
     readiness: (candidate.readiness as ReadinessRecord[]).filter(record => record?.source !== 'connected-sleep'),
     skills: candidate.skills as Record<string, string>,
     assessments: candidate.assessments as Assessment[],
@@ -137,7 +156,18 @@ export const store = {
   getMutationError() { return mutationFailure; },
   clearMutationError() { mutationFailure = null; },
 
-  loadActive(): Workout | null { return activeWorkout(read<unknown>(ACTIVE, null)); },
+  loadActive(): Workout | null {
+    const active = activeWorkout(read<unknown>(ACTIVE, null));
+    const historyValue = read<unknown>(HISTORY, []);
+    const history = Array.isArray(historyValue) ? deduplicateHistory(historyValue as HistoryEntry[]) : [];
+    if (activeWorkoutWasFinalized(active, history)) {
+      remove(ACTIVE);
+      remove(REST_TIMER);
+      remove(LEGACY_REST_UNTIL);
+      return null;
+    }
+    return active;
+  },
   saveActive(value: Workout | null) { return value ? write(ACTIVE, value) : remove(ACTIVE); },
 
   loadRestTimer(): RestTimerState | null {
@@ -156,15 +186,25 @@ export const store = {
   },
   saveRestTimer(value: RestTimerState | null) {
     if (value) return write(REST_TIMER, value);
-    return remove(REST_TIMER) && remove(LEGACY_REST_UNTIL);
+    const currentRemoved = remove(REST_TIMER);
+    const legacyRemoved = remove(LEGACY_REST_UNTIL);
+    return currentRemoved && legacyRemoved;
   },
   loadRestUntil(): number | null { const timer = store.loadRestTimer(); return timer?.status === 'running' ? timer.endsAt : null; },
   saveRestUntil(value: number | null) { return store.saveRestTimer(value ? { status: 'running', endsAt: value, durationMs: Math.max(1, value - Date.now()) } : null); },
 
-  loadHistory(): HistoryEntry[] { const value = read<unknown>(HISTORY, []); if (!Array.isArray(value)) { mutationFailure = 'Saved workout history was invalid and was ignored.'; return []; } return value as HistoryEntry[]; },
-  saveHistory(value: HistoryEntry[]) { return write(HISTORY, value); },
-  loadActivity(): ActivityDose[] { const value = read<unknown>(ACTIVITY, []); if (!Array.isArray(value)) { mutationFailure = 'Saved activity data was invalid and was ignored.'; return []; } return value as ActivityDose[]; },
-  saveActivity(value: ActivityDose[]) { return write(ACTIVITY, value); },
+  loadHistory(): HistoryEntry[] {
+    const value = read<unknown>(HISTORY, []);
+    if (!Array.isArray(value)) { mutationFailure = 'Saved workout history was invalid and was ignored.'; return []; }
+    return deduplicateHistory(value as HistoryEntry[]);
+  },
+  saveHistory(value: HistoryEntry[]) { return write(HISTORY, deduplicateHistory(value)); },
+  loadActivity(): ActivityDose[] {
+    const value = read<unknown>(ACTIVITY, []);
+    if (!Array.isArray(value)) { mutationFailure = 'Saved activity data was invalid and was ignored.'; return []; }
+    return deduplicateWorkoutActivity(value as ActivityDose[]);
+  },
+  saveActivity(value: ActivityDose[]) { return write(ACTIVITY, deduplicateWorkoutActivity(value)); },
   loadReadiness(): ReadinessRecord[] { return effectiveReadiness(); },
   saveReadiness(value: ReadinessRecord[]) { return write(READINESS, value.filter(record => record.source !== 'connected-sleep').slice(-90)); },
   loadSkills(): Record<string, string> { return read<Record<string, string>>(SKILLS, {}); },
@@ -201,20 +241,21 @@ export const store = {
   importData(value: unknown, mode: 'merge' | 'replace' = 'merge') {
     const incoming = validateTrainingExport(value);
     const current = store.exportData();
-    const next = mode === 'replace' ? incoming : {
+    const next: HumanHealthExport = mode === 'replace' ? incoming : {
       ...current,
       activeWorkout: current.activeWorkout || incoming.activeWorkout,
       restTimer: current.activeWorkout ? current.restTimer : incoming.restTimer,
-      history: mergeUnique(current.history, incoming.history, item => `${item.completedAt}|${item.session}|${item.status || 'completed'}`),
-      activity: mergeUnique(current.activity, incoming.activity, item => `${item.completedAt}|${item.domain}|${item.sessionId || ''}|${item.minutes || ''}|${item.sets || ''}|${item.source || ''}`),
-      readiness: mergeUnique(current.readiness, incoming.readiness, item => item.recordedAt),
+      history: deduplicateHistory(mergeUnique(current.history, incoming.history, item => `${item.completedAt}|${item.session}|${item.status || 'completed'}`)),
+      activity: deduplicateWorkoutActivity(mergeUnique(current.activity, incoming.activity, item => `${item.completedAt}|${item.domain}|${item.sessionId || ''}|${item.minutes || ''}|${item.sets || ''}|${item.source || ''}`)),
+      readiness: mergeUnique(current.readiness, incoming.readiness, item => `${item.recordedAt}|${item.source || 'manual'}`),
       skills: { ...incoming.skills, ...current.skills },
       assessments: mergeUnique(current.assessments, incoming.assessments, item => `${item.metricId}|${item.recordedAt}`),
       progressions: { ...incoming.progressions, ...current.progressions },
       skillAssessments: mergeUnique(current.skillAssessments, incoming.skillAssessments, item => `${item.treeId}|${item.stepId}|${item.recordedAt}`),
       preferences: current.preferences,
       scheduleEvents: mergeUnique(current.scheduleEvents, incoming.scheduleEvents, item => `${item.recordedAt}|${item.type}|${item.from}|${item.to}`),
-    } satisfies HumanHealthExport;
+    };
+
     if (mode === 'replace' && !store.clearAll()) throw new Error(store.getMutationError() || 'Existing local data could not be cleared safely.');
     const writes = [
       store.saveActive(next.activeWorkout),
@@ -234,6 +275,7 @@ export const store = {
   },
 
   clearAll() {
-    return [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS, CONNECTED_SLEEP_CONTEXT_KEY].every(remove);
+    const keys = [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS, CONNECTED_SLEEP_CONTEXT_KEY];
+    return keys.map(remove).every(Boolean);
   },
 };
