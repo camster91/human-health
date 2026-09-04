@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'human-health-v4';
+const CACHE_VERSION = 'human-health-v5';
 const CORE = ['/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/offline.html'];
 
 async function precacheApplicationShell() {
@@ -46,10 +46,10 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(request)
         .then(response => {
-          if (response.ok) caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone()));
+          if (response.ok) event.waitUntil(caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone())));
           return response;
         })
-        .catch(async () => (await caches.match(request)) || (await caches.match('/')) || (await caches.match('/offline.html'))),
+        .catch(async () => (await caches.match(request)) || (await caches.match('/')) || (await caches.match('/offline.html')) || new Response('Offline', { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } })),
     );
     return;
   }
@@ -58,10 +58,10 @@ self.addEventListener('fetch', event => {
     caches.match(request).then(cached => {
       const network = fetch(request)
         .then(response => {
-          if (response.ok && response.type === 'basic') caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone()));
+          if (response.ok && response.type === 'basic') event.waitUntil(caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone())));
           return response;
         })
-        .catch(() => cached);
+        .catch(() => cached || new Response('', { status: 504, statusText: 'Offline' }));
       return cached || network;
     }),
   );
