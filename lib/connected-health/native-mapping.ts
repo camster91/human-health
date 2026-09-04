@@ -5,6 +5,7 @@ import { observationId } from './merge';
 const healthConnectTypes: Record<string, ConnectedMetric> = {
   StepsRecord: 'steps',
   SleepSessionRecord: 'sleep-duration',
+  SleepStageRecord: 'sleep-stage',
   HeartRateRecord: 'heart-rate',
   RestingHeartRateRecord: 'resting-heart-rate',
   Vo2MaxRecord: 'cardio-fitness',
@@ -16,6 +17,7 @@ const healthConnectTypes: Record<string, ConnectedMetric> = {
 
 const appleTypes: Record<string, ConnectedMetric> = {
   HKQuantityTypeIdentifierStepCount: 'steps',
+  HKCategoryTypeIdentifierSleepAnalysis: 'sleep-stage',
   HKQuantityTypeIdentifierHeartRate: 'heart-rate',
   HKQuantityTypeIdentifierRestingHeartRate: 'resting-heart-rate',
   HKQuantityTypeIdentifierVO2Max: 'cardio-fitness',
@@ -33,11 +35,18 @@ function durationMinutes(record: NativeBridgeRecord) {
   return Number.isFinite(start) && Number.isFinite(end) && end > start ? (end - start) / 60_000 : undefined;
 }
 
-function buildObservation(provider: HealthProvider, sourceId: string, record: NativeBridgeRecord, metric: ConnectedMetric, value: number, unit?: string, suffix = ''): HealthObservation | null {
+function cleanTags(metadata?: NativeBridgeRecord['metadata']) {
+  if (!metadata) return undefined;
+  const values = Object.entries(metadata).filter(([, value]) => value !== null) as [string, string | number | boolean][];
+  return values.length ? Object.fromEntries(values) : undefined;
+}
+
+function buildObservation(provider: HealthProvider, sourceId: string, record: NativeBridgeRecord, metric: ConnectedMetric, value: number, unit?: string, suffix = '', extraTags?: Record<string, string | number | boolean>): HealthObservation | null {
   const normalized = convertToCanonical(metric, value, unit);
   if (!normalized) return null;
   const importedAt = new Date().toISOString();
   const externalId = `${record.id}${suffix}`;
+  const tags = { ...(cleanTags(record.metadata) || {}), ...(extraTags || {}) };
   return {
     id: observationId(sourceId, externalId),
     sourceId,
@@ -61,7 +70,7 @@ function buildObservation(provider: HealthProvider, sourceId: string, record: Na
       externalVersion: record.version,
       importedAt,
     },
-    tags: record.metadata || undefined,
+    tags: Object.keys(tags).length ? tags : undefined,
   };
 }
 
@@ -69,7 +78,7 @@ export function mapNativeRecord(provider: Extract<HealthProvider, 'health-connec
   const directMetric = record.metric || (provider === 'health-connect' ? healthConnectTypes[record.type] : appleTypes[record.type]);
   const observations: HealthObservation[] = [];
 
-  if (record.type === 'HeartRateRecord' && record.samples?.length) {
+  if ((record.type === 'HeartRateRecord' || record.type === 'HKQuantityTypeIdentifierHeartRate') && record.samples?.length) {
     record.samples.forEach((sample, index) => {
       const mapped = buildObservation(provider, sourceId, { ...record, startTime: sample.time, endTime: undefined, recordedAt: sample.time }, 'heart-rate', sample.value, sample.unit || record.unit, `:sample:${index}:${sample.time}`);
       if (mapped) observations.push(mapped);
@@ -90,9 +99,11 @@ export function mapNativeRecord(provider: Extract<HealthProvider, 'health-connec
   }
 
   if (!directMetric) return observations;
-  const value = typeof record.value === 'number' ? record.value : directMetric === 'sleep-duration' || directMetric === 'workout-duration' ? durationMinutes(record) : undefined;
+  const durationMetric = directMetric === 'sleep-duration' || directMetric === 'sleep-stage' || directMetric === 'workout-duration';
+  const value = typeof record.value === 'number' ? record.value : durationMetric ? durationMinutes(record) : undefined;
   if (typeof value !== 'number') return observations;
-  const mapped = buildObservation(provider, sourceId, record, directMetric, value, record.unit || (directMetric.endsWith('duration') ? 'minute' : undefined));
+  const stage = directMetric === 'sleep-stage' ? String(record.metadata?.stage || record.metadata?.value || 'unknown') : undefined;
+  const mapped = buildObservation(provider, sourceId, record, directMetric, value, record.unit || (durationMetric ? 'minute' : undefined), '', stage ? { stage } : undefined);
   if (mapped) observations.push(mapped);
   return observations;
 }
