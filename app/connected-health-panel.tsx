@@ -14,6 +14,7 @@ import {
   createFullHealthArchive,
   createHealthConnectAdapter,
   createManualObservation,
+  deleteConnectedHealthSource,
   disconnectAdapter,
   downloadJson,
   habitMetrics,
@@ -166,9 +167,10 @@ export function ConnectedHealthPanel() {
   async function deleteSource(sourceId: string, adapter?: HealthDataAdapter) {
     if (!window.confirm('Delete every connected-health observation stored from this source? Other sources and training history will remain.')) return;
     await run(`delete:${sourceId}`, async () => {
-      await adapter?.disconnect?.();
-      await healthRepository.deleteSource(sourceId);
-      return 'The selected source and its locally stored observations were deleted.';
+      const result = await deleteConnectedHealthSource(sourceId, adapter);
+      return result.disconnectWarning
+        ? `The selected source and its locally stored observations were deleted. The native/provider disconnect did not complete: ${result.disconnectWarning}`
+        : 'The selected source and its locally stored observations were deleted.';
     });
   }
 
