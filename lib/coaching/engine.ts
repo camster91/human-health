@@ -106,9 +106,16 @@ export function createCoachingSnapshot(input: CoachingInput): CoachingSnapshot {
   evidence.push({ id: 'recent-load', domain: 'recovery', label: 'Recent training load', observation: workload.message, sampleCount: workloadSamples, window: '36–48 hours', confidence: confidence(workloadSamples), current: workload.lowerSets + workload.upperSets, unit: 'working sets' });
 
   for (const signal of input.connectedSignals || []) {
-    const usable = signal.status === 'current';
-    evidence.push({ id: `connected:${signal.id}`, domain: 'connected-health', label: signal.label, observation: usable ? signal.note : `${signal.status}: ${signal.note}`, sampleCount: signal.sampleDays, window: 'provider trend window', confidence: usable ? confidence(signal.sampleDays) : 'insufficient', current: signal.currentAverage, previous: signal.previousAverage, unit: signal.unit });
-    trends.push({ id: `connected-trend:${signal.id}`, domain: 'connected-health', label: signal.label, direction: !usable || signal.direction === 'insufficient' ? 'unknown' : signal.direction === 'up' ? 'improving' : signal.direction === 'down' ? 'declining' : 'stable', confidence: usable ? confidence(signal.sampleDays) : 'insufficient', message: usable ? signal.note : `This connected signal is ${signal.status} and does not drive a current action.`, evidenceIds: [`connected:${signal.id}`] });
+    const comparable = signal.direction !== 'insufficient';
+    const usable = signal.status === 'current' && comparable;
+    const direction: CoachTrend['direction'] = !usable ? 'unknown' : signal.direction === 'stable' ? 'stable' : 'mixed';
+    const message = signal.status !== 'current'
+      ? `This connected signal is ${signal.status} and does not drive a current action.`
+      : !comparable
+        ? `${signal.note} A comparable prior window is not available, so no direction is inferred.`
+        : `${signal.note} Recorded direction: ${signal.direction}. Human Health keeps this direction value-neutral rather than labelling it medically better or worse.`;
+    evidence.push({ id: `connected:${signal.id}`, domain: 'connected-health', label: signal.label, observation: signal.status === 'current' ? signal.note : `${signal.status}: ${signal.note}`, sampleCount: signal.sampleDays, window: 'provider trend window', confidence: usable ? confidence(signal.sampleDays) : 'insufficient', current: signal.currentAverage, previous: signal.previousAverage, unit: signal.unit });
+    trends.push({ id: `connected-trend:${signal.id}`, domain: 'connected-health', label: signal.label, direction, confidence: usable ? confidence(signal.sampleDays) : 'insufficient', message, evidenceIds: [`connected:${signal.id}`] });
   }
 
   const plateaus = assessPlateaus(input.history, input.readiness, now);
