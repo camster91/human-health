@@ -81,7 +81,9 @@ export function mapNativeRecord(provider: Extract<HealthProvider, 'health-connec
   if ((record.type === 'HeartRateRecord' || record.type === 'HKQuantityTypeIdentifierHeartRate') && record.samples?.length) {
     record.samples.forEach(sample => {
       const sampleUnit = sample.unit || record.unit;
-      const sampleKey = `${sample.time}:${sample.value}:${sampleUnit || ''}`;
+      // Timestamp + unit identify the provider sample independently of array order and
+      // measured value, so a corrected provider value updates the same observation.
+      const sampleKey = `${sample.time}:${sampleUnit || ''}`;
       const mapped = buildObservation(provider, sourceId, { ...record, startTime: sample.time, endTime: undefined, recordedAt: sample.time }, 'heart-rate', sample.value, sampleUnit, `:sample:${sampleKey}`);
       if (mapped) observations.push(mapped);
     });
