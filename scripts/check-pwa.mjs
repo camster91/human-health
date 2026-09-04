@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 const root = existsSync('out') ? 'out' : 'public';
 const required = ['manifest.webmanifest', 'sw.js', 'offline.html', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
-if (root === 'out') required.push('index.html', 'health/index.html');
+if (root === 'out') required.push('index.html', 'health/index.html', 'coach/index.html');
 
 for (const file of required) {
   const path = join(root, file);
@@ -28,6 +28,6 @@ if (!sizes.has('192x192') || !sizes.has('512x512')) throw new Error('Manifest re
 if (!(manifest.icons || []).some(icon => String(icon.purpose || '').includes('maskable'))) throw new Error('Manifest requires a maskable icon.');
 
 const serviceWorker = readFileSync(join(root, 'sw.js'), 'utf8');
-if (!serviceWorker.includes('CACHE_VERSION') || !serviceWorker.includes('offline.html') || !serviceWorker.includes("'/health/'")) throw new Error('Service worker is missing versioned cache/offline/Health-route handling.');
+if (!serviceWorker.includes('CACHE_VERSION') || !serviceWorker.includes('offline.html') || !serviceWorker.includes("'/health/'") || !serviceWorker.includes("'/coach/'")) throw new Error('Service worker is missing versioned cache/offline/Health/Coach route handling.');
 if (!serviceWorker.includes('new Response') || !serviceWorker.includes('504')) throw new Error('Service worker must return a valid response when an uncached asset fails offline.');
 console.log(`PWA static checks passed using ${root}/`);
