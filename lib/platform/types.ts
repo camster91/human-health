@@ -3,6 +3,8 @@ import type { HumanHealthExport } from '../storage';
 import type { CapabilityDomain } from '../whole-person';
 
 export type PreventiveRecordCategory = 'checkup' | 'screening' | 'vaccination' | 'dental' | 'vision' | 'lab' | 'other';
+export type PreventiveEntrySource = 'manual' | 'clinician-provided';
+
 export type PreventiveRecord = {
   id: string;
   category: PreventiveRecordCategory;
@@ -10,7 +12,7 @@ export type PreventiveRecord = {
   occurredAt: string;
   provider?: string;
   note?: string;
-  source: 'manual' | 'clinician-provided';
+  source: PreventiveEntrySource;
   createdAt: string;
 };
 
@@ -20,8 +22,9 @@ export type PreventiveReminder = {
   dueOn: string;
   category: PreventiveRecordCategory;
   repeatMonths?: number;
+  provider?: string;
   note?: string;
-  source: 'manual' | 'clinician-provided';
+  source: PreventiveEntrySource;
   enabled: boolean;
   createdAt: string;
 };
@@ -47,6 +50,8 @@ export type CapabilityEvidence = {
   population?: string;
   protocol?: string;
   outcome?: string;
+  /** Replication evidence must explicitly state whether it was independent of the original validation work. */
+  independent?: boolean;
   reviewedAt: string;
 };
 export type CapabilityModelDefinition = {
@@ -109,6 +114,7 @@ export type RegulatoryGateResult = {
 
 export type ConnectedMetricSummary = {
   metric: ConnectedMetric;
+  sourceId: string;
   sourceNames: string[];
   sampleCount: number;
   latestAt: string | null;
