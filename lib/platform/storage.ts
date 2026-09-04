@@ -30,8 +30,13 @@ export function validatePlatformData(value: unknown): PlatformLocalData {
 
 function read(): PlatformLocalData {
   if (typeof window === 'undefined') return createEmptyPlatformData();
-  const raw = localStorage.getItem(KEY);
-  if (!raw) return createEmptyPlatformData();
+  let raw: string | null;
+  try { raw = localStorage.getItem(KEY); }
+  catch {
+    mutationFailure = 'Browser storage is unavailable, so Phase 5 preventive/platform data could not be read.';
+    return createEmptyPlatformData();
+  }
+  if (!raw) { mutationFailure = null; return createEmptyPlatformData(); }
   try {
     const parsed = JSON.parse(raw) as Partial<PlatformLocalData>;
     if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.records) || !Array.isArray(parsed.reminders)) throw new Error('Unsupported or malformed platform storage.');
