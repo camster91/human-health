@@ -2,6 +2,7 @@ export * from './types';
 export * from './metrics';
 export * from './merge';
 export * from './freshness';
+export * from './local-day';
 export * from './bridge';
 export * from './native-mapping';
 export * from './adapters';
