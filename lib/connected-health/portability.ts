@@ -40,6 +40,7 @@ export function parseFullHealthArchive(text: string): FullHealthArchive {
 }
 
 export async function importFullHealthArchive(text: string, mode: 'merge' | 'replace' = 'merge') {
+  // Validate the complete archive before mutating either storage backend.
   const archive = parseFullHealthArchive(text);
   const trainingBackup = store.exportData();
   const connectedBackup = await healthRepository.exportData();
@@ -48,15 +49,38 @@ export async function importFullHealthArchive(text: string, mode: 'merge' | 'rep
     await healthRepository.importData(archive.connected, mode);
     return archive;
   } catch (error) {
-    store.importData(trainingBackup, 'replace');
-    await healthRepository.importData(connectedBackup, 'replace');
+    // Best-effort rollback keeps the two local stores from intentionally diverging.
+    let rollbackError: unknown = null;
+    try { store.importData(trainingBackup, 'replace'); } catch (failure) { rollbackError = failure; }
+    try { await healthRepository.importData(connectedBackup, 'replace'); } catch (failure) { rollbackError ||= failure; }
+    if (rollbackError) {
+      const original = error instanceof Error ? error.message : 'Archive import failed.';
+      const rollback = rollbackError instanceof Error ? rollbackError.message : 'Rollback failed.';
+      throw new Error(`${original} Automatic rollback also failed: ${rollback}`);
+    }
     throw error;
   }
 }
 
 export async function clearAllHumanHealthData() {
-  store.clearAll();
-  await healthRepository.clearAll();
+  const trainingBackup = store.exportData();
+  const connectedBackup = await healthRepository.exportData();
+  try {
+    if (!store.clearAll()) throw new Error(store.getMutationError() || 'Training data could not be fully deleted.');
+    await healthRepository.clearAll();
+  } catch (error) {
+    // Destructive all-data deletion should either complete across both local stores or
+    // restore the prior snapshots as far as the browser storage backends allow.
+    let rollbackError: unknown = null;
+    try { store.importData(trainingBackup, 'replace'); } catch (failure) { rollbackError = failure; }
+    try { await healthRepository.importData(connectedBackup, 'replace'); } catch (failure) { rollbackError ||= failure; }
+    if (rollbackError) {
+      const original = error instanceof Error ? error.message : 'Local data deletion failed.';
+      const rollback = rollbackError instanceof Error ? rollbackError.message : 'Rollback failed.';
+      throw new Error(`${original} Automatic rollback also failed: ${rollback}`);
+    }
+    throw error;
+  }
 }
 
 export function downloadJson(filename: string, value: unknown) {
