@@ -22,9 +22,18 @@ export function workoutCompletionRatio(entry: HistoryEntry) {
   return prescribed > 0 ? completed / prescribed : 0;
 }
 
-export function nextRollingSession(history: HistoryEntry[]): RollingDecision {
-  if (!history.length) return { session: 'upper-a', reason: 'Start the rolling Upper/Lower sequence.', repeating: false };
-  const last = history[history.length - 1];
+function latestUsableHistoryEntry(history: HistoryEntry[], now: Date) {
+  const ceiling = now.getTime() + 5 * 60_000;
+  return history
+    .map(entry => ({ entry, completedAt: Date.parse(entry.completedAt) }))
+    .filter(item => Number.isFinite(item.completedAt) && item.completedAt <= ceiling)
+    .sort((a, b) => a.completedAt - b.completedAt)
+    .at(-1)?.entry;
+}
+
+export function nextRollingSession(history: HistoryEntry[], now = new Date()): RollingDecision {
+  const last = latestUsableHistoryEntry(history, now);
+  if (!last) return { session: 'upper-a', reason: 'Start the rolling Upper/Lower sequence.', repeating: false };
   const status = last.status || 'completed';
   if (status === 'completed') return { session: advanceSession(last.session), reason: 'Previous session was completed; continue the rolling sequence.', repeating: false };
   if (status === 'abandoned') return { session: last.session, reason: 'The previous session was abandoned, so it remains the next session. You can manually reorder it without marking it complete.', repeating: true };
@@ -44,8 +53,9 @@ export function contextualRollingSession(
   mode: TrainingMode = 'normal',
   override: SessionId | null = null,
   readiness: 'normal' | 'reduced' | 'recovery' = 'normal',
+  now = new Date(),
 ): ContextualRollingDecision {
-  const base = nextRollingSession(history);
+  const base = nextRollingSession(history, now);
   const selected: RollingDecision = override
     ? { session: override, reason: `Manual session choice: ${override.replace('-', ' ')}. No skipped workout was marked complete and the rolling recommendation remains recoverable.`, repeating: false, manual: true }
     : base;
