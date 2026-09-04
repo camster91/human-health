@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultPreferences } from '../preferences';
 import { createConnectedJsonEnvelope, parseConnectedJson } from './import/canonical-json';
 import { createManualObservation } from './habits';
-import { parseFullHealthArchive } from './portability';
+import { parseFullHealthArchive, runCompleteDeletion } from './portability';
 import { defaultConnectedHealthPreferences } from './types';
 import { makeSource } from './test-helpers';
 
@@ -88,5 +88,46 @@ describe('connected and full archive parsing', () => {
     expect(() => parseConnectedJson(JSON.stringify({ ...base, sources: [{ ...makeSource('bad-metric'), supportedMetrics: ['mystery-metric'], grantedMetrics: [] }] }))).toThrow('unsupported or inconsistent metrics');
     expect(() => parseConnectedJson(JSON.stringify({ ...base, sources: [{ ...makeSource('bad-grant', { supportedMetrics: ['steps'] }), grantedMetrics: ['water'] }] }))).toThrow('unsupported or inconsistent metrics');
     expect(() => parseConnectedJson(JSON.stringify({ ...base, sources: [{ ...makeSource('bad-date'), lastSuccessAt: 'not-a-date' }] }))).toThrow('invalid last success timestamp');
+  });
+});
+
+describe('privacy-directed complete deletion', () => {
+  it('attempts every local domain even when an earlier domain fails', async () => {
+    const calls: string[] = [];
+    await expect(runCompleteDeletion({
+      clearTraining: () => { calls.push('training'); return false; },
+      trainingError: () => 'training storage unavailable',
+      clearConnected: async () => { calls.push('connected'); },
+      clearPlatform: () => { calls.push('platform'); return true; },
+    })).rejects.toThrow('training storage unavailable');
+    expect(calls).toEqual(['training', 'connected', 'platform']);
+  });
+
+  it('does not restore successfully deleted domains after a partial failure', async () => {
+    const calls: string[] = [];
+    await expect(runCompleteDeletion({
+      clearTraining: () => { calls.push('delete-training'); return true; },
+      clearConnected: async () => { calls.push('delete-connected'); throw new Error('IndexedDB deletion failed'); },
+      clearPlatform: () => { calls.push('delete-platform'); return true; },
+    })).rejects.toThrow('Successfully deleted domains were not restored');
+    expect(calls).toEqual(['delete-training', 'delete-connected', 'delete-platform']);
+  });
+
+  it('reports all domain failures so a retry can target remaining data', async () => {
+    await expect(runCompleteDeletion({
+      clearTraining: () => false,
+      trainingError: () => 'training failed',
+      clearConnected: async () => { throw new Error('connected failed'); },
+      clearPlatform: () => false,
+      platformError: () => 'platform failed',
+    })).rejects.toThrow(/training failed.*connected failed.*platform failed/);
+  });
+
+  it('completes without a backup/export precondition when every clear succeeds', async () => {
+    await expect(runCompleteDeletion({
+      clearTraining: () => true,
+      clearConnected: async () => {},
+      clearPlatform: () => true,
+    })).resolves.toBeUndefined();
   });
 });
