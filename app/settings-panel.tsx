@@ -62,7 +62,11 @@ export function SettingsPanel({
 
   function clearData() {
     if (!window.confirm('Delete all Human Health data stored in this browser? This cannot be undone unless you exported a backup.')) return;
-    store.clearAll();
+    if (!store.clearAll()) {
+      setNotice('The browser did not allow all local Human Health data to be deleted. Your current in-memory view was left intact.');
+      return;
+    }
+    setNotice('Local Human Health data deleted.');
     onDataCleared();
   }
 
