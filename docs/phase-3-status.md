@@ -12,6 +12,9 @@ The planned Phase 3 web/PWA feature scope is implemented on `phase-3-connected-h
 - [x] Provenance for provider, ingestion method, source application, device, external record ID/version, and import time
 - [x] IndexedDB repository separated from Phase 1/2 workout localStorage
 - [x] Deterministic upsert/version/deletion handling and selected-source aggregation to avoid duplicate provider totals
+- [x] Stable native heart-rate sample identity across provider reorder/corrected-value updates
+- [x] Strict unit validation: unknown non-empty units are rejected rather than guessed
+- [x] Strict connected archive source validation for provider/status/metrics/freshness/timestamps
 - [x] Health Connect native bridge adapter contract
 - [x] Apple Health/HealthKit native bridge adapter contract
 - [x] Explicit unavailable state in a browser-only PWA
@@ -21,15 +24,17 @@ The planned Phase 3 web/PWA feature scope is implemented on `phase-3-connected-h
 - [x] Complete local archive containing training and connected-health data
 - [x] Validation-first merge/replace import, rollback-aware full import, and atomic connected-repository replacement
 - [x] Source-scoped deletion and rollback-aware complete local deletion
+- [x] Batched localStorage mutations preserve the first actionable failure instead of losing it after later successful operations
 - [x] Steps, sleep, heart rate, resting heart rate, cardio fitness, distance, active energy, workout, hydration, protein, and fibre mappings
 - [x] Optional fruit/vegetable and meal-quality habit logging
 - [x] Freshness-aware summaries and recent-versus-prior trend views
 - [x] Overlapping sleep-stage intervals are merged before sleep duration is summarized
 - [x] Fresh connected sleep can inform effective readiness; a recent manual sleep check remains authoritative
 - [x] Dedicated `/health/` route, source/permission UI, provenance details, habits, import/export, and offline route caching
-- [x] Reconciled Phase 2 workout finalization/deduplication, storage failure handling, readiness logic, and final acceptance tests
+- [x] Health route uses committed PWA icons; obsolete runtime icon generator dependency removed
+- [x] Reconciled Phase 2 workout finalization/deduplication, volume scaling, storage failure handling, readiness logic, and final acceptance tests
 - [x] Safety/privacy and native-validation documentation
-- [x] Unit-test source coverage for conversions, deduplication, native mapping, Apple XML, summaries, trends, sync, portability, source state, connected readiness, and sleep-overlap accounting
+- [x] Unit-test source coverage for conversions, strict units, deduplication, native mapping/corrections, Apple XML, summaries, trends, sync, portability/source validation, source state, connected readiness, storage failures, and sleep-overlap accounting
 
 ## Automated/browser verification still required
 
@@ -42,7 +47,7 @@ The planned Phase 3 web/PWA feature scope is implemented on `phase-3-connected-h
 
 ### Current infrastructure blocker
 
-GitHub creates the verification runs, but the Human Health job is waiting for an eligible runner. The known working Ashbi runner documented in `camster91/magic-type-quest` is repository-scoped to that repository, so it cannot be assumed eligible for `human-health`. Issue #51 now tracks provisioning/authorizing a dedicated Human Health runner as an approval-gated infrastructure action.
+GitHub creates the verification runs, but the Human Health job is waiting for an eligible runner. The known working Ashbi runner documented in `camster91/magic-type-quest` is repository-scoped to that repository, so it cannot be assumed eligible for `human-health`. Issue #51 tracks provisioning/authorizing a dedicated Human Health runner as an approval-gated infrastructure action.
 
 ## Native validation release dependencies
 
