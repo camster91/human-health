@@ -7,6 +7,19 @@ export function workingLogs(exercise: WorkoutExercise) {
   return exercise.logs.filter(log => !log.warmup);
 }
 
+export function applyVolumeMultiplier(items: WorkoutExercise[], multiplier: number, options: { preservePrimary?: boolean } = {}) {
+  const clamped = Math.max(0, Math.min(1, Number.isFinite(multiplier) ? multiplier : 1));
+  if (clamped >= 1) return { exercises: items.map(item => ({ ...item, logs: [...item.logs] })), changed: false };
+  let changed = false;
+  const exercises = items.map(item => {
+    if (options.preservePrimary && item.priority === 'primary' && clamped > 0.6) return { ...item, logs: [...item.logs] };
+    const sets = Math.max(1, Math.floor(item.sets * clamped));
+    if (sets !== item.sets) changed = true;
+    return { ...item, sets: Math.min(item.sets, sets), logs: [...item.logs] };
+  });
+  return { exercises, changed };
+}
+
 export function adaptWorkout(items: WorkoutExercise[], context: AdaptContext): { exercises: WorkoutExercise[]; notes: string[] } {
   let exercises = items.map(item => ({ ...item, logs: [...item.logs] }));
   const notes: string[] = [];
@@ -34,14 +47,10 @@ export function adaptWorkout(items: WorkoutExercise[], context: AdaptContext): {
   if (context.mode === 'maintenance') multiplier = Math.min(multiplier, 0.75);
 
   if (multiplier < 1) {
-    exercises = exercises.map(item => {
-      const preservePrimary = item.priority === 'primary' && context.mode !== 'return' && multiplier > 0.6;
-      if (preservePrimary) return item;
-      const reduced = Math.max(1, Math.floor(item.sets * multiplier));
-      return { ...item, sets: Math.min(item.sets, reduced) };
-    });
+    const scaled = applyVolumeMultiplier(exercises, multiplier, { preservePrimary: context.mode !== 'return' });
+    exercises = scaled.exercises;
     const label = context.mode === 'return' ? 'Return-to-training' : context.mode === 'maintenance' ? 'Maintenance' : context.mode === 'travel' ? 'Travel' : 'Recovery-aware';
-    notes.push(`${label} mode reduced volume while preserving the session’s main movement intent.`);
+    if (scaled.changed) notes.push(`${label} mode reduced volume while preserving the session’s main movement intent.`);
   }
 
   if (context.minutes) {
