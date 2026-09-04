@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { completeReminder, normalizePreventiveReminder, reminderState } from './preventive';
+import { completeReminder, normalizePreventiveRecord, normalizePreventiveReminder, reminderState } from './preventive';
 
 const reminder = { id: 'r1', title: 'Follow up', dueOn: '2026-10-01', category: 'checkup' as const, provider: 'Clinic A', source: 'clinician-provided' as const, enabled: true, createdAt: '2026-09-01T12:00:00Z' };
 
@@ -22,9 +22,10 @@ describe('preventive reminders', () => {
     expect(repeated.nextReminder?.dueOn).toBe('2027-02-28');
   });
 
-  it('rejects invalid reminder dates and invalid repeat intervals', () => {
+  it('rejects invalid reminder dates, repeat intervals, and impossible record dates', () => {
     expect(() => normalizePreventiveReminder({ ...reminder, dueOn: 'not-a-date' })).toThrow();
     expect(() => normalizePreventiveReminder({ ...reminder, dueOn: '2026-02-31' })).toThrow();
     expect(() => normalizePreventiveReminder({ ...reminder, repeatMonths: Number.NaN })).toThrow();
+    expect(() => normalizePreventiveRecord({ id: 'bad', title: 'Bad record', category: 'other', occurredAt: '2026-02-31T12:00:00Z', source: 'manual', createdAt: '2026-09-01T12:00:00Z' })).toThrow('dates are invalid');
   });
 });
