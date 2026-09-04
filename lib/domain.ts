@@ -116,6 +116,8 @@ export type AdaptContext = {
   unavailable?: Equipment[];
   volumeMultiplier?: number;
   mode?: TrainingMode;
+  /** Allow original set volume after a reduced-readiness check while still holding load progression. */
+  overrideRecoveryVolume?: boolean;
   /** Preferred replacement exercise by original exercise id for the active gym. */
   preferredSubstitutions?: Record<string, string>;
 };
