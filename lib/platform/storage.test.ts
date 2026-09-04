@@ -8,17 +8,21 @@ class MemoryStorage {
   removeItem(key: string) { this.values.delete(key); }
 }
 
-function withMemoryStorage(run: (memory: MemoryStorage) => void) {
+function withStorage(storage: unknown, run: () => void) {
   const previousWindow = (globalThis as { window?: unknown }).window;
   const previousStorage = (globalThis as { localStorage?: unknown }).localStorage;
-  const memory = new MemoryStorage();
   Object.defineProperty(globalThis, 'window', { value: globalThis, configurable: true });
-  Object.defineProperty(globalThis, 'localStorage', { value: memory, configurable: true });
-  try { run(memory); }
+  Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true });
+  try { run(); }
   finally {
     Object.defineProperty(globalThis, 'window', { value: previousWindow, configurable: true });
     Object.defineProperty(globalThis, 'localStorage', { value: previousStorage, configurable: true });
   }
+}
+
+function withMemoryStorage(run: (memory: MemoryStorage) => void) {
+  const memory = new MemoryStorage();
+  withStorage(memory, () => run(memory));
 }
 
 describe('Phase 5 local platform storage', () => {
@@ -50,6 +54,14 @@ describe('Phase 5 local platform storage', () => {
     expect(platformStore.importData(incoming, 'merge').records[0].title).toBe('Current title');
     expect(platformStore.importData(incoming, 'replace').records[0].title).toBe('Imported title');
   }));
+
+  it('returns a safe empty snapshot and exposes an error when storage access is blocked', () => {
+    const blocked = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); } };
+    withStorage(blocked, () => {
+      expect(platformStore.load()).toEqual({ schemaVersion: 1, records: [], reminders: [] });
+      expect(platformStore.getMutationError()).toContain('storage is unavailable');
+    });
+  });
 
   it('rejects malformed archives instead of coercing them', () => {
     expect(() => validatePlatformData({ schemaVersion: 2, records: [], reminders: [] })).toThrow('Unsupported platform archive version');
