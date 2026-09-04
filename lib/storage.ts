@@ -1,9 +1,10 @@
+import { CONNECTED_SLEEP_CONTEXT_KEY, loadConnectedSleepContext } from './connected-health/connected-readiness';
 import { HistoryEntry, Workout } from './domain';
 import { SkillAssessment } from './performance';
 import { defaultPreferences, normalizePreferences, UserPreferences } from './preferences';
 import { RestTimerState, sanitizeRestTimer, startRestTimer } from './rest-timer';
 import { ScheduleEvent } from './schedule';
-import { ActivityDose, Assessment, ReadinessInput } from './whole-person';
+import { ActivityDose, Assessment, ReadinessInput, ReadinessRecord } from './whole-person';
 
 const PREFIX = 'human-health:';
 const ACTIVE = `${PREFIX}active`;
@@ -48,6 +49,26 @@ function activeWorkout(value: unknown): Workout | null {
   return candidate as Workout;
 }
 
+function storedReadiness(): ReadinessRecord[] {
+  const value = read<unknown>(READINESS, []);
+  if (!Array.isArray(value)) return [];
+  return (value as ReadinessRecord[]).filter(record => record && record.source !== 'connected-sleep' && typeof record.recordedAt === 'string' && record.input && typeof record.input === 'object');
+}
+
+function effectiveReadiness(): ReadinessRecord[] {
+  const manual = storedReadiness();
+  const connected = loadConnectedSleepContext();
+  if (!connected) return manual;
+  const latest = manual.at(-1);
+  const manualTime = latest ? Date.parse(latest.recordedAt) : Number.NaN;
+  const manualFresh = Number.isFinite(manualTime) && Date.now() - manualTime >= -5 * 60_000 && Date.now() - manualTime <= 24 * 3_600_000;
+  const manualHasSleep = manualFresh && (latest?.input.sleep !== undefined || typeof latest?.input.sleepHours === 'number');
+  if (manualHasSleep) return manual;
+  const manualInput = manualFresh ? latest?.input || {} : {};
+  const recordedAt = manualFresh && manualTime > Date.parse(connected.observedAt) ? latest!.recordedAt : connected.observedAt;
+  return [...manual, { recordedAt, input: { ...connected.input, ...manualInput }, source: 'connected-sleep', sourceName: connected.sourceName }];
+}
+
 export type HumanHealthExport = {
   schemaVersion: 2;
   exportedAt: string;
@@ -55,7 +76,7 @@ export type HumanHealthExport = {
   restTimer: RestTimerState | null;
   history: HistoryEntry[];
   activity: ActivityDose[];
-  readiness: { recordedAt: string; input: ReadinessInput }[];
+  readiness: ReadinessRecord[];
   skills: Record<string, string>;
   assessments: Assessment[];
   progressions: Record<string, string>;
@@ -81,7 +102,7 @@ export function validateTrainingExport(value: unknown): HumanHealthExport {
     restTimer: sanitizeRestTimer(candidate.restTimer) || null,
     history: candidate.history as HistoryEntry[],
     activity: candidate.activity as ActivityDose[],
-    readiness: candidate.readiness as { recordedAt: string; input: ReadinessInput }[],
+    readiness: (candidate.readiness as ReadinessRecord[]).filter(record => record?.source !== 'connected-sleep'),
     skills: candidate.skills as Record<string, string>,
     assessments: candidate.assessments as Assessment[],
     progressions: candidate.progressions as Record<string, string>,
@@ -125,8 +146,8 @@ export const store = {
   saveHistory(value: HistoryEntry[]) { return write(HISTORY, value); },
   loadActivity(): ActivityDose[] { const value = read<unknown>(ACTIVITY, []); return Array.isArray(value) ? value as ActivityDose[] : []; },
   saveActivity(value: ActivityDose[]) { return write(ACTIVITY, value); },
-  loadReadiness(): { recordedAt: string; input: ReadinessInput }[] { const value = read<unknown>(READINESS, []); return Array.isArray(value) ? value as { recordedAt: string; input: ReadinessInput }[] : []; },
-  saveReadiness(value: { recordedAt: string; input: ReadinessInput }[]) { return write(READINESS, value.slice(-90)); },
+  loadReadiness(): ReadinessRecord[] { return effectiveReadiness(); },
+  saveReadiness(value: ReadinessRecord[]) { return write(READINESS, value.filter(record => record.source !== 'connected-sleep').slice(-90)); },
   loadSkills(): Record<string, string> { return read<Record<string, string>>(SKILLS, {}); },
   saveSkills(value: Record<string, string>) { return write(SKILLS, value); },
   loadAssessments(): Assessment[] { const value = read<unknown>(ASSESSMENTS, []); return Array.isArray(value) ? value as Assessment[] : []; },
@@ -148,7 +169,7 @@ export const store = {
       restTimer: store.loadRestTimer(),
       history: store.loadHistory(),
       activity: store.loadActivity(),
-      readiness: store.loadReadiness(),
+      readiness: storedReadiness(),
       skills: store.loadSkills(),
       assessments: store.loadAssessments(),
       progressions: store.loadProgressions(),
@@ -194,6 +215,6 @@ export const store = {
   },
 
   clearAll() {
-    [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS].forEach(remove);
+    [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS, CONNECTED_SLEEP_CONTEXT_KEY].forEach(remove);
   },
 };
