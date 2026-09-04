@@ -15,6 +15,11 @@ function label(value: string) {
   return value.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 }
 
+function isFailureNotice(value: string) {
+  const message = value.toLowerCase();
+  return message.includes('failed') || message.includes('could not') || message.includes('invalid') || message.includes('unavailable') || message.includes('incomplete') || message.includes('error');
+}
+
 export function SettingsPanel({
   preferences,
   gyms,
@@ -94,8 +99,9 @@ export function SettingsPanel({
     update({ lastUnavailableEquipment: selected ? preferences.lastUnavailableEquipment.filter(value => value !== item) : [...preferences.lastUnavailableEquipment, item] });
   }
 
+  const noticeIsFailure = isFailureNotice(notice);
   return <>
-    {notice && <div className="connection-state" role="status" aria-live="polite">{notice}</div>}
+    {notice && <div className={noticeIsFailure ? 'connection-state storage-error' : 'connection-state'} role={noticeIsFailure ? 'alert' : 'status'} aria-live={noticeIsFailure ? 'assertive' : 'polite'}>{notice}</div>}
     <section className="card" aria-labelledby="training-settings-title">
       <h2 id="training-settings-title">Training settings</h2>
       <p className="muted">These settings change future recommendations. Existing workout history is never rewritten.</p>
@@ -131,7 +137,7 @@ export function SettingsPanel({
 
     <section className="card" aria-labelledby="data-controls-title">
       <h2 id="data-controls-title">Your local data</h2>
-      <p className="muted">Human Health stores training, connected-health, and Phase 5 platform data locally in this browser. Export a complete archive before clearing or moving devices.</p>
+      <p className="muted">Human Health stores training, connected-health, and Phase 5 platform data locally in this browser. Export a complete archive before clearing or moving devices. Delete-all attempts every local domain even if one store is corrupt or unavailable; any partial failure is reported and already-deleted domains are not recreated.</p>
       <div className="button-row"><button className="primary" disabled={dataBusy} onClick={() => void exportData()}>{dataBusy ? 'Working…' : 'Export complete archive'}</button><button className="danger" disabled={dataBusy} onClick={() => void clearData()}>Delete all local data</button></div>
     </section>
   </>;
