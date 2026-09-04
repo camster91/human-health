@@ -1,5 +1,6 @@
 import { cardioCoverage, consistencyPattern, normalizedStrengthTrend, recoveryPattern } from '../capability-trends';
 import { workingLogs } from '../engine';
+import { recentTrainingLoad } from '../load-management';
 import { domainDeficits } from '../performance';
 import { readinessDecisionFromRecords } from '../whole-person';
 import type { CapabilityDomain } from '../whole-person';
@@ -86,8 +87,9 @@ export function createCoachingSnapshot(input: CoachingInput): CoachingSnapshot {
   trends.push({ id: 'strength-trend', domain: 'strength', label: 'Strength', direction: strength.percentChange === null ? 'unknown' : strength.percentChange > 2 ? 'improving' : strength.percentChange < -2 ? 'declining' : 'stable', confidence: confidence(strength.exerciseCount), message: strength.message, evidenceIds: ['strength'] });
 
   const cardio = cardioCoverage(input.activity, input.preferences.cardioTargetMinutes, now);
-  evidence.push({ id: 'cardio', domain: 'cardio', label: 'Planned aerobic coverage', observation: `${Math.round(cardio.equivalentMinutes)} of ${cardio.target} equivalent planned minutes recorded in the current seven-day window.`, sampleCount: input.activity.filter(item => item.domain === 'cardio').length, window: '7 days', confidence: confidence(input.activity.filter(item => item.domain === 'cardio').length), current: cardio.coverage * 100, unit: '%' });
-  trends.push({ id: 'cardio-trend', domain: 'cardio', label: 'Cardio target coverage', direction: cardio.coverage >= 1 ? 'stable' : 'unknown', confidence: confidence(input.activity.filter(item => item.domain === 'cardio').length), message: `${Math.round(cardio.remaining)} equivalent planned minutes remain against the configured weekly target.`, evidenceIds: ['cardio'] });
+  const cardioSamples = input.activity.filter(item => item.domain === 'cardio').length;
+  evidence.push({ id: 'cardio', domain: 'cardio', label: 'Planned aerobic coverage', observation: `${Math.round(cardio.equivalentMinutes)} of ${cardio.target} equivalent planned minutes recorded in the current seven-day window.`, sampleCount: cardioSamples, window: '7 days', confidence: confidence(cardioSamples), current: cardio.coverage * 100, unit: '%' });
+  trends.push({ id: 'cardio-trend', domain: 'cardio', label: 'Cardio target coverage', direction: cardio.coverage >= 1 ? 'stable' : 'unknown', confidence: confidence(cardioSamples), message: `${Math.round(cardio.remaining)} equivalent planned minutes remain against the configured weekly target.`, evidenceIds: ['cardio'] });
 
   const consistency = consistencyPattern(input.history, now);
   evidence.push({ id: 'consistency', domain: 'consistency', label: 'Training consistency', observation: consistency.message, sampleCount: consistency.sessions, window: '28 days vs preceding 28 days', confidence: confidence(consistency.sessions), current: consistency.sessions, previous: consistency.previousSessions, unit: 'sessions' });
@@ -96,6 +98,10 @@ export function createCoachingSnapshot(input: CoachingInput): CoachingSnapshot {
   const recovery = recoveryPattern(input.readiness, now);
   evidence.push({ id: 'recovery', domain: 'recovery', label: 'Readiness pattern', observation: recovery.message, sampleCount: recovery.checkIns, window: '7 days', confidence: confidence(recovery.checkIns), current: recovery.normalShare === null ? null : recovery.normalShare * 100, unit: '% normal check-ins' });
   trends.push({ id: 'recovery-trend', domain: 'recovery', label: 'Recovery', direction: recovery.checkIns === 0 ? 'unknown' : recovery.normalShare !== null && recovery.normalShare >= 0.7 ? 'stable' : recovery.normalShare !== null && recovery.normalShare < 0.5 ? 'declining' : 'mixed', confidence: confidence(recovery.checkIns), message: recovery.message, evidenceIds: ['recovery'] });
+
+  const workload = recentTrainingLoad(input.history, input.activity, now);
+  const workloadSamples = workload.lowerSets + workload.upperSets + (workload.hardCardioMinutes ? 1 : 0);
+  evidence.push({ id: 'recent-load', domain: 'recovery', label: 'Recent training load', observation: workload.message, sampleCount: workloadSamples, window: '36–48 hours', confidence: confidence(workloadSamples), current: workload.lowerSets + workload.upperSets, unit: 'working sets' });
 
   for (const signal of input.connectedSignals || []) {
     const usable = signal.status === 'current';
@@ -108,6 +114,19 @@ export function createCoachingSnapshot(input: CoachingInput): CoachingSnapshot {
   const actions: CoachAction[] = [];
   if (readiness.level === 'recovery') actions.push({ id: 'recovery-first', kind: 'recover', priority: 1, title: 'Use recovery-first training', instruction: 'Keep today easy and do not chase missed volume or progression.', rationale: readiness.reasons.join(' ') || 'Current readiness is recovery-first.', evidenceIds: ['recovery'], reversible: true });
   else if (readiness.level === 'reduced') actions.push({ id: 'reduced-load', kind: 'hold', priority: 1, title: 'Keep progression conservative', instruction: 'Use the reduced-readiness volume path and hold automatic load progression for this exposure.', rationale: readiness.reasons.join(' ') || 'Recent readiness data supports a conservative session.', evidenceIds: ['recovery'], reversible: true });
+
+  if (readiness.level === 'normal' && input.preferences.lifeMode !== 'normal') {
+    const copy = input.preferences.lifeMode === 'travel'
+      ? 'Use portable substitutions and preserve movement patterns rather than forcing normal-gym loads.'
+      : input.preferences.lifeMode === 'return'
+        ? 'Rebuild tolerance with reduced volume before resuming normal progression.'
+        : 'Preserve key strength and cardio capability with a lower total training burden.';
+    actions.push({ id: 'life-mode', kind: 'schedule', priority: actions.length ? 2 : 1, title: `${input.preferences.lifeMode.replaceAll('-', ' ')} mode is active`, instruction: copy, rationale: 'The selected life mode is an explicit user preference and should shape recommendations before deficit chasing.', evidenceIds: ['consistency'], reversible: true });
+  }
+
+  if (readiness.level === 'normal' && ((workload.lowerBodyRecent && workload.lowerSets >= 6) || (workload.hoursSinceHardCardio !== null && workload.hoursSinceHardCardio < 24 && workload.hardCardioMinutes >= 15))) {
+    actions.push({ id: 'avoid-stacking', kind: 'hold', priority: actions.length ? 2 : 1, title: 'Avoid stacking another hard lower-body stressor', instruction: 'Prefer upper-body, easy aerobic, mobility, balance, or other low-fatigue work until the recent lower-body load is less concentrated.', rationale: workload.message, evidenceIds: ['recent-load'], reversible: true });
+  }
 
   const deloads = plateaus.filter(item => item.deloadSuggested);
   if (deloads.length) actions.push({ id: 'deload', kind: 'deload', priority: actions.length ? 2 : 1, title: 'Consider a short deload', instruction: `Reduce volume and/or load briefly for ${deloads.map(item => item.exerciseName).join(', ')}, then reassess comparable performance.`, rationale: 'Repeated performance stagnation/regression aligns with constrained recovery evidence. The app does not apply this automatically.', evidenceIds: ['strength', 'recovery'], reversible: true });
