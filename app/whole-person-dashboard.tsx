@@ -66,9 +66,10 @@ export function WholePersonDashboard({
   useEffect(() => { if (latestInput) setCheck(latestInput); }, [latestInput]);
 
   const decision = readinessDecisionFromRecords(readinessRecords);
+  const safetyHold = decision.level === 'recovery';
   const trend = readinessTrend(readinessRecords);
   const coverage = useMemo(() => cardioCoverage(activity, preferences.cardioTargetMinutes), [activity, preferences.cardioTargetMinutes]);
-  const prescription = cardioPrescription(coverage.equivalentMinutes, preferences.cardioTargetMinutes, 30);
+  const prescription = cardioPrescription(coverage.equivalentMinutes, preferences.cardioTargetMinutes, 30, decision.level);
   const load = useMemo(() => recentTrainingLoad(history, activity), [history, activity]);
   const cardioChoices = useMemo(
     () => coordinateCardio(cardioOptions(coverage.equivalentMinutes, preferences.cardioTargetMinutes, decision.level, 30), load, decision.level),
@@ -165,7 +166,7 @@ export function WholePersonDashboard({
         <label><b>How ready do you feel?</b><select value={check.subjective || 3} onChange={event => setCheck({ ...check, subjective: Number(event.target.value) as ReadinessInput['subjective'] })}><option value="1">1 — very low</option><option value="2">2 — low</option><option value="3">3 — okay</option><option value="4">4 — good</option><option value="5">5 — excellent</option></select></label>
       </div>
       <div className="toggle-grid"><button className={check.pain ? 'active warning' : ''} aria-pressed={Boolean(check.pain)} onClick={() => setCheck({ ...check, pain: !check.pain })}>Unusual pain {check.pain ? 'flagged' : 'not flagged'}</button><button className={check.illness ? 'active warning' : ''} aria-pressed={Boolean(check.illness)} onClick={() => setCheck({ ...check, illness: !check.illness })}>Illness {check.illness ? 'flagged' : 'not flagged'}</button><button className="primary" onClick={saveCheck}>Save check-in</button></div>
-      <div className="coach-note"><b>{decision.level === 'normal' ? 'Normal training available' : decision.level === 'reduced' ? 'Conservative training recommended' : 'Recovery-first recommendation'}</b><br/>{decision.reasons.join(' ') || 'No major recovery constraints are recorded in the latest check-in.'}</div>
+      <div className="coach-note"><b>{decision.level === 'normal' ? 'Normal training available' : decision.level === 'reduced' ? 'Conservative training recommended' : 'Automatic exercise suggestions paused'}</b><br/>{safetyHold ? 'Pain or illness was flagged. Human Health cannot determine whether exercise is safe or provide injury/illness clearance; use your established care/safety plan or appropriate professional support before resuming app-generated training suggestions. ' : ''}{decision.reasons.join(' ') || 'No major recovery constraints are recorded in the latest check-in.'}</div>
       <p className="muted"><b>Seven-day pattern:</b> {trend.message}</p>
     </section>
 
@@ -180,41 +181,43 @@ export function WholePersonDashboard({
     <section className="card" aria-labelledby="cardio-title">
       <h2 id="cardio-title">Cardio</h2>
       <div className="metrics"><span><b>Planned coverage</b>{Math.round(coverage.equivalentMinutes)}/{preferences.cardioTargetMinutes} equivalent min</span><span><b>Remaining</b>{Math.round(coverage.remaining)} equivalent min</span><span><b>Recent lower work</b>{load.lowerSets} working sets</span><span><b>Hard cardio</b>{load.hardCardioMinutes} min / 36h</span></div>
-      <div className="coach-note"><b>Recommended next dose</b><br/>{prescription.message}{load.lowerBodyRecent && load.lowerSets >= 6 ? ' Hard intervals are deferred because recent lower-body workload is being protected.' : ''}</div>
-      <div className="choice-grid">{cardioChoices.map(choice => <button key={choice.type} onClick={() => { setCardioMinutes(choice.minutes); setCardioEffort(choice.effort); }}><b>{choice.name}</b><small>{choice.minutes} min · {choice.effort}</small><span>{choice.description}</span></button>)}</div>
+      <div className="coach-note"><b>{safetyHold ? 'Automatic cardio suggestions paused' : 'Recommended next dose'}</b><br/>{prescription.message}{!safetyHold && load.lowerBodyRecent && load.lowerSets >= 6 ? ' Hard intervals are deferred because recent lower-body workload is being protected.' : ''}</div>
+      {!safetyHold && <div className="choice-grid">{cardioChoices.map(choice => <button key={choice.type} onClick={() => { setCardioMinutes(choice.minutes); setCardioEffort(choice.effort); }}><b>{choice.name}</b><small>{choice.minutes} min · {choice.effort}</small><span>{choice.description}</span></button>)}</div>}
       <div className="settings-grid">
         <label><b>Minutes</b><input type="number" min="1" max="240" value={cardioMinutes} onChange={event => setCardioMinutes(Math.max(1, Number(event.target.value)))}/></label>
         <label><b>Effort</b><select value={cardioEffort} onChange={event => setCardioEffort(event.target.value as typeof cardioEffort)}><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
         <label><b>Modality</b><select value={cardioModality} onChange={event => setCardioModality(event.target.value as CardioModality)}>{modalities.map(item => <option key={item} value={item}>{title(item)}</option>)}</select></label>
         <label><b>Type</b><select value={cardioKind} onChange={event => setCardioKind(event.target.value as typeof cardioKind)}><option value="planned">Planned exercise</option><option value="incidental">Daily movement</option></select></label>
       </div>
-      <button className="primary" onClick={logCardio}>Log cardio</button>
-      <p className="muted">Only planned cardio contributes to the configurable aerobic target. Hard minutes count as approximately double for planning; this is not a medical score.</p>
+      <button className="primary" onClick={logCardio}>Log activity I chose</button>
+      <p className="muted">Logging records activity you chose to do; it is not exercise clearance or a recommendation. Only planned cardio contributes to the configurable aerobic target.</p>
     </section>
 
     <section className="card" aria-labelledby="movement-support-title">
       <h2 id="movement-support-title">Core, mobility, and athletic support</h2>
-      <div className="history"><b>{preparation.name}</b><span>{preparation.minutes} min</span><small>{preparation.items.join(' · ')} · {preparation.reason}</small><button className="link" onClick={() => logDose({ domain: 'mobility', minutes: preparation.minutes, effort: 'easy', source: 'manual', kind: 'planned', sessionId: preparation.id, completedAt: new Date().toISOString() })}>Mark preparation done</button></div>
-      <div className="history"><b>{restore.name}</b><span>{restore.minutes} min</span><small>{restore.items.join(' · ')} · {restore.reason}</small><button className="link" onClick={() => logDose({ domain: 'mobility', minutes: restore.minutes, effort: 'easy', source: 'manual', kind: 'planned', sessionId: restore.id, completedAt: new Date().toISOString() })}>Mark mobility done</button></div>
-      {core.map(session => <div className="history" key={session.id}><b>{session.name}</b><span>{session.minutes} min</span><small>{session.items.join(' · ')}</small><button className="link" onClick={() => logDose({ domain: 'core', minutes: session.minutes, effort: session.fatigue === 'low' ? 'easy' : 'moderate', source: 'manual', kind: 'planned', sessionId: session.id, completedAt: new Date().toISOString() })}>Mark core done</button></div>)}
-      {athletic.map(plan => <div className="history" key={plan.domain}><b>{plan.name}</b><span>{plan.impact} impact</span><small>{plan.items.join(' · ')} · {plan.reason}</small><button className="link" onClick={() => logDose({ domain: plan.domain, minutes: 10, effort: plan.impact === 'low' ? 'easy' : 'moderate', source: 'manual', kind: 'planned', sessionId: `athletic:${plan.domain}`, completedAt: new Date().toISOString() })}>Mark 10 min done</button></div>)}
-      {!power.allowed && <div className="coach-note"><b>Power held today</b><br/>{power.reason}</div>}
+      {safetyHold ? <div className="coach-note"><b>Automatic movement suggestions paused</b><br/>Pain or illness is currently flagged, so Human Health does not substitute mobility, core, balance, or other lower-intensity exercise as implicit clearance.</div> : <>
+        <div className="history"><b>{preparation.name}</b><span>{preparation.minutes} min</span><small>{preparation.items.join(' · ')} · {preparation.reason}</small><button className="link" onClick={() => logDose({ domain: 'mobility', minutes: preparation.minutes, effort: 'easy', source: 'manual', kind: 'planned', sessionId: preparation.id, completedAt: new Date().toISOString() })}>Mark preparation done</button></div>
+        <div className="history"><b>{restore.name}</b><span>{restore.minutes} min</span><small>{restore.items.join(' · ')} · {restore.reason}</small><button className="link" onClick={() => logDose({ domain: 'mobility', minutes: restore.minutes, effort: 'easy', source: 'manual', kind: 'planned', sessionId: restore.id, completedAt: new Date().toISOString() })}>Mark mobility done</button></div>
+        {core.map(session => <div className="history" key={session.id}><b>{session.name}</b><span>{session.minutes} min</span><small>{session.items.join(' · ')}</small><button className="link" onClick={() => logDose({ domain: 'core', minutes: session.minutes, effort: session.fatigue === 'low' ? 'easy' : 'moderate', source: 'manual', kind: 'planned', sessionId: session.id, completedAt: new Date().toISOString() })}>Mark core done</button></div>)}
+        {athletic.map(plan => <div className="history" key={plan.domain}><b>{plan.name}</b><span>{plan.impact} impact</span><small>{plan.items.join(' · ')} · {plan.reason}</small><button className="link" onClick={() => logDose({ domain: plan.domain, minutes: 10, effort: plan.impact === 'low' ? 'easy' : 'moderate', source: 'manual', kind: 'planned', sessionId: `athletic:${plan.domain}`, completedAt: new Date().toISOString() })}>Mark 10 min done</button></div>)}
+        {!power.allowed && <div className="coach-note"><b>Power held today</b><br/>{power.reason}</div>}
+      </>}
     </section>
 
-    <section className="card" aria-labelledby="progressions-title">
+    {!safetyHold && <section className="card" aria-labelledby="progressions-title">
       <h2 id="progressions-title">Core and mobility progressions</h2>
       <p className="muted">Choose the highest level you can perform cleanly. Completion is logged separately from the selected level so history is not rewritten.</p>
       {progressionTracks.map(track => {
         const current = track.levels.find(level => level.id === progressions[track.id]) || track.levels[0];
         return <div className="skill-block" key={track.id}><b>{track.name} · {current.name}</b><p className="muted">{current.target}</p><small>{current.items.join(' · ')}</small><div className="chip-grid">{track.levels.map(level => <button key={level.id} className={level.id === current.id ? 'active' : ''} aria-pressed={level.id === current.id} onClick={() => selectProgression(track.id, level.id)}>{level.name}</button>)}</div><button className="link" onClick={() => logDose({ domain: track.domain, minutes: 8, effort: 'easy', source: 'manual', kind: 'planned', quality: 1, sessionId: `${track.id}:${current.id}`, completedAt: new Date().toISOString() })}>Record current-level practice</button></div>;
       })}
-    </section>
+    </section>}
 
-    <section className="card" aria-labelledby="athletic-progression-title">
+    {!safetyHold && <section className="card" aria-labelledby="athletic-progression-title">
       <h2 id="athletic-progression-title">Athletic progression</h2>
       <p className="muted">Balance and jump difficulty changes only after repeated comparable benchmarks. Readiness and the high-impact preference can hold progression.</p>
       {athleticProgressions.map(item => <div className="history" key={item.metricId}><b>{item.metricId === 'jump' ? 'Jump / power' : 'Single-leg balance'} · {title(item.level)}</b><span>{item.decision.evidenceCount} tests</span><small>{item.decision.message} Current work: {athleticLevelSession(item.metricId, item.level).join(' · ')}</small>{item.decision.action !== 'hold' && <button className="link" onClick={() => applyAthleticProgression(item.metricId, item.decision.nextLevel)}>Apply {item.decision.action}: {title(item.decision.nextLevel)}</button>}</div>)}
-    </section>
+    </section>}
   </>;
 }
 
