@@ -31,9 +31,10 @@ const serviceWorker = readFileSync(join(root, 'sw.js'), 'utf8');
 for (const route of ["'/health/'", "'/coach/'", "'/platform/'"]) {
   if (!serviceWorker.includes(route)) throw new Error(`Service worker is missing route ${route}.`);
 }
-if (!serviceWorker.includes('CACHE_VERSION') || !serviceWorker.includes('offline.html') || !serviceWorker.includes('new Response') || !serviceWorker.includes('504')) throw new Error('Service worker is missing required offline handling.');
+if (!serviceWorker.includes('CACHE_VERSION') || !serviceWorker.includes('CACHE_PREFIX') || !serviceWorker.includes('offline.html') || !serviceWorker.includes('new Response') || !serviceWorker.includes('504')) throw new Error('Service worker is missing required offline handling.');
 if (!serviceWorker.includes('fetchRequired') || !serviceWorker.includes('verifyNewCacheBeforeActivation')) throw new Error('Service worker must fail closed when the required offline shell is incomplete.');
 if (!serviceWorker.includes('await caches.delete(CACHE_VERSION)')) throw new Error('Failed service-worker installs must remove the incomplete candidate cache.');
+if (!serviceWorker.includes('key.startsWith(CACHE_PREFIX) && key !== CACHE_VERSION')) throw new Error('Service worker activation must delete only stale Human Health caches, never unrelated origin caches.');
 const installBlock = serviceWorker.slice(serviceWorker.indexOf("self.addEventListener('install'"), serviceWorker.indexOf("self.addEventListener('activate'"));
 if (installBlock.includes('skipWaiting()')) throw new Error('Service worker must not automatically skip waiting after install; the known-good worker must remain active until explicit activation.');
 console.log(`PWA static checks passed using ${root}/`);
