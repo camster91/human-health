@@ -30,32 +30,57 @@ export const metricDefinitions: Record<ConnectedMetric, MetricDefinition> = {
 };
 
 function token(unit?: string) {
-  return (unit || '').toLowerCase().replace(/[\s_]/g, '').replace('·', '/');
+  return (unit || '').toLowerCase().replace(/[\s_]/g, '').replaceAll('·', '/');
 }
 
+function isOneOf(value: string, allowed: string[]) {
+  return allowed.includes(value);
+}
+
+/**
+ * Normalize only units that are explicitly understood. A missing unit is accepted as
+ * already canonical because native bridge contracts can provide canonical values, but
+ * an unknown non-empty unit is rejected rather than silently reinterpreted.
+ */
 export function convertToCanonical(metric: ConnectedMetric, value: number, originalUnit?: string): { value: number; unit: CanonicalUnit } | null {
   if (!Number.isFinite(value)) return null;
   const definition = metricDefinitions[metric];
   const source = token(originalUnit);
   let normalized = value;
+  let understood = source === '';
 
   if (definition.unit === 'minute') {
-    if (['s', 'sec', 'second', 'seconds'].includes(source)) normalized = value / 60;
-    else if (['h', 'hr', 'hour', 'hours'].includes(source)) normalized = value * 60;
+    if (isOneOf(source, ['min', 'mins', 'minute', 'minutes'])) understood = true;
+    else if (isOneOf(source, ['s', 'sec', 'secs', 'second', 'seconds'])) { normalized = value / 60; understood = true; }
+    else if (isOneOf(source, ['h', 'hr', 'hrs', 'hour', 'hours'])) { normalized = value * 60; understood = true; }
   } else if (definition.unit === 'km') {
-    if (['m', 'meter', 'meters', 'metre', 'metres'].includes(source)) normalized = value / 1_000;
-    else if (['mi', 'mile', 'miles'].includes(source)) normalized = value * 1.609344;
+    if (isOneOf(source, ['km', 'kilometer', 'kilometers', 'kilometre', 'kilometres'])) understood = true;
+    else if (isOneOf(source, ['m', 'meter', 'meters', 'metre', 'metres'])) { normalized = value / 1_000; understood = true; }
+    else if (isOneOf(source, ['mi', 'mile', 'miles'])) { normalized = value * 1.609344; understood = true; }
   } else if (definition.unit === 'kcal') {
-    if (['kj', 'kilojoule', 'kilojoules'].includes(source)) normalized = value / 4.184;
+    if (isOneOf(source, ['kcal', 'kilocalorie', 'kilocalories'])) understood = true;
+    else if (isOneOf(source, ['kj', 'kilojoule', 'kilojoules'])) { normalized = value / 4.184; understood = true; }
   } else if (definition.unit === 'ml') {
-    if (['l', 'liter', 'liters', 'litre', 'litres'].includes(source)) normalized = value * 1_000;
-    else if (['flozus', 'floz', 'fluidounce', 'fluidounces'].includes(source)) normalized = value * 29.5735295625;
+    if (isOneOf(source, ['ml', 'milliliter', 'milliliters', 'millilitre', 'millilitres'])) understood = true;
+    else if (isOneOf(source, ['l', 'liter', 'liters', 'litre', 'litres'])) { normalized = value * 1_000; understood = true; }
+    else if (isOneOf(source, ['flozus', 'floz', 'fluidounce', 'fluidounces'])) { normalized = value * 29.5735295625; understood = true; }
   } else if (definition.unit === 'g') {
-    if (['kg', 'kilogram', 'kilograms'].includes(source)) normalized = value * 1_000;
-    else if (['mg', 'milligram', 'milligrams'].includes(source)) normalized = value / 1_000;
+    if (isOneOf(source, ['g', 'gram', 'grams'])) understood = true;
+    else if (isOneOf(source, ['kg', 'kilogram', 'kilograms'])) { normalized = value * 1_000; understood = true; }
+    else if (isOneOf(source, ['mg', 'milligram', 'milligrams'])) { normalized = value / 1_000; understood = true; }
+  } else if (definition.unit === 'count') {
+    understood ||= isOneOf(source, ['count', 'counts', 'step', 'steps']);
+  } else if (definition.unit === 'bpm') {
+    understood ||= isOneOf(source, ['bpm', 'count/min', 'counts/min', 'beat/min', 'beats/min', '1/min']);
+  } else if (definition.unit === 'ml/kg/min') {
+    understood ||= isOneOf(source, ['ml/kg/min', 'ml/min/kg', 'ml/(kg*min)', 'ml/kg/minute']);
+  } else if (definition.unit === 'serving') {
+    understood ||= isOneOf(source, ['serving', 'servings']);
+  } else if (definition.unit === 'score') {
+    understood ||= source === 'score';
   }
 
-  if (!Number.isFinite(normalized) || normalized < 0 || (!definition.allowZero && normalized === 0)) return null;
+  if (!understood || !Number.isFinite(normalized) || normalized < 0 || (!definition.allowZero && normalized === 0)) return null;
   return { value: normalized, unit: definition.unit };
 }
 
