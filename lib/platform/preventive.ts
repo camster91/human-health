@@ -2,6 +2,7 @@ import type { PreventiveRecord, PreventiveRecordCategory, PreventiveReminder, Re
 
 const categories: PreventiveRecordCategory[] = ['checkup', 'screening', 'vaccination', 'dental', 'vision', 'lab', 'other'];
 const sources = ['manual', 'clinician-provided'] as const;
+const FUTURE_TOLERANCE_MS = 5 * 60_000;
 
 function validYmd(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -33,6 +34,10 @@ function optionalString(value: unknown, label: string, max = 10_000) {
   return value.trim() || undefined;
 }
 
+function materiallyFuture(value: string, now: Date) {
+  return Date.parse(value) > now.getTime() + FUTURE_TOLERANCE_MS;
+}
+
 function addUtcMonthsClamped(date: Date, months: number) {
   const originalDay = date.getUTCDate();
   const firstOfTarget = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1, 12));
@@ -50,12 +55,13 @@ export function reminderState(reminder: PreventiveReminder, now = new Date(), du
   return 'scheduled';
 }
 
-export function normalizePreventiveRecord(value: PreventiveRecord): PreventiveRecord {
+export function normalizePreventiveRecord(value: PreventiveRecord, now = new Date()): PreventiveRecord {
   const item = objectValue(value, 'Preventive record');
   const id = requiredString(item.id, 'Preventive record id', 500);
   const title = requiredString(item.title, 'Preventive record title', 1000);
   if (!categories.includes(item.category as PreventiveRecordCategory)) throw new Error('Preventive record category is unsupported.');
   if (typeof item.occurredAt !== 'string' || typeof item.createdAt !== 'string' || !validIso(item.occurredAt) || !validIso(item.createdAt)) throw new Error('Preventive record dates are invalid.');
+  if (materiallyFuture(item.occurredAt, now) || materiallyFuture(item.createdAt, now)) throw new Error('Preventive record dates cannot be materially in the future.');
   if (!sources.includes(item.source as typeof sources[number])) throw new Error('Preventive record source is invalid.');
   return {
     id,
@@ -69,13 +75,14 @@ export function normalizePreventiveRecord(value: PreventiveRecord): PreventiveRe
   };
 }
 
-export function normalizePreventiveReminder(value: PreventiveReminder): PreventiveReminder {
+export function normalizePreventiveReminder(value: PreventiveReminder, now = new Date()): PreventiveReminder {
   const item = objectValue(value, 'Preventive reminder');
   const id = requiredString(item.id, 'Preventive reminder id', 500);
   const title = requiredString(item.title, 'Preventive reminder title', 1000);
   if (!categories.includes(item.category as PreventiveRecordCategory)) throw new Error('Preventive reminder category is unsupported.');
   if (typeof item.dueOn !== 'string' || !validYmd(item.dueOn)) throw new Error('Preventive reminder due date is invalid.');
   if (typeof item.createdAt !== 'string' || !validIso(item.createdAt)) throw new Error('Preventive reminder created date is invalid.');
+  if (materiallyFuture(item.createdAt, now)) throw new Error('Preventive reminder created date cannot be materially in the future.');
   if (!sources.includes(item.source as typeof sources[number])) throw new Error('Preventive reminder source is invalid.');
   if (typeof item.enabled !== 'boolean') throw new Error('Preventive reminder enabled state is invalid.');
   if (item.repeatMonths !== undefined && (typeof item.repeatMonths !== 'number' || !Number.isFinite(item.repeatMonths) || !Number.isInteger(item.repeatMonths) || item.repeatMonths <= 0 || item.repeatMonths > 120)) throw new Error('Preventive reminder repeat interval is invalid.');
@@ -94,14 +101,15 @@ export function normalizePreventiveReminder(value: PreventiveReminder): Preventi
 }
 
 export function completeReminder(reminder: PreventiveReminder, occurredAt = new Date()): { record: PreventiveRecord; nextReminder: PreventiveReminder | null } {
-  if (!Number.isFinite(occurredAt.getTime())) throw new Error('Preventive completion date is invalid.');
-  const normalized = normalizePreventiveReminder(reminder);
-  const createdAt = new Date().toISOString();
+  const now = new Date();
+  if (!Number.isFinite(occurredAt.getTime()) || occurredAt.getTime() > now.getTime() + FUTURE_TOLERANCE_MS) throw new Error('Preventive completion date is invalid or materially in the future.');
+  const normalized = normalizePreventiveReminder(reminder, now);
+  const createdAt = now.toISOString();
   const record: PreventiveRecord = normalizePreventiveRecord({
     id: crypto.randomUUID(), category: normalized.category, title: normalized.title,
     occurredAt: occurredAt.toISOString(), provider: normalized.provider, note: normalized.note,
     source: normalized.source, createdAt,
-  });
+  }, now);
   if (!normalized.repeatMonths) return { record, nextReminder: null };
   const next = addUtcMonthsClamped(occurredAt, normalized.repeatMonths);
   return {
