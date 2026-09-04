@@ -1,5 +1,5 @@
 import { mergeObservationCollections, normalizeConnectedPreferences, normalizeSourceState } from '../merge';
-import { HealthObservation, HealthRepositoryExport } from '../types';
+import { HealthObservation, HealthRepositoryExport, HealthSourceState } from '../types';
 
 export type ConnectedJsonEnvelope = {
   format: 'human-health-connected-export';
@@ -7,6 +7,21 @@ export type ConnectedJsonEnvelope = {
   exportedAt: string;
   data: HealthRepositoryExport;
 };
+
+const providers = new Set(['health-connect', 'apple-health', 'manual', 'human-health-import']);
+const statuses = new Set(['not-connected', 'unavailable', 'permission-required', 'syncing', 'current', 'partial', 'stale', 'failed']);
+
+function parseSourceState(value: unknown): HealthSourceState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Connected-health archive contains an invalid source state.');
+  const source = value as Partial<HealthSourceState>;
+  if (typeof source.id !== 'string' || !source.id.trim()) throw new Error('Connected-health archive source is missing an ID.');
+  if (typeof source.displayName !== 'string' || !source.displayName.trim()) throw new Error(`Connected-health archive source ${source.id} is missing a display name.`);
+  if (!providers.has(String(source.provider))) throw new Error(`Connected-health archive source ${source.id} has an unsupported provider.`);
+  if (!statuses.has(String(source.status))) throw new Error(`Connected-health archive source ${source.id} has an unsupported status.`);
+  if (!Array.isArray(source.supportedMetrics) || !Array.isArray(source.grantedMetrics)) throw new Error(`Connected-health archive source ${source.id} has invalid metric permissions.`);
+  if (!Number.isFinite(source.staleAfterMs) || Number(source.staleAfterMs) <= 0) throw new Error(`Connected-health archive source ${source.id} has an invalid freshness window.`);
+  return normalizeSourceState(source as HealthSourceState);
+}
 
 export function createConnectedJsonEnvelope(data: HealthRepositoryExport): ConnectedJsonEnvelope {
   return { format: 'human-health-connected-export', schemaVersion: 1, exportedAt: new Date().toISOString(), data };
@@ -20,11 +35,12 @@ export function parseConnectedJson(text: string): HealthRepositoryExport {
   if (!data || data.schemaVersion !== 1 || !Array.isArray(data.observations) || !Array.isArray(data.sources)) throw new Error('Unsupported connected-health JSON format.');
   const merged = mergeObservationCollections([], data.observations as HealthObservation[]);
   if (merged.rejected) throw new Error(`${merged.rejected} connected-health observations were invalid.`);
+  const sources = data.sources.map(parseSourceState);
   return {
     schemaVersion: 1,
-    exportedAt: typeof data.exportedAt === 'string' ? data.exportedAt : new Date().toISOString(),
+    exportedAt: typeof data.exportedAt === 'string' && Number.isFinite(Date.parse(data.exportedAt)) ? new Date(data.exportedAt).toISOString() : new Date().toISOString(),
     observations: merged.observations,
-    sources: data.sources.map(normalizeSourceState),
+    sources,
     preferences: normalizeConnectedPreferences(data.preferences),
   };
 }
