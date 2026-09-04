@@ -50,4 +50,12 @@ describe('connected and full archive parsing', () => {
     expect(() => parseConnectedJson('{bad json')).toThrow('not valid JSON');
     expect(() => parseConnectedJson(JSON.stringify({ schemaVersion: 2, observations: [], sources: [] }))).toThrow('Unsupported');
   });
+
+  it('rejects malformed source metadata instead of silently coercing its provider or status', () => {
+    const observation = createManualObservation('water', 250, new Date('2026-09-03T12:00:00Z'));
+    const base = { schemaVersion: 1, exportedAt: '2026-09-03T12:00:00Z', observations: [observation], preferences: defaultConnectedHealthPreferences };
+    expect(() => parseConnectedJson(JSON.stringify({ ...base, sources: [{ ...makeSource('bad-provider'), provider: 'mystery-provider' }] }))).toThrow('unsupported provider');
+    expect(() => parseConnectedJson(JSON.stringify({ ...base, sources: [{ ...makeSource('bad-status'), status: 'maybe-current' }] }))).toThrow('unsupported status');
+    expect(() => parseConnectedJson(JSON.stringify({ ...base, sources: [{ ...makeSource('bad-freshness'), staleAfterMs: 0 }] }))).toThrow('invalid freshness window');
+  });
 });
