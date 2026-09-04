@@ -11,9 +11,11 @@
 - [x] Local JSON/archive import/export and source-scoped deletion
 - [x] Consent-first Health dashboard with provenance details
 - [x] Connected sleep can contribute to readiness only when fresh and clearly sourced
+- [x] Final source review and privacy/safety review
+- [x] Reconciled with the latest Phase 2 hardening head
 
-## Integration gate
-- [x] Reconciled with latest Phase 2 hardening tree
+## Web/PWA verification gate
+- [ ] Eligible Human Health Actions runner executes the workflow (#51)
 - [ ] TypeScript check
 - [ ] Unit tests
 - [ ] Production static build
@@ -25,4 +27,4 @@
 - [ ] HealthKit bridge tested in a compatible Apple host
 - [ ] Large real Apple Health export validated locally without server upload
 
-Native validation is a platform release dependency; its absence must not be misrepresented as verified device integration.
+Phase 3 is source-complete/source-reviewed, not release-verified. Native validation is a platform release dependency and must not be inferred from adapter source code.
