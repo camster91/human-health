@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { gyms } from '../program';
 import { interpretCoachMessage } from './conversation';
-import { buildCoachExplanationRequest, deterministicExplanation } from './explanation';
+import { buildCoachExplanationRequest, deterministicExplanation, requestAIExplanation } from './explanation';
 import { movementVideoGate } from './movement-video';
 import { defaultPreferences } from '../preferences';
 import { createCoachingSnapshot } from './engine';
@@ -32,6 +32,14 @@ describe('deterministic-first explanations', () => {
     expect(request.rules.some(rule => rule.includes('do not add, remove, reorder'))).toBe(true);
     expect(request.safetyBoundary).toContain('medication');
     expect(deterministicExplanation(snapshot).length).toBeGreaterThan(0);
+  });
+
+  it('accepts narrative text without changing deterministic actions or evidence', async () => {
+    const snapshot = createCoachingSnapshot({ history: [], activity: [], readiness: [], preferences: defaultPreferences, now: new Date('2026-09-03T12:00:00Z') });
+    const before = JSON.stringify({ actions: snapshot.actions, evidence: snapshot.evidence });
+    const text = await requestAIExplanation(snapshot, { explain: async request => `Narrative only: ${request.deterministicActions[0]?.title || 'keep plan'}` });
+    expect(text).toContain('Narrative only');
+    expect(JSON.stringify({ actions: snapshot.actions, evidence: snapshot.evidence })).toBe(before);
   });
 });
 
