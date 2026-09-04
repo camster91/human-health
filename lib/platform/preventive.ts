@@ -16,6 +16,13 @@ function validYmd(value: string) {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
+function addUtcMonthsClamped(date: Date, months: number) {
+  const originalDay = date.getUTCDate();
+  const firstOfTarget = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1, 12));
+  const lastDay = new Date(Date.UTC(firstOfTarget.getUTCFullYear(), firstOfTarget.getUTCMonth() + 1, 0, 12)).getUTCDate();
+  return new Date(Date.UTC(firstOfTarget.getUTCFullYear(), firstOfTarget.getUTCMonth(), Math.min(originalDay, lastDay), 12));
+}
+
 export function reminderState(reminder: PreventiveReminder, now = new Date(), dueSoonDays = 30): ReminderState {
   if (!reminder.enabled) return 'disabled';
   if (!validYmd(reminder.dueOn)) return 'invalid';
@@ -31,7 +38,12 @@ export function normalizePreventiveRecord(value: PreventiveRecord): PreventiveRe
   if (!categories.includes(value.category)) throw new Error('Preventive record category is unsupported.');
   if (!validIso(value.occurredAt) || !validIso(value.createdAt)) throw new Error('Preventive record dates are invalid.');
   if (!['manual', 'clinician-provided'].includes(value.source)) throw new Error('Preventive record source is invalid.');
-  return { ...value, title: value.title.trim(), provider: value.provider?.trim() || undefined, note: value.note?.trim() || undefined };
+  return {
+    ...value,
+    title: value.title.trim(),
+    provider: value.provider?.trim() || undefined,
+    note: value.note?.trim() || undefined,
+  };
 }
 
 export function normalizePreventiveReminder(value: PreventiveReminder): PreventiveReminder {
@@ -42,26 +54,39 @@ export function normalizePreventiveReminder(value: PreventiveReminder): Preventi
   if (!['manual', 'clinician-provided'].includes(value.source)) throw new Error('Preventive reminder source is invalid.');
   if (value.repeatMonths !== undefined && (!Number.isFinite(value.repeatMonths) || value.repeatMonths <= 0)) throw new Error('Preventive reminder repeat interval is invalid.');
   const repeatMonths = value.repeatMonths === undefined ? undefined : Math.max(1, Math.min(120, Math.floor(value.repeatMonths)));
-  return { ...value, title: value.title.trim(), note: value.note?.trim() || undefined, repeatMonths };
+  return {
+    ...value,
+    title: value.title.trim(),
+    provider: value.provider?.trim() || undefined,
+    note: value.note?.trim() || undefined,
+    repeatMonths,
+  };
 }
 
 export function completeReminder(reminder: PreventiveReminder, occurredAt = new Date()): { record: PreventiveRecord; nextReminder: PreventiveReminder | null } {
+  if (!Number.isFinite(occurredAt.getTime())) throw new Error('Preventive completion date is invalid.');
   const normalized = normalizePreventiveReminder(reminder);
+  const createdAt = new Date().toISOString();
   const record: PreventiveRecord = normalizePreventiveRecord({
     id: crypto.randomUUID(),
     category: normalized.category,
     title: normalized.title,
     occurredAt: occurredAt.toISOString(),
+    provider: normalized.provider,
     note: normalized.note,
     source: normalized.source,
-    createdAt: new Date().toISOString(),
+    createdAt,
   });
   if (!normalized.repeatMonths) return { record, nextReminder: null };
-  const next = new Date(occurredAt);
-  next.setUTCMonth(next.getUTCMonth() + normalized.repeatMonths);
+  const next = addUtcMonthsClamped(occurredAt, normalized.repeatMonths);
   return {
     record,
-    nextReminder: { ...normalized, id: crypto.randomUUID(), dueOn: next.toISOString().slice(0, 10), createdAt: new Date().toISOString() },
+    nextReminder: {
+      ...normalized,
+      id: crypto.randomUUID(),
+      dueOn: next.toISOString().slice(0, 10),
+      createdAt,
+    },
   };
 }
 
