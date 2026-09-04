@@ -8,5 +8,6 @@ export function GlobalHealthLink() {
   return <nav className="global-route-links" aria-label="Quick routes">
     {!pathname.startsWith('/coach') && <Link className="global-route-link" href="/coach/" aria-label="Open coaching intelligence">Coach</Link>}
     {!pathname.startsWith('/health') && <Link className="global-route-link" href="/health/" aria-label="Open connected health">Health</Link>}
+    {!pathname.startsWith('/platform') && <Link className="global-route-link" href="/platform/" aria-label="Open long-horizon health platform">Platform</Link>}
   </nav>;
 }

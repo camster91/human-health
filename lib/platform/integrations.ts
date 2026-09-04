@@ -1,0 +1,91 @@
+import type { HealthObservation, HealthSourceState } from '../connected-health';
+import type { HumanHealthExport } from '../storage';
+import type { IntegrationBundle, IntegrationScope, PreventiveRecord, PreventiveReminder } from './types';
+
+export const integrationScopes: IntegrationScope[] = ['training:read', 'connected-health:read', 'preventive:read', 'coaching:read'];
+
+export function normalizeScopes(scopes: IntegrationScope[]) {
+  return [...new Set(scopes.filter(scope => integrationScopes.includes(scope)))];
+}
+
+export function createIntegrationBundle(options: {
+  scopes: IntegrationScope[];
+  training: HumanHealthExport;
+  connectedObservations: HealthObservation[];
+  connectedSources: HealthSourceState[];
+  preventiveRecords: PreventiveRecord[];
+  preventiveReminders: PreventiveReminder[];
+  generatedAt?: Date;
+}): IntegrationBundle {
+  const scopes = normalizeScopes(options.scopes);
+  if (!scopes.length) throw new Error('At least one explicit integration scope is required.');
+  const bundle: IntegrationBundle = {
+    schemaVersion: 1,
+    generatedAt: (options.generatedAt || new Date()).toISOString(),
+    scopes,
+    safety: 'This bundle was generated after an explicit user export/share action. Receiving systems must preserve provenance and must not infer diagnosis, medication/insulin dosing, emergency monitoring, or injury clearance from Human Health data.',
+  };
+  if (scopes.includes('training:read')) bundle.training = options.training;
+  if (scopes.includes('connected-health:read')) bundle.connectedHealth = { observations: options.connectedObservations, sources: options.connectedSources };
+  if (scopes.includes('preventive:read')) bundle.preventive = { records: options.preventiveRecords, reminders: options.preventiveReminders };
+  if (scopes.includes('coaching:read')) bundle.coaching = { note: 'Phase 4 coaching is deterministic fitness guidance. An integration should consume an explicit exported snapshot rather than silently invoking hidden recommendations.' };
+  return bundle;
+}
+
+export function integrationBundleContainsOnlyScopes(bundle: IntegrationBundle) {
+  if (bundle.schemaVersion !== 1 || !Array.isArray(bundle.scopes) || !bundle.scopes.length) return false;
+  const normalized = normalizeScopes(bundle.scopes);
+  if (normalized.length !== bundle.scopes.length || normalized.some((scope, index) => scope !== bundle.scopes[index])) return false;
+  if (!Number.isFinite(Date.parse(bundle.generatedAt)) || !bundle.safety?.trim()) return false;
+  if (bundle.training && !bundle.scopes.includes('training:read')) return false;
+  if (bundle.connectedHealth && !bundle.scopes.includes('connected-health:read')) return false;
+  if (bundle.preventive && !bundle.scopes.includes('preventive:read')) return false;
+  if (bundle.coaching && !bundle.scopes.includes('coaching:read')) return false;
+  if (bundle.scopes.includes('training:read') && !bundle.training) return false;
+  if (bundle.scopes.includes('connected-health:read') && !bundle.connectedHealth) return false;
+  if (bundle.scopes.includes('preventive:read') && !bundle.preventive) return false;
+  if (bundle.scopes.includes('coaching:read') && !bundle.coaching) return false;
+  return true;
+}
+
+function sanitizeBundleForShare(bundle: IntegrationBundle): IntegrationBundle {
+  if (!integrationBundleContainsOnlyScopes(bundle)) throw new Error('Integration bundle is malformed or contains data outside its declared scopes.');
+  const safe: IntegrationBundle = {
+    schemaVersion: 1,
+    generatedAt: bundle.generatedAt,
+    scopes: [...bundle.scopes],
+    safety: bundle.safety,
+  };
+  if (safe.scopes.includes('training:read')) safe.training = bundle.training;
+  if (safe.scopes.includes('connected-health:read')) safe.connectedHealth = bundle.connectedHealth;
+  if (safe.scopes.includes('preventive:read')) safe.preventive = bundle.preventive;
+  if (safe.scopes.includes('coaching:read')) safe.coaching = bundle.coaching;
+  return safe;
+}
+
+export interface HumanHealthIntegrationHost {
+  describe(): Promise<{ name: string; supportedScopes: IntegrationScope[] }>;
+  share(bundle: IntegrationBundle): Promise<{ accepted: boolean; receipt?: string; message?: string }>;
+}
+
+declare global {
+  interface Window {
+    HumanHealthIntegrationHost?: HumanHealthIntegrationHost;
+  }
+}
+
+export function getIntegrationHost(): HumanHealthIntegrationHost | null {
+  if (typeof window === 'undefined') return null;
+  return window.HumanHealthIntegrationHost || null;
+}
+
+export async function shareIntegrationBundle(bundle: IntegrationBundle, options: { confirmed: boolean }) {
+  if (options.confirmed !== true) throw new Error('Explicit user confirmation is required before sharing Human Health data.');
+  const safeBundle = sanitizeBundleForShare(bundle);
+  const host = getIntegrationHost();
+  if (!host) throw new Error('No Human Health integration host is connected.');
+  const description = await host.describe();
+  const unsupported = safeBundle.scopes.filter(scope => !description.supportedScopes.includes(scope));
+  if (unsupported.length) throw new Error(`Connected integration does not support scope(s): ${unsupported.join(', ')}.`);
+  return host.share(safeBundle);
+}
