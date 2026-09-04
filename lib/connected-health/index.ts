@@ -14,5 +14,6 @@ export * from './trends';
 export * from './connected-readiness';
 export * from './portability';
 export * from './import/apple-health-xml';
+export * from './import/recoverable-apple-import';
 export * from './import/canonical-json';
 export * from './import/source-state';
