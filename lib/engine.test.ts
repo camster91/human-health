@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { adaptWorkout, nextLoadRecommendation, platePlan, summarizeWorkout, workingLogs } from './engine';
-import { buildSession, gyms } from './program';
+import { buildSession, findExercise, gyms } from './program';
 
 describe('adaptive workout engine', () => {
   it('defers lower-priority work before primary movements when time is short', () => {
@@ -33,6 +33,14 @@ describe('deterministic progression', () => {
     expect(nextLoadRecommendation({ ...exercise, logs: exercise.logs.map((log, index) => ({ ...log, weight: index ? 62.5 : 60 })) }).action).toBe('hold');
   });
 
+  it('recommends variation or external load instead of inventing a bodyweight machine load', () => {
+    const definition = findExercise('pushup')!;
+    const exercise = { ...definition, sets: 3, logs: Array.from({ length: 3 }, () => ({ weight: 0, reps: definition.repRange[1], rir: 2, formQuality: 'good' as const, completedAt: new Date().toISOString() })) };
+    const recommendation = nextLoadRecommendation(exercise);
+    expect(recommendation.action).toBe('increase');
+    expect(recommendation.message).toContain('variation');
+  });
+
   it('blocks progression for pain, poor form, recovery context and long gaps', () => {
     const base = buildSession('upper-a')[0];
     expect(nextLoadRecommendation({ ...base, logs: [{ weight: 60, reps: 8, pain: true, completedAt: new Date().toISOString() }] }).action).toBe('hold');
@@ -60,5 +68,9 @@ describe('plate calculator', () => {
     expect(platePlan(80)).toEqual([25, 5]);
     expect(platePlan(45, 15, [10, 5, 2.5])).toEqual([10, 5]);
     expect(platePlan(21)).toBeNull();
+  });
+
+  it('finds exact non-greedy combinations for custom plate denominations', () => {
+    expect(platePlan(32, 20, [4, 3])).toEqual([3, 3]);
   });
 });
