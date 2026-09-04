@@ -1,5 +1,5 @@
 import { cardioCoverage, consistencyPattern, normalizedStrengthTrend, recoveryPattern } from '../capability-trends';
-import { workingLogs } from '../engine';
+import { comparableStrengthLogs } from '../engine';
 import { recentTrainingLoad } from '../load-management';
 import { domainDeficits } from '../performance';
 import type { DomainPriority } from '../preferences';
@@ -25,7 +25,7 @@ export function assessPlateaus(history: CoachingInput['history'], readiness: Coa
     const at = Date.parse(entry.completedAt);
     if (!Number.isFinite(at) || at > now.getTime()) return;
     entry.exercises.filter(exercise => exercise.priority === 'primary').forEach(exercise => {
-      const best = workingLogs(exercise).filter(set => !set.pain && set.formQuality !== 'poor').reduce((max, set) => Math.max(max, e1rm(set.weight, set.reps)), 0);
+      const best = comparableStrengthLogs(exercise).reduce((max, set) => Math.max(max, e1rm(set.weight, set.reps)), 0);
       if (!best) return;
       const values = byExercise.get(exercise.id) || [];
       values.push({ name: exercise.name, at, value: best });
@@ -58,23 +58,19 @@ export function assessPlateaus(history: CoachingInput['history'], readiness: Coa
 }
 
 export function balanceGoals(input: CoachingInput, readinessLevel: 'normal' | 'reduced' | 'recovery'): GoalAllocation[] {
+  if (readinessLevel === 'recovery') return [];
   const deficits = new Set(domainDeficits(input.activity, input.now || new Date(), { cardioTargetMinutes: input.preferences.cardioTargetMinutes, priorities: input.preferences.domainPriorities }));
   const weights: Record<DomainPriority, number> = { focus: 4, maintain: 2, deprioritize: 0, off: 0 };
   const entries = Object.entries(input.preferences.domainPriorities) as [CapabilityDomain, DomainPriority][];
   const domains = entries
     .map(([domain, priority]) => ({ domain, priority, weight: weights[priority] + (deficits.has(domain) ? 1 : 0) }))
     .filter(item => item.weight > 0 && item.priority !== 'off' && item.priority !== 'deprioritize');
-  if (readinessLevel === 'recovery') {
-    domains.forEach(item => { if (item.domain !== 'recovery' && item.domain !== 'mobility') item.weight = Math.max(1, item.weight - 2); });
-    const recovery = domains.find(item => item.domain === 'recovery');
-    if (recovery) recovery.weight += 5;
-  }
   const total = domains.reduce((sum, item) => sum + item.weight, 0) || 1;
   return domains.sort((a, b) => b.weight - a.weight).slice(0, 5).map(item => ({
     domain: item.domain,
     priority: item.priority,
     share: Math.round(item.weight / total * 100),
-    reason: `${item.priority === 'focus' ? 'Focus priority' : 'Maintenance priority'}${deficits.has(item.domain) ? ' and currently below its configured target' : ''}${readinessLevel === 'recovery' && item.domain === 'recovery' ? '; recovery temporarily takes precedence' : ''}.`,
+    reason: `${item.priority === 'focus' ? 'Focus priority' : 'Maintenance priority'}${deficits.has(item.domain) ? ' and currently below its configured target' : ''}.`,
   }));
 }
 
@@ -84,12 +80,15 @@ export function createCoachingSnapshot(input: CoachingInput): CoachingSnapshot {
   const evidence: CoachEvidence[] = [];
   const trends: CoachTrend[] = [];
 
-  const strength = normalizedStrengthTrend(input.history);
+  const strength = normalizedStrengthTrend(input.history, now);
   evidence.push({ id: 'strength', domain: 'strength', label: 'Primary-lift trend', observation: strength.message, sampleCount: strength.exerciseCount, window: 'all comparable primary-lift history', confidence: confidence(strength.exerciseCount), current: strength.percentChange, unit: '%' });
   trends.push({ id: 'strength-trend', domain: 'strength', label: 'Strength', direction: strength.percentChange === null ? 'unknown' : strength.percentChange > 2 ? 'improving' : strength.percentChange < -2 ? 'declining' : 'stable', confidence: confidence(strength.exerciseCount), message: strength.message, evidenceIds: ['strength'] });
 
   const cardio = cardioCoverage(input.activity, input.preferences.cardioTargetMinutes, now);
-  const cardioSamples = input.activity.filter(item => item.domain === 'cardio').length;
+  const cardioSamples = input.activity.filter(item => {
+    const at = Date.parse(item.completedAt);
+    return item.domain === 'cardio' && Number.isFinite(at) && at <= now.getTime();
+  }).length;
   evidence.push({ id: 'cardio', domain: 'cardio', label: 'Planned aerobic coverage', observation: `${Math.round(cardio.equivalentMinutes)} of ${cardio.target} equivalent planned minutes recorded in the current seven-day window.`, sampleCount: cardioSamples, window: '7 days', confidence: confidence(cardioSamples), current: cardio.coverage * 100, unit: '%' });
   trends.push({ id: 'cardio-trend', domain: 'cardio', label: 'Cardio target coverage', direction: cardio.coverage >= 1 ? 'stable' : 'unknown', confidence: confidence(cardioSamples), message: `${Math.round(cardio.remaining)} equivalent planned minutes remain against the configured weekly target.`, evidenceIds: ['cardio'] });
 
@@ -121,10 +120,22 @@ export function createCoachingSnapshot(input: CoachingInput): CoachingSnapshot {
   const plateaus = assessPlateaus(input.history, input.readiness, now);
   const goals = balanceGoals(input, readiness.level);
   const actions: CoachAction[] = [];
-  if (readiness.level === 'recovery') actions.push({ id: 'recovery-first', kind: 'recover', priority: 1, title: 'Use recovery-first training', instruction: 'Keep today easy and do not chase missed volume or progression.', rationale: readiness.reasons.join(' ') || 'Current readiness is recovery-first.', evidenceIds: ['recovery'], reversible: true });
-  else if (readiness.level === 'reduced') actions.push({ id: 'reduced-load', kind: 'hold', priority: 1, title: 'Keep progression conservative', instruction: 'Use the reduced-readiness volume path and hold automatic load progression for this exposure.', rationale: readiness.reasons.join(' ') || 'Recent readiness data supports a conservative session.', evidenceIds: ['recovery'], reversible: true });
+  if (readiness.level === 'recovery') {
+    actions.push({
+      id: 'safety-hold',
+      kind: 'recover',
+      priority: 1,
+      title: 'Automatic exercise suggestions paused',
+      instruction: 'Do not use Human Health as exercise clearance while pain or illness is flagged. Use your established care/safety plan or appropriate professional support before resuming app-generated training suggestions.',
+      rationale: readiness.reasons.join(' ') || 'A recent readiness record includes pain or illness.',
+      evidenceIds: ['recovery'],
+      reversible: false,
+    });
+  } else if (readiness.level === 'reduced') {
+    actions.push({ id: 'reduced-load', kind: 'hold', priority: 1, title: 'Keep progression conservative', instruction: 'Use the reduced-readiness volume path and hold automatic load progression for this exposure.', rationale: readiness.reasons.join(' ') || 'Recent readiness data supports a conservative session.', evidenceIds: ['recovery'], reversible: true });
+  }
 
-  if (readiness.level === 'normal' && input.preferences.lifeMode !== 'normal') {
+  if (readiness.level !== 'recovery' && readiness.level === 'normal' && input.preferences.lifeMode !== 'normal') {
     const copy = input.preferences.lifeMode === 'travel'
       ? 'Use portable substitutions and preserve movement patterns rather than forcing normal-gym loads.'
       : input.preferences.lifeMode === 'return'
@@ -137,13 +148,15 @@ export function createCoachingSnapshot(input: CoachingInput): CoachingSnapshot {
     actions.push({ id: 'avoid-stacking', kind: 'hold', priority: actions.length ? 2 : 1, title: 'Avoid stacking another hard lower-body stressor', instruction: 'Prefer upper-body, easy aerobic, mobility, balance, or other low-fatigue work until the recent lower-body load is less concentrated.', rationale: workload.message, evidenceIds: ['recent-load'], reversible: true });
   }
 
-  const deloads = plateaus.filter(item => item.deloadSuggested);
-  if (deloads.length) actions.push({ id: 'deload', kind: 'deload', priority: actions.length ? 2 : 1, title: 'Consider a short deload', instruction: `Reduce volume and/or load briefly for ${deloads.map(item => item.exerciseName).join(', ')}, then reassess comparable performance.`, rationale: 'Repeated performance stagnation/regression aligns with constrained recovery evidence. The app does not apply this automatically.', evidenceIds: ['strength', 'recovery'], reversible: true });
+  if (readiness.level !== 'recovery') {
+    const deloads = plateaus.filter(item => item.deloadSuggested);
+    if (deloads.length) actions.push({ id: 'deload', kind: 'deload', priority: actions.length ? 2 : 1, title: 'Consider a short deload', instruction: `Reduce volume and/or load briefly for ${deloads.map(item => item.exerciseName).join(', ')}, then reassess comparable performance.`, rationale: 'Repeated performance stagnation/regression aligns with constrained recovery evidence. The app does not apply this automatically.', evidenceIds: ['strength', 'recovery'], reversible: true });
 
-  const leading = goals[0];
-  if (leading) actions.push({ id: 'goal-balance', kind: 'balance-goals', priority: actions.length ? 2 : 1, title: `Prioritize ${leading.domain.replaceAll('-', ' ')}`, instruction: `Allocate the next available training opportunity to ${leading.domain.replaceAll('-', ' ')} while maintaining the other enabled goals.`, rationale: leading.reason, evidenceIds: leading.domain === 'strength' ? ['strength'] : leading.domain === 'cardio' ? ['cardio'] : ['consistency'], reversible: true });
+    const leading = goals[0];
+    if (leading) actions.push({ id: 'goal-balance', kind: 'balance-goals', priority: actions.length ? 2 : 1, title: `Prioritize ${leading.domain.replaceAll('-', ' ')}`, instruction: `Allocate the next available training opportunity to ${leading.domain.replaceAll('-', ' ')} while maintaining the other enabled goals.`, rationale: leading.reason, evidenceIds: leading.domain === 'strength' ? ['strength'] : leading.domain === 'cardio' ? ['cardio'] : ['consistency'], reversible: true });
 
-  if (consistency.sessions < 4 && readiness.level !== 'recovery') actions.push({ id: 'minimum-dose', kind: 'minimum-dose', priority: 3, title: 'Protect consistency with a minimum dose', instruction: 'When time is tight, prefer a short valid session over trying to make up missed work later.', rationale: consistency.message, evidenceIds: ['consistency'], reversible: true });
+    if (consistency.sessions < 4) actions.push({ id: 'minimum-dose', kind: 'minimum-dose', priority: 3, title: 'Protect consistency with a minimum dose', instruction: 'When time is tight, prefer a short valid session over trying to make up missed work later.', rationale: consistency.message, evidenceIds: ['consistency'], reversible: true });
+  }
 
   return {
     generatedAt: now.toISOString(),
@@ -153,6 +166,6 @@ export function createCoachingSnapshot(input: CoachingInput): CoachingSnapshot {
     goals,
     actions: actions.slice(0, 4),
     readinessLevel: readiness.level,
-    safetyBoundary: 'Coaching recommendations are fitness guidance only. They do not diagnose conditions, clear injuries, prescribe medication/insulin, calculate treatment carbohydrates, or provide emergency monitoring.',
+    safetyBoundary: 'Coaching recommendations are fitness guidance only. Pain or illness pauses automatic exercise suggestions; Human Health does not diagnose conditions, clear injuries, prescribe medication/insulin, calculate treatment carbohydrates, or provide emergency monitoring.',
   };
 }
