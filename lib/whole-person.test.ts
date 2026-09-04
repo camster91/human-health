@@ -27,12 +27,11 @@ describe('whole-person fitness model', () => {
     expect(nextSkillStep('pull-up', 'weighted')?.id).toBe('weighted');
   });
 
-  it('programs all core patterns and reduces fatigue under recovery constraints', () => {
+  it('programs core normally but withholds automatic core work on pain/illness recovery', () => {
     const normal = corePrescription({ session: 'upper-a', equipment: ['bodyweight', 'cable', 'dumbbell'], readiness: 'normal' });
     const recovery = corePrescription({ session: 'lower-a', equipment: ['bodyweight', 'cable', 'dumbbell'], readiness: 'recovery' });
     expect(normal.length).toBeGreaterThan(1);
-    expect(recovery).toHaveLength(1);
-    expect(recovery.every(session => session.fatigue === 'low')).toBe(true);
+    expect(recovery).toEqual([]);
   });
 
   it('separates pre-workout preparation from longer mobility work', () => {
@@ -47,7 +46,9 @@ describe('whole-person fitness model', () => {
   it('uses sleep duration and subjective readiness without diagnosing', () => {
     expect(readinessDecision({ sleepHours: 5.5 }).level).toBe('reduced');
     expect(readinessDecision({ subjective: 1, stress: 'high' }).allowProgression).toBe(false);
-    expect(readinessDecision({ pain: true }).level).toBe('recovery');
+    const pain = readinessDecision({ pain: true });
+    expect(pain.level).toBe('recovery');
+    expect(pain.volumeMultiplier).toBe(0);
   });
 
   it('summarizes repeated readiness constraints', () => {
@@ -71,12 +72,13 @@ describe('whole-person fitness model', () => {
     expect(decision.allowProgression).toBe(false);
   });
 
-  it('distinguishes planned cardio from incidental movement', () => {
+  it('distinguishes planned cardio from incidental movement and withholds cardio suggestions on recovery', () => {
     expect(activityCountsTowardCardioTarget({ domain: 'cardio', minutes: 30, kind: 'planned', completedAt: '2026-09-01T12:00:00Z' })).toBe(true);
     expect(activityCountsTowardCardioTarget({ domain: 'cardio', minutes: 30, kind: 'incidental', completedAt: '2026-09-01T12:00:00Z' })).toBe(false);
     expect(cardioEquivalentMinutes(30, 'hard')).toBe(60);
     expect(cardioOptions(60, 150, 'normal', 30).some(option => option.type === 'intervals')).toBe(true);
     expect(cardioOptions(60, 150, 'reduced', 30).some(option => option.type === 'intervals')).toBe(false);
+    expect(cardioOptions(60, 150, 'recovery', 30)).toEqual([]);
   });
 
   it('selects only compatible minimum-effective sessions', () => {
@@ -85,21 +87,28 @@ describe('whole-person fitness model', () => {
     expect(result.every(session => (session.requiredEquipment || []).every(item => item === 'bodyweight'))).toBe(true);
   });
 
-  it('keeps high-impact power out of recovery/disabled plans', () => {
-    expect(athleticPlan([], 'recovery').every(plan => plan.domain !== 'power')).toBe(true);
+  it('withholds automatic athletic plans on recovery and keeps high-impact disabled plans low impact', () => {
+    expect(athleticPlan([], 'recovery')).toEqual([]);
     const lowImpact = athleticPlan([], 'normal', { highImpactAllowed: false });
     expect(lowImpact.every(plan => plan.domain !== 'power')).toBe(true);
     expect(lowImpact.some(plan => plan.domain === 'movement')).toBe(true);
   });
 
-  it('tracks weekly minutes and explicit assessment trends', () => {
+  it('tracks weekly minutes and explicit assessment trends without future evidence', () => {
     const now = new Date('2026-09-02T12:00:00Z');
-    const doses = [{ domain: 'mobility' as const, minutes: 10, completedAt: '2026-09-01T12:00:00Z' }];
+    const doses = [
+      { domain: 'mobility' as const, minutes: 10, completedAt: '2026-09-01T12:00:00Z' },
+      { domain: 'mobility' as const, minutes: 100, completedAt: '2027-09-01T12:00:00Z' },
+    ];
     expect(weeklyMinutes(doses, 'mobility', now)).toBe(10);
     expect(targetProgress(75, 150)).toBe(0.5);
-    const values = [{ metricId: 'pullups', value: 3, recordedAt: '2026-08-01T12:00:00Z' }, { metricId: 'pullups', value: 6, recordedAt: '2026-09-01T12:00:00Z' }];
-    expect(latestAssessment(values, 'pullups')?.value).toBe(6);
-    expect(assessmentTrend(values, 'pullups')).toBe(3);
+    const values = [
+      { metricId: 'pullups', value: 3, recordedAt: '2026-08-01T12:00:00Z' },
+      { metricId: 'pullups', value: 6, recordedAt: '2026-09-01T12:00:00Z' },
+      { metricId: 'pullups', value: 99, recordedAt: '2027-09-01T12:00:00Z' },
+    ];
+    expect(latestAssessment(values, 'pullups', now)?.value).toBe(6);
+    expect(assessmentTrend(values, 'pullups', now)).toBe(3);
   });
 
   it('does not let unfinished optional additions lower required-workout quality', () => {
