@@ -3,6 +3,11 @@
 import { ChangeEvent, useState } from 'react';
 import { clearAllHumanHealthData, createFullHealthArchive, downloadJson, importFullHealthArchive } from '@/lib/connected-health';
 
+function isFailureMessage(message: string) {
+  const value = message.toLowerCase();
+  return value.includes('could not') || value.includes('invalid') || value.includes('failed') || value.includes('incomplete') || value.includes('error');
+}
+
 export function FullArchiveControls() {
   const [mode, setMode] = useState<'merge' | 'replace'>('merge');
   const [busy, setBusy] = useState(false);
@@ -46,10 +51,11 @@ export function FullArchiveControls() {
     } finally { setBusy(false); }
   }
 
+  const failure = isFailureMessage(message);
   return <section className="card" aria-labelledby="full-archive-title">
     <h2 id="full-archive-title">Complete data portability</h2>
     <p className="muted">The complete archive combines training, preferences, readiness, assessments, connected observations/source states/sync cursors, and Phase 5 preventive records/reminders. Processing stays in this browser.</p>
-    {message && <p className={message.toLowerCase().includes('could not') || message.toLowerCase().includes('invalid') || message.toLowerCase().includes('failed') ? 'connection-state storage-error' : 'connection-state online'} role="status">{message}</p>}
+    {message && <p className={failure ? 'connection-state storage-error' : 'connection-state online'} role={failure ? 'alert' : 'status'} aria-live={failure ? 'assertive' : 'polite'}>{message}</p>}
     <div className="settings-grid"><label><b>Import behaviour</b><select value={mode} onChange={event => setMode(event.target.value as typeof mode)}><option value="merge">Merge, keep current records</option><option value="replace">Replace after validation</option></select></label><label className="file-button"><b>Import complete archive</b><span>Choose a human-health-full JSON file</span><input type="file" accept=".json,application/json" disabled={busy} onChange={event => void importFull(event)}/></label></div>
     <div className="button-row"><button className="primary" disabled={busy} onClick={() => void exportFull()}>Export complete archive</button><button className="danger" disabled={busy} onClick={() => void clearAll()}>Delete all local data</button></div>
   </section>;
