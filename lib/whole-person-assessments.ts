@@ -5,18 +5,28 @@ import { microSessions } from './whole-person-skills';
 import type { CapabilityDomain } from './whole-person-types';
 
 export type Assessment = { metricId: string; value: number; recordedAt: string; note?: string };
-export function latestAssessment(assessments: Assessment[], id: string) {
-  return assessments.filter(item => item.metricId === id).sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())[0] || null;
+
+function validAssessmentValues(assessments: Assessment[], id: string, now = new Date()) {
+  const ceiling = now.getTime() + 5 * 60_000;
+  return assessments
+    .filter(item => item.metricId === id && Number.isFinite(item.value))
+    .map(item => ({ item, timestamp: Date.parse(item.recordedAt) }))
+    .filter(value => Number.isFinite(value.timestamp) && value.timestamp <= ceiling)
+    .sort((a, b) => a.timestamp - b.timestamp);
 }
-export function assessmentTrend(assessments: Assessment[], id: string) {
-  const values = assessments.filter(item => item.metricId === id).sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
-  return values.length < 2 ? null : values.at(-1)!.value - values[0].value;
+
+export function latestAssessment(assessments: Assessment[], id: string, now = new Date()) {
+  return validAssessmentValues(assessments, id, now).at(-1)?.item || null;
+}
+export function assessmentTrend(assessments: Assessment[], id: string, now = new Date()) {
+  const values = validAssessmentValues(assessments, id, now);
+  return values.length < 2 ? null : values.at(-1)!.item.value - values[0].item.value;
 }
 
 export type AthleticPlan = { domain: 'power' | 'balance' | 'movement'; name: string; items: string[]; reason: string; impact: 'low' | 'moderate' };
-export function athleticPlan(assessments: Assessment[], readiness: 'normal' | 'reduced' | 'recovery', options: { highImpactAllowed?: boolean; equipment?: Equipment[] } = {}): AthleticPlan[] {
-  if (readiness === 'recovery') return [{ domain: 'balance', name: 'Low-risk balance + coordination', items: ['Supported single-leg balance 2 × 20–30 sec/side', 'Heel-to-toe walk or controlled march'], reason: 'Recovery-first mode avoids high-impact power work.', impact: 'low' }];
-  const balance = latestAssessment(assessments, 'single-leg-balance')?.value || 0;
+export function athleticPlan(assessments: Assessment[], readiness: 'normal' | 'reduced' | 'recovery', options: { highImpactAllowed?: boolean; equipment?: Equipment[]; now?: Date } = {}): AthleticPlan[] {
+  if (readiness === 'recovery') return [];
+  const balance = latestAssessment(assessments, 'single-leg-balance', options.now)?.value || 0;
   const plans: AthleticPlan[] = [];
   if (balance < 30 || options.highImpactAllowed === false) plans.push({ domain: 'balance', name: 'Balance foundation', items: ['Single-leg balance 3 × 20–30 sec/side', 'Step-down control 2 × 6/side', 'Heel-to-toe walk 2 × 10 steps'], reason: options.highImpactAllowed === false ? 'High-impact work is disabled, so athletic development stays with balance and coordination.' : 'Build repeatable single-leg control and coordination.', impact: 'low' });
   if (readiness === 'normal' && options.highImpactAllowed !== false) plans.push({ domain: 'power', name: 'Low-volume power', items: ['3–5 sets of 2–3 crisp jumps or explosive reps', 'Full recovery between sets'], reason: 'Train power without turning it into conditioning.', impact: 'moderate' });
@@ -28,7 +38,12 @@ export function weeklyMinutes(doses: ActivityDose[], domain: CapabilityDomain, n
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   start.setDate(start.getDate() - 6);
-  return doses.filter(item => item.domain === domain && new Date(item.completedAt) >= start).reduce((sum, item) => sum + (item.minutes || 0), 0);
+  const ceiling = now.getTime();
+  return doses.filter(item => {
+    if (item.domain !== domain) return false;
+    const timestamp = Date.parse(item.completedAt);
+    return Number.isFinite(timestamp) && timestamp >= start.getTime() && timestamp <= ceiling;
+  }).reduce((sum, item) => sum + (item.minutes || 0), 0);
 }
 export function targetProgress(current: number, target: number) {
   return target <= 0 ? 0 : Math.min(1, current / target);
