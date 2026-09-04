@@ -26,6 +26,14 @@ export type RecoverableAppleImportOptions = {
 
 type SourceBackup = { observations: HealthObservation[]; source: HealthSourceState | null };
 
+function cloneObservation(value: HealthObservation): HealthObservation {
+  return structuredClone(value);
+}
+
+function cloneSource(value: HealthSourceState | null) {
+  return value ? structuredClone(value) : null;
+}
+
 /**
  * Streams an Apple Health export without retaining the full parsed observation set,
  * while snapshotting only sources that are actually touched. If parsing, IndexedDB,
@@ -44,7 +52,10 @@ export async function importAppleHealthXmlRecoverably(file: File, options: Recov
       repository.listObservations({ sourceId }),
       repository.getSource(sourceId),
     ]);
-    backups.set(sourceId, { observations, source });
+    backups.set(sourceId, {
+      observations: observations.map(cloneObservation),
+      source: cloneSource(source),
+    });
   };
 
   const rollback = async () => {
@@ -53,9 +64,9 @@ export async function importAppleHealthXmlRecoverably(file: File, options: Recov
       try {
         await repository.deleteSource(sourceId);
         if (backup.observations.length) {
-          await repository.upsertBatch(sourceId, { observations: backup.observations, deletedExternalIds: [], complete: true });
+          await repository.upsertBatch(sourceId, { observations: backup.observations.map(cloneObservation), deletedExternalIds: [], complete: true });
         }
-        if (backup.source) await repository.saveSource(backup.source);
+        if (backup.source) await repository.saveSource(structuredClone(backup.source));
       } catch (error) {
         failures.push(`${sourceId}: ${error instanceof Error ? error.message : 'rollback failed'}`);
       }
