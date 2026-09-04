@@ -1,4 +1,5 @@
 import { chooseSourceForMetric, observationFreshness, sourceFreshness } from './freshness';
+import { deviceLocalDayKey } from './local-day';
 import { metricDefinitions } from './metrics';
 import { ConnectedHealthPreferences, ConnectedMetric, HealthObservation, HealthSourceState } from './types';
 
@@ -20,15 +21,6 @@ export type MetricTrend = {
 
 const additiveMetrics = new Set<ConnectedMetric>(['steps', 'sleep-duration', 'sleep-stage', 'distance', 'active-energy', 'workout-duration', 'water', 'protein', 'fibre', 'fruit-vegetable-servings']);
 
-function dayKey(value: string) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return '';
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 function average(values: number[]) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 }
@@ -36,7 +28,7 @@ function average(values: number[]) {
 function dailyValues(observations: HealthObservation[], metric: ConnectedMetric) {
   const groups = new Map<string, number[]>();
   observations.forEach(observation => {
-    const key = dayKey(observation.endTime || observation.startTime);
+    const key = deviceLocalDayKey(observation.endTime || observation.startTime);
     if (!key) return;
     groups.set(key, [...(groups.get(key) || []), observation.value]);
   });
@@ -112,8 +104,8 @@ export function metricTrend(
     status: trendStatus(source, latest, now),
     sampleDays: current.length,
     note: changePercent === null
-      ? `${source.displayName} has ${current.length} current-window day${current.length === 1 ? '' : 's'}, but a comparable prior window is not yet available.`
-      : `${days}-day average compared with the preceding ${days} days from ${source.displayName}. Direction is descriptive and is not a diagnosis.`,
+      ? `${source.displayName} has ${current.length} current-window device-local day${current.length === 1 ? '' : 's'}, but a comparable prior window is not yet available.`
+      : `${days}-day average compared with the preceding ${days} device-local days from ${source.displayName}. Direction is descriptive and is not a diagnosis.`,
   };
 }
 
