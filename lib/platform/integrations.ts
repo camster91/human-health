@@ -57,11 +57,13 @@ export function getIntegrationHost(): HumanHealthIntegrationHost | null {
 }
 
 /**
- * This call performs an external share and therefore must only be invoked from
- * an explicit user action after the UI has shown the selected scopes.
+ * External sharing requires a positive confirmation from the immediate user
+ * action. Callers cannot rely on a comment or UI convention alone.
  */
-export async function shareIntegrationBundle(bundle: IntegrationBundle) {
+export async function shareIntegrationBundle(bundle: IntegrationBundle, options: { confirmed: boolean }) {
+  if (options.confirmed !== true) throw new Error('Explicit user confirmation is required before sharing Human Health data.');
   if (!integrationBundleContainsOnlyScopes(bundle)) throw new Error('Integration bundle contains data outside its declared scopes.');
+  if (!bundle.scopes.length) throw new Error('Integration bundle has no declared scopes.');
   const host = getIntegrationHost();
   if (!host) throw new Error('No Human Health integration host is connected.');
   const description = await host.describe();
