@@ -21,7 +21,8 @@ The recommendation itself is deterministic. The optional AI contract receives th
 - Cardio uses planned aerobic coverage against the configured target; incidental movement is not silently counted as planned cardio.
 - Consistency compares qualifying recent sessions with the preceding period.
 - Recovery uses explicit readiness check-ins.
-- Connected-health trends retain current/stale/partial/failed state. Only current connected signals are assigned usable coaching confidence; stale/partial/failed data remains visible as context but is not allowed to drive a current action.
+- Connected-health trends retain current/stale/partial/failed state. Only current signals with a comparable trend window receive usable coaching confidence.
+- Connected-health up/down directions remain value-neutral; the coaching layer does not label a resting-heart-rate, sleep, steps or cardio-fitness direction medically better or worse.
 - No cross-domain universal health score is created.
 
 ## Plateau / deload review
@@ -44,13 +45,15 @@ Recommendations can account for:
 - plateau/deload evidence
 - current connected-health trend context
 
-Recent workload can cause the coach to advise against stacking another hard lower-body stressor. Life modes shape the coaching recommendation before deficit chasing.
+Recent workload can cause the coach to advise against stacking another hard lower-body stressor. Life modes shape the coaching recommendation before deficit chasing. Fresh connected sleep can also influence readiness through the existing Phase 3 readiness bridge while stale connected signals remain non-authoritative.
 
 ## Conversational adaptation review
 
-The parser recognizes bounded time limits, low-energy wording, travel/return/maintenance context, known gym profiles, unavailable equipment and goal hints. It returns a reversible structured suggestion; it does not silently change history or preferences.
+The parser recognizes bounded time limits, low-energy wording, travel/return/maintenance context, known gym profiles, unavailable equipment and goal hints.
 
-Symptom and treatment language is not interpreted as medical coaching. Pain, injury, dizziness, illness, glucose-adjacent warning language, insulin, medication, correction or carbohydrate-treatment wording routes to a safety boundary instead of diagnosis or dosing advice.
+Recognized context is now passed into the existing adaptive workout, readiness, workload and rolling-schedule engines to create a **preview-only workout plan**. The preview can show compatible substitutions, reduced set volume and held progression without creating an active workout or changing history, preferences or schedule events.
+
+Symptom and treatment language is not interpreted as medical coaching. Pain, injury, dizziness, illness, glucose-adjacent warning language, insulin, medication, correction or carbohydrate-treatment wording causes the workout preview to be withheld and routes the user to the safety boundary instead of diagnosis, dosing advice or training clearance.
 
 ## AI explanation review
 
@@ -60,7 +63,9 @@ The optional `window.HumanHealthCoachAI` adapter is narrative-only. The request 
 - the safety boundary
 - explicit rules prohibiting action changes, confidence upgrades, diagnosis, medication/insulin/carb dosing and universal health scoring
 
-No provider is bundled with credentials. Deterministic explanations remain available without AI. Source tests also preserve the snapshot before and after an injected narrative provider call to demonstrate that narrative generation does not mutate deterministic actions or evidence.
+No provider is bundled with credentials. Deterministic explanations remain available without AI. Source tests preserve the snapshot before and after an injected narrative provider call to demonstrate that narrative generation does not mutate deterministic actions or evidence.
+
+The provider contract receives evidence summaries rather than raw connected-health records. A host that connects a remote provider is responsible for disclosing destination, retention and privacy behaviour before use; Phase 4 itself creates no cloud account or background AI upload. See `docs/phase-4-safety-privacy.md`.
 
 ## Movement/video review
 
@@ -68,7 +73,7 @@ Camera/video analysis is not enabled. The reliability gate requires explicit rev
 
 ## UX/PWA review
 
-A dedicated `/coach/` route presents next actions, evidence, plateau/deload review, multi-goal planning, conversational adaptation, explanation-layer status and the movement/video gate. The global quick-route control exposes Coach and Health outside the focused live-workout screen. `/coach/` is included in the service-worker precache and static PWA check expectations.
+A dedicated `/coach/` route presents next actions, evidence, plateau/deload review, multi-goal planning, conversational adaptation with workout preview, explanation-layer status and the movement/video gate. The global quick-route control exposes Coach and Health outside the focused live-workout screen. `/coach/` is included in the service-worker precache and static PWA check expectations.
 
 The existing compact Coach tab in the training shell remains a session-note surface; the advanced Phase 4 coaching experience is the dedicated `/coach/` route. This avoids a risky wholesale rewrite of the mature live-workout shell during the coaching phase.
 
