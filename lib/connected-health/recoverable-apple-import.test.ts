@@ -105,4 +105,65 @@ describe('recoverable streamed Apple Health import', () => {
     expect(observations).toEqual([]);
     expect(currentSource).toBeNull();
   });
+
+  it('remains duplicate-safe when the same successful import is retried', async () => {
+    const sourceId = 'import:apple:retry';
+    const imported = observation(sourceId, 'stable-record', 4500);
+    let observations: HealthObservation[] = [];
+    let currentSource: HealthSourceState | null = null;
+
+    const repository = {
+      async listObservations(query: { sourceId?: string }) { return observations.filter(item => !query.sourceId || item.sourceId === query.sourceId); },
+      async getSource() { return currentSource; },
+      async upsertBatch(id: string, batch: { observations: HealthObservation[] }) {
+        for (const next of batch.observations) {
+          observations = observations.filter(item => item.sourceId !== id || item.provenance.externalId !== next.provenance.externalId);
+          observations.push(next);
+        }
+      },
+      async deleteSource(id: string) { observations = observations.filter(item => item.sourceId !== id); currentSource = null; },
+      async saveSource(next: HealthSourceState) { currentSource = next; },
+    };
+    const parser = async (_file: File, onBatch: (items: HealthObservation[]) => Promise<void> | void) => {
+      await onBatch([structuredClone(imported)]);
+      return {
+        observations: [], importedCount: 1, parsedTags: 1, skippedTags: 0, unsupportedTypes: {}, warnings: [],
+        sourceSummaries: [{ sourceId, provider: 'apple-health' as const, displayName: 'Apple Watch', importedAt: imported.provenance.importedAt, metrics: ['steps' as const], count: 1 }],
+      };
+    };
+    const saveSummaries = async () => { currentSource = source(sourceId, observations.length); };
+
+    await importAppleHealthXmlRecoverably({} as File, { repository, parser: parser as never, saveSummaries });
+    await importAppleHealthXmlRecoverably({} as File, { repository, parser: parser as never, saveSummaries });
+
+    expect(observations).toHaveLength(1);
+    expect(observations[0].provenance.externalId).toBe('stable-record');
+    expect(currentSource?.recordCount).toBe(1);
+  });
+
+  it('surfaces rollback failure separately with the affected source id', async () => {
+    const sourceId = 'import:apple:rollback-failure';
+    let observations: HealthObservation[] = [];
+    let rollbackStarted = false;
+
+    const repository = {
+      async listObservations(query: { sourceId?: string }) { return observations.filter(item => !query.sourceId || item.sourceId === query.sourceId); },
+      async getSource() { return null; },
+      async upsertBatch(_id: string, batch: { observations: HealthObservation[] }) { observations = [...observations, ...batch.observations]; },
+      async deleteSource(id: string) {
+        rollbackStarted = true;
+        throw new Error(`cannot restore ${id}`);
+      },
+      async saveSource() {},
+    };
+    const parser = async (_file: File, onBatch: (items: HealthObservation[]) => Promise<void> | void) => {
+      await onBatch([observation(sourceId, 'new', 5000)]);
+      throw new Error('late parser failure');
+    };
+
+    await expect(importAppleHealthXmlRecoverably({} as File, { repository, parser: parser as never, saveSummaries: async () => {} }))
+      .rejects.toThrow(`Automatic rollback also failed: ${sourceId}: cannot restore ${sourceId}`);
+    expect(rollbackStarted).toBe(true);
+    expect(observations).toHaveLength(1);
+  });
 });
