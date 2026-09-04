@@ -40,7 +40,7 @@ export function skillAssessmentValue(step: SkillStep, assessment: SkillAssessmen
 export function skillAssessmentPasses(step: SkillStep, assessment: SkillAssessment) {
   if (assessment.pain || !assessment.clean) return false;
   const value = skillAssessmentValue(step, assessment);
-  if (typeof value === 'number' && typeof step.targetValue === 'number') {
+  if (typeof value === 'number' && Number.isFinite(value) && typeof step.targetValue === 'number') {
     if (step.metric === 'assistance-kg') return value <= step.targetValue;
     return value >= step.targetValue;
   }
@@ -52,18 +52,25 @@ export function skillAssessmentsAreComparable(first: SkillAssessment, second: Sk
   if ((first.variation || '') !== (second.variation || '')) return false;
   const eitherUsesAssistance = typeof first.assistanceKg === 'number' || typeof second.assistanceKg === 'number';
   if (eitherUsesAssistance && (typeof first.assistanceKg !== 'number' || typeof second.assistanceKg !== 'number')) return false;
+  if (typeof first.assistanceKg === 'number' && !Number.isFinite(first.assistanceKg)) return false;
+  if (typeof second.assistanceKg === 'number' && !Number.isFinite(second.assistanceKg)) return false;
   return true;
 }
 
-export function recommendSkillProgression(treeId: string, currentStepId: string, assessments: SkillAssessment[]): SkillRecommendation {
+export function recommendSkillProgression(treeId: string, currentStepId: string, assessments: SkillAssessment[], now = new Date()): SkillRecommendation {
   const tree = skillTrees.find(item => item.id === treeId);
   if (!tree) return { action: 'hold', stepId: currentStepId, message: 'Skill tree not found.' };
-  const index = Math.max(0, tree.steps.findIndex(step => step.id === currentStepId));
+  const index = tree.steps.findIndex(step => step.id === currentStepId);
+  if (index < 0) return { action: 'hold', stepId: currentStepId, message: 'The saved skill step is no longer valid. Choose a current step before changing progression.' };
   const currentStep = tree.steps[index];
+  const futureCeiling = now.getTime() + 5 * 60_000;
   const recent = assessments
     .filter(item => item.treeId === treeId && item.stepId === currentStepId)
-    .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
-    .slice(0, 3);
+    .map(item => ({ item, timestamp: Date.parse(item.recordedAt) }))
+    .filter(value => Number.isFinite(value.timestamp) && value.timestamp <= futureCeiling)
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, 3)
+    .map(value => value.item);
 
   if (recent.some(item => item.pain)) return { action: 'hold', stepId: currentStepId, message: 'Discomfort was reported. Hold progression and reassess rather than advancing.' };
   const latestPair = recent.slice(0, 2);
@@ -98,19 +105,6 @@ export function availableSkillTrees(equipment: Equipment[]) {
   return skillTrees.filter(tree => availableSkillSteps(tree, equipment).length > 0);
 }
 
-export type AthleticSession = { id: string; name: string; domain: 'power' | 'balance' | 'movement'; minutes: number; items: string[]; impact: 'low' | 'moderate' };
-export const athleticSessions: AthleticSession[] = [
-  { id: 'balance-base', name: 'Balance + coordination base', domain: 'balance', minutes: 8, impact: 'low', items: ['Single-leg balance 3 × 20–40 sec/side', 'Heel-to-toe walk 2 × 10 steps', 'Controlled step-down 2 × 6/side'] },
-  { id: 'power-base', name: 'Low-volume power', domain: 'power', minutes: 10, impact: 'moderate', items: ['Low pogo or snap-down practice 3 × 5', 'Countermovement jump 3 × 3 with full rest', 'Fast bodyweight squat 2 × 5'] },
-  { id: 'movement-carry', name: 'Carry + locomotion', domain: 'movement', minutes: 10, impact: 'low', items: ['Suitcase carry 3 × 30 sec/side', 'Farmer carry 3 × 30 sec', 'Backward walk or controlled march 3 × 30 sec'] },
-];
-
-export function athleticRecommendation(options: { pain?: boolean; lowEnergy?: boolean; highImpactOkay?: boolean; recentLowerBody?: boolean; recentHardCardio?: boolean; canCarry?: boolean }) {
-  if (options.pain || options.highImpactOkay === false || options.recentLowerBody || options.recentHardCardio) return athleticSessions.find(session => session.id === 'balance-base')!;
-  if (options.lowEnergy) return options.canCarry === false ? athleticSessions.find(session => session.id === 'balance-base')! : athleticSessions.find(session => session.id === 'movement-carry')!;
-  return athleticSessions.find(session => session.id === 'power-base')!;
-}
-
 export type DailyPlan = { mode: LifeMode; minutes: number; domains: CapabilityDomain[]; message: string; sessionIds: string[] };
 
 function uniqueCompletedSessions(doses: ActivityDose[]) {
@@ -136,11 +130,16 @@ export function domainDeficits(
   start.setDate(start.getDate() - 6);
   const cardioTarget = options.cardioTargetMinutes ?? weeklyTargets.find(target => target.domain === 'cardio')?.minutes ?? 150;
   const priorityOrder: Record<DomainPriority, number> = { focus: 0, maintain: 1, deprioritize: 2, off: 3 };
+  const nowTime = now.getTime();
 
   return weeklyTargets
     .filter(target => drivesCatchUp(options.priorities?.[target.domain] || 'maintain'))
     .map(target => {
-      const recent = activity.filter(item => item.domain === target.domain && new Date(item.completedAt) >= start);
+      const recent = activity.filter(item => {
+        if (item.domain !== target.domain) return false;
+        const timestamp = Date.parse(item.completedAt);
+        return Number.isFinite(timestamp) && timestamp >= start.getTime() && timestamp <= nowTime;
+      });
       const minutes = target.domain === 'cardio'
         ? recent.filter(activityCountsTowardCardioTarget).reduce((sum, item) => sum + cardioEquivalentMinutes(item.minutes || 0, item.effort || 'moderate'), 0)
         : recent.reduce((sum, item) => sum + (item.minutes || 0), 0);
@@ -161,16 +160,22 @@ export function minimumEffectiveDay(options: {
   cardioTargetMinutes?: number;
   priorities?: Partial<Record<CapabilityDomain, DomainPriority>>;
   equipment?: Equipment[];
+  now?: Date;
 }): DailyPlan {
   const mode = options.mode || 'normal';
   const availableMinutes = Math.max(0, Math.floor(options.availableMinutes));
   const equipment = options.equipment || ['bodyweight'];
-  const deficits = domainDeficits(options.activity, new Date(), { cardioTargetMinutes: options.cardioTargetMinutes, priorities: options.priorities });
+  const now = options.now || new Date();
+  const deficits = domainDeficits(options.activity, now, { cardioTargetMinutes: options.cardioTargetMinutes, priorities: options.priorities });
 
   if (options.readiness.level === 'recovery') {
-    const sessions = minimumEffectiveOptions(availableMinutes, ['mobility'], equipment);
-    const chosen = sessions[0];
-    return { mode, minutes: chosen?.minutes || 0, domains: chosen ? [chosen.domain] : [], message: 'Recovery signals take priority. Keep today easy and avoid chasing missed training volume.', sessionIds: chosen ? [chosen.id] : [] };
+    return {
+      mode,
+      minutes: 0,
+      domains: [],
+      message: 'Pain or illness was flagged, so Human Health pauses automatic exercise suggestions. The app cannot determine whether training is safe; use your established care/safety plan or appropriate professional support before resuming.',
+      sessionIds: [],
+    };
   }
 
   const modeDomains: CapabilityDomain[] = mode === 'travel'
