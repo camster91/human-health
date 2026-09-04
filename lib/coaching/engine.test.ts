@@ -15,6 +15,21 @@ function benchEntry(at: string, weight: number, reps = 5): HistoryEntry {
   };
 }
 
+function lowerEntry(at: string): HistoryEntry {
+  return {
+    session: 'lower-a',
+    status: 'completed',
+    completedAt: at,
+    exercises: [{
+      id: 'squat', name: 'Barbell Back Squat', movement: 'squat', equipment: ['barbell','rack'], priority: 'primary', repRange: [5,8], sets: 4,
+      logs: Array.from({ length: 4 }, () => ({ weight: 80, reps: 6, rir: 2, formQuality: 'good' as const, completedAt: at })),
+    }, {
+      id: 'rdl', name: 'Romanian Deadlift', movement: 'hinge', equipment: ['barbell'], priority: 'secondary', repRange: [6,10], sets: 3,
+      logs: Array.from({ length: 3 }, () => ({ weight: 70, reps: 8, rir: 2, formQuality: 'good' as const, completedAt: at })),
+    }],
+  };
+}
+
 describe('Phase 4 plateau and deload logic', () => {
   it('requires repeated comparable evidence before calling a plateau', () => {
     const result = assessPlateaus([benchEntry('2026-09-01T12:00:00Z', 80), benchEntry('2026-09-08T12:00:00Z', 80)], [], new Date('2026-09-10T12:00:00Z'));
@@ -33,6 +48,13 @@ describe('Phase 4 plateau and deload logic', () => {
       { recordedAt: '2026-09-03T08:00:00Z', input: { soreness: 'high' as const } },
     ];
     expect(assessPlateaus(history, readiness, new Date('2026-09-03T12:00:00Z'))[0].deloadSuggested).toBe(true);
+  });
+
+  it('distinguishes progression and regression from a plateau', () => {
+    const improving = [benchEntry('2026-08-01T12:00:00Z', 70), benchEntry('2026-08-08T12:00:00Z', 72.5), benchEntry('2026-08-22T12:00:00Z', 77.5), benchEntry('2026-09-01T12:00:00Z', 80)];
+    const regressing = [benchEntry('2026-08-01T12:00:00Z', 80), benchEntry('2026-08-08T12:00:00Z', 80), benchEntry('2026-08-22T12:00:00Z', 75), benchEntry('2026-09-01T12:00:00Z', 72.5)];
+    expect(assessPlateaus(improving, [], new Date('2026-09-03T12:00:00Z'))[0].status).toBe('progressing');
+    expect(assessPlateaus(regressing, [], new Date('2026-09-03T12:00:00Z'))[0].status).toBe('regressing');
   });
 });
 
@@ -63,5 +85,19 @@ describe('Phase 4 goal balancing and actions', () => {
     expect(snapshot.actions[0].kind).toBe('recover');
     expect(snapshot.actions.every(action => action.reversible)).toBe(true);
     expect(snapshot.safetyBoundary).toContain('insulin');
+  });
+
+  it('uses explicit life mode before generic deficit chasing', () => {
+    const preferences = { ...defaultPreferences, lifeMode: 'travel' as const };
+    const snapshot = createCoachingSnapshot({ history: [], activity: [], readiness: [], preferences, now: new Date('2026-09-03T12:00:00Z') });
+    expect(snapshot.actions[0].id).toBe('life-mode');
+    expect(snapshot.actions[0].instruction).toContain('portable substitutions');
+  });
+
+  it('avoids stacking another hard lower-body stressor after recent demanding lower work', () => {
+    const now = new Date('2026-09-03T12:00:00Z');
+    const snapshot = createCoachingSnapshot({ history: [lowerEntry('2026-09-03T06:00:00Z')], activity: [], readiness: [], preferences: defaultPreferences, now });
+    expect(snapshot.actions.some(action => action.id === 'avoid-stacking')).toBe(true);
+    expect(snapshot.evidence.find(item => item.id === 'recent-load')?.observation).toContain('Lower-body training');
   });
 });
