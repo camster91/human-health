@@ -64,7 +64,10 @@ export type WorkoutExercise = Exercise & {
   sets: number;
   logs: SetLog[];
   originalId?: string;
+  /** Optional additions never reduce required-session completion. */
   optional?: boolean;
+  /** A planned exercise explicitly left unfinished; preserved for truthful partial-session accounting. */
+  deferred?: boolean;
 };
 
 export type SessionId = 'upper-a' | 'lower-a' | 'upper-b' | 'lower-b';
