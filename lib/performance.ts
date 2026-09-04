@@ -50,10 +50,8 @@ export function skillAssessmentPasses(step: SkillStep, assessment: SkillAssessme
 export function skillAssessmentsAreComparable(first: SkillAssessment, second: SkillAssessment) {
   if ((first.metric || null) !== (second.metric || null)) return false;
   if ((first.variation || '') !== (second.variation || '')) return false;
-  if (typeof first.assistanceKg === 'number' || typeof second.assistanceKg === 'number') {
-    if (typeof first.assistanceKg !== 'number' || typeof second.assistanceKg !== 'number') return false;
-    if (Math.abs(first.assistanceKg - second.assistanceKg) > 2.5) return false;
-  }
+  const eitherUsesAssistance = typeof first.assistanceKg === 'number' || typeof second.assistanceKg === 'number';
+  if (eitherUsesAssistance && (typeof first.assistanceKg !== 'number' || typeof second.assistanceKg !== 'number')) return false;
   return true;
 }
 
@@ -70,7 +68,7 @@ export function recommendSkillProgression(treeId: string, currentStepId: string,
   if (recent.some(item => item.pain)) return { action: 'hold', stepId: currentStepId, message: 'Discomfort was reported. Hold progression and reassess rather than advancing.' };
   const latestPair = recent.slice(0, 2);
   if (latestPair.length === 2 && !skillAssessmentsAreComparable(latestPair[0], latestPair[1])) {
-    return { action: 'hold', stepId: currentStepId, message: 'The two latest results used different assistance or test conditions. Repeat a comparable assessment before changing level.' };
+    return { action: 'hold', stepId: currentStepId, message: 'The two latest results used different assistance records or test conditions. Repeat a comparable assessment before changing level.' };
   }
   const assistanceStableOrLower = currentStep.id !== 'assisted'
     || typeof latestPair[0]?.assistanceKg !== 'number'
