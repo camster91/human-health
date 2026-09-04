@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AthleticLevel, athleticLevelSession, recommendAthleticProgression } from '@/lib/athletic-progression';
 import { GymProfile, HistoryEntry, SessionId } from '@/lib/domain';
 import { coordinateCardio, powerAllowed, recentTrainingLoad } from '@/lib/load-management';
-import { availableSkillTrees, minimumEffectiveDay, recommendSkillProgression, SkillAssessment } from '@/lib/performance';
+import { minimumEffectiveDay } from '@/lib/performance';
 import { UserPreferences } from '@/lib/preferences';
 import { store } from '@/lib/storage';
 import {
@@ -14,22 +14,18 @@ import {
   ReadinessInput,
   ReadinessRecord,
   athleticPlan,
-  capabilityMetrics,
   cardioOptions,
   cardioPrescription,
   corePrescription,
-  latestAssessment,
   microSessions,
   mobilityPrescription,
   progressionTracks,
   readinessDecisionFromRecords,
   readinessTrend,
-  skillTrees,
 } from '@/lib/whole-person';
 import { cardioCoverage } from '@/lib/capability-trends';
 
 const modalities: CardioModality[] = ['walk', 'run', 'cycle', 'row', 'incline-treadmill', 'other'];
-const assessmentMetricIds = ['pullups', 'dead-hang', 'ankle-mobility', 'single-leg-balance', 'jump', 'carry'];
 
 function title(value: string) {
   return value.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
@@ -222,76 +218,5 @@ export function WholePersonDashboard({
   </>;
 }
 
-export function SkillProgressPanel({ gym }: { gym: GymProfile }) {
-  const [skills, setSkills] = useState<Record<string, string>>({});
-  const [assessments, setAssessments] = useState<SkillAssessment[]>([]);
-  const [inputs, setInputs] = useState<Record<string, { value: number; assistanceKg: number; variation: string; pain: boolean }>>({});
-  const [notice, setNotice] = useState('');
-  useEffect(() => { setSkills(store.loadSkills()); setAssessments(store.loadSkillAssessments()); }, []);
-  const trees = availableSkillTrees(gym.equipment);
-
-  function currentStepId(treeId: string) {
-    const tree = skillTrees.find(item => item.id === treeId)!;
-    const available = tree.steps.filter(step => step.requiredEquipment.every(item => gym.equipment.includes(item)));
-    return available.some(step => step.id === skills[treeId]) ? skills[treeId] : available[0]?.id;
-  }
-
-  function record(treeId: string) {
-    const tree = skillTrees.find(item => item.id === treeId);
-    const stepId = currentStepId(treeId);
-    const step = tree?.steps.find(item => item.id === stepId);
-    if (!tree || !step) return;
-    const input = inputs[treeId] || { value: 0, assistanceKg: 0, variation: '', pain: false };
-    const entry: SkillAssessment = { treeId, stepId, passed: input.value >= (step.targetValue || 0), clean: !input.pain, pain: input.pain, metric: step.metric, value: input.value, assistanceKg: step.id === 'assisted' ? input.assistanceKg : undefined, externalLoadKg: step.metric === 'external-load-kg' ? input.value : undefined, variation: input.variation.trim(), recordedAt: new Date().toISOString() };
-    const next = [...assessments, entry];
-    if (!store.saveSkillAssessments(next)) { setNotice('The skill assessment could not be saved.'); return; }
-    setAssessments(next);
-    setNotice('Skill assessment saved.');
-  }
-
-  function apply(treeId: string, stepId: string) {
-    const next = { ...skills, [treeId]: stepId };
-    if (!store.saveSkills(next)) { setNotice('The selected skill level could not be saved.'); return; }
-    setSkills(next);
-  }
-
-  return <section className="card" aria-labelledby="skills-title">
-    <h2 id="skills-title">Bodyweight skills</h2>
-    <p className="muted">Progressions are equipment-aware and require two clean, comparable assessments. Assistance and external load are tracked rather than discarded.</p>
-    {notice && <div className="connection-state" role="status" aria-live="polite">{notice}</div>}
-    {trees.length === 0 && <p>No compatible bodyweight skill tree is available in this equipment profile.</p>}
-    {trees.map(tree => {
-      const stepId = currentStepId(tree.id);
-      const step = tree.steps.find(item => item.id === stepId)!;
-      const recommendation = recommendSkillProgression(tree.id, stepId, assessments);
-      const input = inputs[tree.id] || { value: 0, assistanceKg: 0, variation: '', pain: false };
-      return <div className="skill-block" key={tree.id}>
-        <div className="exercise-title"><div><span className="pill">{tree.name}</span><h3>{step.name}</h3><p className="muted">Target: {step.target}</p></div><select aria-label={`${tree.name} level`} value={stepId} onChange={event => apply(tree.id, event.target.value)}>{tree.steps.filter(item => item.requiredEquipment.every(required => gym.equipment.includes(required))).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
-        <div className="settings-grid"><label><b>{step.metric === 'seconds' ? 'Seconds' : step.metric === 'external-load-kg' ? 'Added load (kg)' : 'Best clean reps'}</b><input type="number" min="0" step="0.5" value={input.value} onChange={event => setInputs({ ...inputs, [tree.id]: { ...input, value: Number(event.target.value) } })}/></label>{step.id === 'assisted' && <label><b>Assistance (kg)</b><input type="number" min="0" step="0.5" value={input.assistanceKg} onChange={event => setInputs({ ...inputs, [tree.id]: { ...input, assistanceKg: Number(event.target.value) } })}/></label>}<label><b>Test condition</b><input value={input.variation} placeholder="e.g. assisted machine" onChange={event => setInputs({ ...inputs, [tree.id]: { ...input, variation: event.target.value } })}/></label><button className={input.pain ? 'warning active' : ''} aria-pressed={input.pain} onClick={() => setInputs({ ...inputs, [tree.id]: { ...input, pain: !input.pain } })}>Discomfort {input.pain ? 'flagged' : 'not flagged'}</button></div>
-        <button className="primary" onClick={() => record(tree.id)}>Record assessment</button>
-        <div className="coach-note">{recommendation.message}</div>
-        {recommendation.action !== 'hold' && <button className="link" onClick={() => apply(tree.id, recommendation.stepId)}>Apply {recommendation.action}: {tree.steps.find(item => item.id === recommendation.stepId)?.name}</button>}
-      </div>;
-    })}
-  </section>;
-}
-
-export function CapabilityAssessmentPanel({ assessments, onChange }: { assessments: Assessment[]; onChange: (next: Assessment[]) => void }) {
-  const [metricId, setMetricId] = useState('pullups');
-  const [value, setValue] = useState(0);
-  const [note, setNote] = useState('');
-  const [notice, setNotice] = useState('');
-  const metrics = capabilityMetrics.filter(metric => assessmentMetricIds.includes(metric.id));
-  const selected = metrics.find(metric => metric.id === metricId) || metrics[0];
-
-  function record() {
-    if (!selected || !Number.isFinite(value)) return;
-    const next = [...assessments, { metricId: selected.id, value, note: note.trim() || undefined, recordedAt: new Date().toISOString() }];
-    if (!store.saveAssessments(next)) { setNotice('The capability assessment could not be saved.'); return; }
-    onChange(next);
-    setNote('');
-    setNotice('Capability assessment saved. Use the same test conditions next time.');
-  }
-
-  return <section className="card" aria-labelledby="assessment-title"><h2 id="assessment-title">Capability assessments</h2><p className="muted">Use the same test conditions each time. Each capability remains separate rather than becoming an arbitrary universal health score.</p>{notice && <div className="connection-state" role="status" aria-live="polite">{notice}</div>}<div className="settings-grid"><label><b>Assessment</b><select value={metricId} onChange={event => setMetricId(event.target.value)}>{metrics.map(metric => <option key={metric.id} value={metric.id}>{metric.name}</option>)}</select></label><label><b>Value {selected ? `(${selected.unit})` : ''}</b><input type="number" step="0.1" value={value} onChange={event => setValue(Number(event.target.value))}/></label><label><b>Test conditions</b><input value={note} onChange={event => setNote(event.target.value)} placeholder="e.g. same shoes and surface"/></label></div><button className="primary" onClick={record}>Record assessment</button>{metrics.map(metric => { const latest = latestAssessment(assessments, metric.id); return <div className="history" key={metric.id}><b>{metric.name}</b><span>{latest ? `${latest.value} ${metric.unit}` : 'No baseline'}</span><small>{latest?.note || metric.description}</small></div>; })}</section>;
-}
+export { SkillProgressPanel } from './skill-progress-panel';
+export { CapabilityAssessmentPanel } from './capability-assessment-panel';
