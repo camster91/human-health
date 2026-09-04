@@ -21,9 +21,9 @@ function record(value: unknown, label: string): Record<string, unknown> {
 }
 
 function stringValue(value: unknown, label: string, optional = false) {
-  if (optional && value === undefined) return undefined;
-  if (typeof value !== 'string' || !value.trim() || value.length > 1000) throw new Error(`${label} must be a non-empty string.`);
-  return value;
+  if (optional && (value === undefined || value === null || (typeof value === 'string' && !value.trim()))) return undefined;
+  if (typeof value !== 'string' || !value.trim() || value.trim().length > 1000) throw new Error(`${label} must be a non-empty string.`);
+  return value.trim();
 }
 
 function optionalBoolean(value: unknown, label: string) {
