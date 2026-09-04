@@ -1,36 +1,24 @@
 # Human Health
 
-Human Health is a long-horizon adaptive health and performance coach designed for real human life: changing schedules, different gyms, limited time, variable recovery, evolving goals, and imperfect consistency.
+Human Health is a long-horizon, local-first health and performance PWA designed around one principle: **structured goals, flexible execution**.
 
-The product begins with a mobile-first adaptive training experience and is planned to expand over a 10-year lifecycle into a broader personal health system spanning strength, cardio, mobility, bodyweight skills, recovery, sleep, nutrition, preventive health, and long-term capability.
+The current product foundation combines adaptive strength training with whole-person fitness and an opt-in connected-health context layer. Workouts adapt to time, equipment, readiness, travel, interruptions and partial completion without pretending that different exercises or devices are directly equivalent.
 
-## Product principle
+## Current lifecycle state
 
-**Structured goals, flexible execution.**
+- **Phase 1:** adaptive training coach foundation
+- **Phase 2:** whole-person fitness foundation and hardening
+- **Phase 3:** connected-health context is source-complete/source-reviewed on draft PR #62; automated/browser/native verification remains pending
 
-The system should answer three practical questions:
+Phase 3 adds a provider-neutral observation model, local IndexedDB storage, Health Connect/HealthKit bridge contracts, Apple Health XML import, freshness/provenance handling, selected-source aggregation, optional hydration/nutrition habits, connected trends and complete local data portability. Native APIs are never fabricated in a browser-only PWA.
 
-1. How am I doing?
-2. What should I do today?
-3. Am I improving over time?
+## Safety and privacy
 
-## Implemented through Phase 2
+Human Health is a fitness/lifestyle product, not a medical authority. Connected observations are contextual inputs and must not be used to diagnose conditions, dose insulin or medication, perform emergency monitoring, provide injury clearance, or claim causal health conclusions.
 
-- Adaptive Upper A / Lower A / Upper B / Lower B rolling sequence
-- Live working-set and warm-up logging with rest timers
-- Pause, interruption recovery, end-early, abandon, defer, add, and substitution flows
-- Equipment-aware gym profiles and independent exercise-variant history
-- Short-on-time, low-energy, travel, return-to-training, and maintenance adaptations
-- Deterministic progression guidance with pain, form, readiness, long-gap, and workload guardrails
-- Configurable cardio targets and planned-versus-incidental activity
-- Core, mobility, bodyweight-skill, balance, power, carry, and locomotion support
-- Repeatable capability assessments and longitudinal trends
-- Local data export, preferences, and explicit storage-failure states
-- Installable static-export PWA foundation with offline fallback
+Phase 3 connected-health data remains local to the device in the current architecture. Native permissions are user initiated, imported files do not require server upload, and source provenance/freshness remains visible.
 
-Phase 2 data is local to the current browser/device. Cloud sync, data import/restore, wearable integrations, and medical features are later lifecycle work.
-
-## Local development
+## Development
 
 ```bash
 npm install
@@ -38,24 +26,32 @@ npm run typecheck
 npm test
 npm run build
 npm run check:pwa
-npm run serve:static
 ```
 
-`npm run build` creates the static site in `out/`. The production build, PWA/offline behaviour, and representative browser/device matrix must pass before a release is described as verified or production-ready.
+The repository also exposes `npm run verify` for the consolidated source/build/PWA gate.
 
-## Current review state
+GitHub Actions currently targets a self-hosted Ashbi runner. Human Health does not yet have a confirmed repository-eligible runner, so queued workflow runs are not evidence of a source failure or a successful verification. Issue #51 tracks that infrastructure dependency.
 
-The Phase 2 feature scope is implemented on the active hardening pull request. Automated verification is currently blocked by runner availability, so source completion does not yet equal verified release completion. See `docs/phase-2-final-review.md` and issue #51 for the current evidence.
+## Key docs
 
-## Documentation
+- `docs/implementation-roadmap.md` — phased product roadmap
+- `docs/10-year-lifecycle.md` — long-horizon lifecycle plan
+- `docs/phase-2-final-review.md` — Phase 2 completion review
+- `docs/phase-3-status.md` — current Phase 3 status
+- `docs/phase-3-final-review.md` — Phase 3 source review
+- `docs/phase-3-completion-checklist.md` — remaining verification/native gates
+- `docs/connected-health-architecture.md` — Phase 3 architecture
+- `docs/connected-health-privacy.md` — privacy/data ownership model
+- `docs/native-health-bridge-contract.md` — Android/Apple native host contract
 
-- [`docs/10-year-lifecycle.md`](docs/10-year-lifecycle.md)
-- [`docs/implementation-roadmap.md`](docs/implementation-roadmap.md)
-- [`docs/coaching-principles.md`](docs/coaching-principles.md)
-- [`docs/architecture-phase1.md`](docs/architecture-phase1.md)
-- [`docs/data-model-notes.md`](docs/data-model-notes.md)
-- [`docs/privacy-safety-boundaries.md`](docs/privacy-safety-boundaries.md)
-- [`docs/deployment-and-rollback.md`](docs/deployment-and-rollback.md)
-- [`docs/release-gates.md`](docs/release-gates.md)
+## Delivery rules
 
-Human Health separates fitness coaching from medical authority. It should help users observe, plan, train, recover, and understand trends without diagnosing disease, prescribing medication or insulin, clearing injuries, or replacing qualified healthcare professionals.
+- Mobile-first and PWA-capable.
+- Keep historical workout data immutable wherever practical.
+- Make automatic recommendations explainable and reversible.
+- Prefer measured data and deterministic rules over opaque scoring.
+- Treat missing, stale, imported, inferred and manually entered data differently.
+- Never silently equate exercise loads across unlike equipment.
+- Safety and recovery override progression.
+- Do not call a phase verified without executable evidence for the applicable gates.
+- Production deployment requires separate explicit approval.
