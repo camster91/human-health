@@ -40,8 +40,13 @@ function write(key: string, value: unknown) {
 }
 
 function remove(key: string) {
-  if (typeof window === 'undefined') return;
-  try { localStorage.removeItem(key); } catch { /* storage can be unavailable */ }
+  if (typeof window === 'undefined') return false;
+  try {
+    localStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function canPersist() {
@@ -82,7 +87,7 @@ export type HumanHealthExport = {
 export const store = {
   canPersist,
   loadActive(): Workout | null { return activeWorkout(read<unknown>(ACTIVE, null)); },
-  saveActive(value: Workout | null) { if (value) return write(ACTIVE, value); remove(ACTIVE); return true; },
+  saveActive(value: Workout | null) { return value ? write(ACTIVE, value) : remove(ACTIVE); },
 
   loadRestTimer(): RestTimerState | null {
     const current = sanitizeRestTimer(read<unknown>(REST_TIMER, null));
@@ -98,7 +103,12 @@ export const store = {
     remove(LEGACY_REST_UNTIL);
     return null;
   },
-  saveRestTimer(value: RestTimerState | null) { if (value) return write(REST_TIMER, value); remove(REST_TIMER); remove(LEGACY_REST_UNTIL); return true; },
+  saveRestTimer(value: RestTimerState | null) {
+    if (value) return write(REST_TIMER, value);
+    const currentRemoved = remove(REST_TIMER);
+    const legacyRemoved = remove(LEGACY_REST_UNTIL);
+    return currentRemoved && legacyRemoved;
+  },
   loadRestUntil(): number | null { const timer = store.loadRestTimer(); return timer?.status === 'running' ? timer.endsAt : null; },
   saveRestUntil(value: number | null) { return store.saveRestTimer(value ? { status: 'running', endsAt: value, durationMs: Math.max(1, value - Date.now()) } : null); },
 
@@ -140,6 +150,8 @@ export const store = {
   },
 
   clearAll() {
-    [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS].forEach(remove);
+    return [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS]
+      .map(remove)
+      .every(Boolean);
   },
 };
