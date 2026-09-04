@@ -15,6 +15,12 @@ describe('volume scaling',()=>{
     expect(result.exercises[1].sets).toBe(2);
   });
 
+  it('allows an explicit zero multiplier to withhold the automatic workout',()=>{
+    const result=applyVolumeMultiplier(exercises,0);
+    expect(result.changed).toBe(true);
+    expect(result.exercises).toEqual([]);
+  });
+
   it('does not increase or alter normal volume',()=>{
     expect(applyVolumeMultiplier(exercises,1).exercises).toEqual(exercises);
   });
