@@ -71,14 +71,16 @@ Status: merged into `main`; release verification remains separately tracked in #
 
 ## Phase 5 — Long-horizon health platform
 
-Status: source implementation is complete and under review on `phase-5-health-platform`. Executable/runtime verification and external validation evidence remain separate gates.
+Status: **source scope and final hardening complete** on draft PR #83. Executable/runtime verification, real external validation evidence and merge/deployment remain separate gates.
 
 1. User/clinician-entered preventive-health reminders and records without invented clinical schedules
 2. Clinician-friendly local discussion export with provenance and explicit non-diagnostic framing
-3. Capability-model validation registry and evidence claim gate; current built-in models remain experimental until real external validation/replication evidence is recorded
+3. Capability-model validation registry and fail-closed evidence claim gate; current built-in models remain experimental until real external validation/replication evidence is recorded
 4. Privacy-preserving deterministic personal baselines generated on-device with no automatic sharing
-5. Versioned scoped integration bundle plus optional explicit user-triggered integration-host contract
-6. Regulatory escalation checkpoints as intended use and product scope evolve
+5. Versioned scoped integration bundle plus optional explicitly confirmed integration-host contract
+6. Regulatory escalation checkpoints that fail closed on ambiguous or high-risk intended use
+7. Complete local archive/import/delete coverage for Phase 5 preventive/platform data
+8. Independent repository-wide line-by-line review prompt for the final release audit
 
 ## Delivery principles
 
