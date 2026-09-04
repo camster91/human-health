@@ -1,4 +1,5 @@
-const CACHE_VERSION = 'human-health-v9';
+const CACHE_PREFIX = 'human-health-';
+const CACHE_VERSION = `${CACHE_PREFIX}v9`;
 const CORE = ['/', '/health/', '/coach/', '/platform/', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/offline.html'];
 
 async function fetchRequired(asset) {
@@ -53,7 +54,8 @@ self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     await verifyNewCacheBeforeActivation();
     const keys = await caches.keys();
-    await Promise.all(keys.filter(key => key !== CACHE_VERSION).map(key => caches.delete(key)));
+    const staleHumanHealthCaches = keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE_VERSION);
+    await Promise.all(staleHumanHealthCaches.map(key => caches.delete(key)));
     await self.clients.claim();
   })());
 });
