@@ -12,12 +12,7 @@ export type ReadinessInput = {
 };
 export type ReadinessDecision = { level: 'normal' | 'reduced' | 'recovery'; volumeMultiplier: number; allowProgression: boolean; reasons: string[] };
 export type ReadinessRecord = { recordedAt: string; input: ReadinessInput; source?: 'manual' | 'connected-sleep'; sourceName?: string };
-
-export type EffectiveReadinessDecision = ReadinessDecision & {
-  checkInCount: number;
-  latestRecordedAt: string | null;
-  source: 'default' | 'check-in';
-};
+export type EffectiveReadinessDecision = ReadinessDecision & { checkInCount: number; latestRecordedAt: string | null; source: 'default' | 'check-in' };
 
 export function readinessDecision(input: ReadinessInput): ReadinessDecision {
   const reasons: string[] = [];
@@ -50,6 +45,12 @@ function validReadinessRecords(records: ReadinessRecord[], now = new Date()) {
     .sort((a, b) => Date.parse(a.recordedAt) - Date.parse(b.recordedAt));
 }
 
+/**
+ * Uses only recent records for the current decision, then keeps progression conservative
+ * when repeated constrained check-ins were recorded during the last week. Connected sleep
+ * can contribute through the same record model, but a recent manual sleep entry remains the
+ * authoritative override in storage.
+ */
 export function readinessDecisionFromRecords(records: ReadinessRecord[], now = new Date()): EffectiveReadinessDecision {
   const valid = validReadinessRecords(records, now);
   const recent = valid.filter(record => now.getTime() - Date.parse(record.recordedAt) <= 36 * 3_600_000);
@@ -65,20 +66,22 @@ export function readinessDecisionFromRecords(records: ReadinessRecord[], now = n
 
   const latest = recent.at(-1)!;
   const latestDecision = readinessDecision(latest.input);
-  const sixDayCutoff = now.getTime() - 6 * 86_400_000;
-  const weekly = valid.filter(record => Date.parse(record.recordedAt) >= sixDayCutoff);
-  const counts = { reduced: 0, recovery: 0 };
-  weekly.forEach(record => {
-    const level = readinessDecision(record.input).level;
-    if (level !== 'normal') counts[level]++;
-  });
-  if (latestDecision.level === 'normal' && counts.recovery >= 2) {
-    return { level: 'reduced', volumeMultiplier: 0.8, allowProgression: false, reasons: ['Recovery-first check-ins have repeated this week, so progression remains conservative despite today’s normal entry.'], checkInCount: weekly.length, latestRecordedAt: latest.recordedAt, source: 'check-in' };
-  }
-  if (latestDecision.level === 'normal' && counts.reduced + counts.recovery >= 3) {
-    return { level: 'reduced', volumeMultiplier: 0.85, allowProgression: false, reasons: ['Reduced-readiness check-ins have been common this week, so progression remains conservative today.'], checkInCount: weekly.length, latestRecordedAt: latest.recordedAt, source: 'check-in' };
-  }
-  return { ...latestDecision, checkInCount: weekly.length, latestRecordedAt: latest.recordedAt, source: 'check-in' };
+  if (latestDecision.level !== 'normal') return { ...latestDecision, checkInCount: recent.length, latestRecordedAt: latest.recordedAt, source: 'check-in' };
+
+  const cutoff = now.getTime() - 7 * 86_400_000;
+  const weekly = valid.filter(record => Date.parse(record.recordedAt) >= cutoff);
+  if (weekly.length < 3) return { ...latestDecision, checkInCount: weekly.length, latestRecordedAt: latest.recordedAt, source: 'check-in' };
+  const constrained = weekly.filter(record => readinessDecision(record.input).level !== 'normal').length;
+  if (constrained < Math.ceil(weekly.length / 2)) return { ...latestDecision, checkInCount: weekly.length, latestRecordedAt: latest.recordedAt, source: 'check-in' };
+  return {
+    level: 'reduced',
+    volumeMultiplier: 0.85,
+    allowProgression: false,
+    reasons: ['Most readiness check-ins from the last seven days were constrained, so progression stays conservative even though the latest check-in is normal.'],
+    checkInCount: weekly.length,
+    latestRecordedAt: latest.recordedAt,
+    source: 'check-in',
+  };
 }
 
 export function readinessTrend(records: ReadinessRecord[], now = new Date()) {
