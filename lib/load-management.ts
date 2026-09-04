@@ -23,10 +23,12 @@ export function recentTrainingLoad(history: HistoryEntry[], activity: ActivityDo
 
   const completed = [...history]
     .filter(entry => (entry.status || 'completed') !== 'abandoned')
-    .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
-  if (completed.length) hoursSinceAny = (now.getTime() - new Date(completed[0].completedAt).getTime()) / 3_600_000;
-  for (const entry of completed) {
-    const hours = (now.getTime() - new Date(entry.completedAt).getTime()) / 3_600_000;
+    .map(entry => ({ entry, timestamp: Date.parse(entry.completedAt) }))
+    .filter(item => Number.isFinite(item.timestamp) && item.timestamp <= now.getTime())
+    .sort((a, b) => b.timestamp - a.timestamp);
+  if (completed.length) hoursSinceAny = (now.getTime() - completed[0].timestamp) / 3_600_000;
+  for (const { entry, timestamp } of completed) {
+    const hours = (now.getTime() - timestamp) / 3_600_000;
     if (hours < 0 || hours > 48) continue;
     const sets = entry.exercises.reduce((sum, exercise) => sum + exercise.logs.filter(log => !log.warmup).length, 0);
     if (entry.session.startsWith('lower')) {
@@ -38,7 +40,9 @@ export function recentTrainingLoad(history: HistoryEntry[], activity: ActivityDo
   }
 
   for (const dose of activity.filter(item => activityCountsTowardCardioTarget(item) && item.effort === 'hard')) {
-    const hours = (now.getTime() - new Date(dose.completedAt).getTime()) / 3_600_000;
+    const timestamp = Date.parse(dose.completedAt);
+    if (!Number.isFinite(timestamp)) continue;
+    const hours = (now.getTime() - timestamp) / 3_600_000;
     if (hours < 0 || hours > 36) continue;
     hardCardioMinutes += dose.minutes || 0;
     if (hoursSinceHardCardio === null || hours < hoursSinceHardCardio) hoursSinceHardCardio = hours;
@@ -53,7 +57,7 @@ export function recentTrainingLoad(history: HistoryEntry[], activity: ActivityDo
 }
 
 export function coordinateCardio(options: CardioOption[], load: RecentTrainingLoad, readiness: 'normal' | 'reduced' | 'recovery') {
-  if (readiness === 'recovery') return options.filter(option => option.type === 'recovery');
+  if (readiness === 'recovery') return [];
   const demandingLower = load.lowerBodyRecent && load.lowerSets >= 6;
   if (demandingLower) {
     return options
@@ -65,6 +69,7 @@ export function coordinateCardio(options: CardioOption[], load: RecentTrainingLo
 
 export function powerAllowed(load: RecentTrainingLoad, readiness: 'normal' | 'reduced' | 'recovery', highImpactAllowed = true) {
   if (!highImpactAllowed) return { allowed: false, reason: 'High-impact work is disabled in preferences.' };
+  if (readiness === 'recovery') return { allowed: false, reason: 'Pain or illness was flagged, so Human Health pauses automatic athletic exercise suggestions rather than treating a lower-impact option as clearance.' };
   if (readiness !== 'normal') return { allowed: false, reason: 'Recovery/readiness is not normal, so explosive work stays low impact.' };
   if (load.lowerBodyRecent && load.lowerSets >= 6) return { allowed: false, reason: `${load.lowerSets} lower-body working sets were logged within the last 36 hours; avoid stacking extra jump fatigue.` };
   if (load.hoursSinceHardCardio !== null && load.hoursSinceHardCardio < 24 && load.hardCardioMinutes >= 15) return { allowed: false, reason: `${load.hardCardioMinutes} hard cardio minutes were logged within the last 24 hours; keep athletic work low impact today.` };
@@ -80,7 +85,7 @@ export type StrengthLoadAdjustment = {
 };
 
 export function strengthLoadAdjustment(session: SessionId, load: RecentTrainingLoad, readiness: 'normal' | 'reduced' | 'recovery'): StrengthLoadAdjustment {
-  if (readiness === 'recovery') return { reduce: true, volumeMultiplier: 0.5, pauseProgression: true, source: 'readiness', reason: 'Recovery-first readiness overrides normal strength progression.' };
+  if (readiness === 'recovery') return { reduce: true, volumeMultiplier: 0, pauseProgression: true, source: 'readiness', reason: 'Pain or illness was flagged, so Human Health pauses automatic strength suggestions instead of prescribing a reduced workout.' };
   if (session.startsWith('lower') && load.hoursSinceHardCardio !== null && load.hoursSinceHardCardio < 24 && load.hardCardioMinutes >= 20) return { reduce: true, volumeMultiplier: 0.8, pauseProgression: true, source: 'hard-cardio', reason: `Recent hard cardio (${load.hardCardioMinutes} min) may add lower-body fatigue. Keep the lower session conservative and do not force progression.` };
   if (readiness === 'reduced') return { reduce: true, volumeMultiplier: 0.8, pauseProgression: true, source: 'readiness', reason: 'Readiness is reduced; trim volume and hold load progression.' };
   return { reduce: false, volumeMultiplier: 1, pauseProgression: false, source: 'none', reason: 'Current recent workload does not require an automatic strength reduction.' };
