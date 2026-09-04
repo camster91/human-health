@@ -8,6 +8,8 @@ Base: `post-phase2-hardening`
 
 Phase 3 is **feature-scope complete and source-reviewed** for the web/PWA implementation. It is not yet release-verified because the automated verification job is waiting for a repository-eligible runner, browser QA has not run against the final candidate, and native Health Connect/HealthKit hosts are not available for device validation.
 
+The Phase 3 branch is ancestry-current with `post-phase2-hardening` and is 0 commits behind that base.
+
 ## Completed and reviewed
 
 ### Data architecture
@@ -18,6 +20,7 @@ Phase 3 is **feature-scope complete and source-reviewed** for the web/PWA implem
 - Connected archive replacement is validation-first and writes observations/sources/preferences in one IndexedDB transaction.
 - Full archive import backs up both training and connected data and attempts rollback if either storage layer fails.
 - Full local deletion is rollback-aware rather than intentionally leaving half-deleted stores.
+- Batched localStorage mutations preserve the first failure instead of allowing a later successful write/remove to erase the actionable error.
 
 ### Providers and import
 - Health Connect and HealthKit share a narrow canonical native bridge contract.
@@ -25,6 +28,8 @@ Phase 3 is **feature-scope complete and source-reviewed** for the web/PWA implem
 - Health Connect/HealthKit permissions are only requested after user action.
 - Apple Health XML import runs locally, supports bounded batching, and reports malformed/unsupported records.
 - Canonical connected JSON and complete Human Health archive export/import are supported.
+- Imported source states are validated for provider, status, metrics, permissions, freshness windows and timestamps before being accepted.
+- Unknown non-empty measurement units are rejected rather than guessed into a canonical unit.
 
 ### Health context
 - Steps/daily movement, sleep, heart rate, resting heart rate, cardio fitness, distance, active energy and workouts have canonical mappings/summaries.
@@ -34,9 +39,11 @@ Phase 3 is **feature-scope complete and source-reviewed** for the web/PWA implem
 - Overlapping sleep-stage intervals are merged before duration is calculated.
 - Connected sleep only contributes to readiness while current; recent manual sleep remains authoritative.
 - Heart-rate/workout summaries remain descriptive and explicitly non-diagnostic.
+- Native heart-rate sample IDs are independent of array ordering and measured value so provider reordering does not duplicate samples and a corrected value can update the same sample identity.
 
 ### UX/PWA/privacy
 - Dedicated `/health/` route exposes sources, permission scopes, data provenance, summaries, trends, habits and import/export controls.
+- The Health route uses the committed static PWA icon assets; an obsolete runtime icon-generator import found during review was removed.
 - Source-scoped delete does not remove unrelated providers or training history.
 - Service-worker/PWA checks include `/health/` and offline fallback behaviour.
 - Phase 3 introduces no remote health-data upload.
@@ -47,10 +54,16 @@ Phase 3 is **feature-scope complete and source-reviewed** for the web/PWA implem
 The final review caught and corrected:
 1. Phase 3 branch divergence from the final Phase 2 hardening head.
 2. Phase 2 progression tests referencing a non-existent `formRating` field instead of canonical `formQuality`.
-3. Full local deletion that could otherwise leave training and connected stores intentionally out of sync after a storage failure.
-4. Connected archive replacement that previously cleared data across separate operations before all replacement writes were complete.
-5. Sleep-stage summaries that could double-count overlapping intervals.
-6. Summary copy that described every latest observation as direct even when provenance marked it derived.
+3. Final Phase 2 volume scaling not yet propagated into the Phase 3 stack.
+4. Full local deletion that could otherwise leave training and connected stores intentionally out of sync after a storage failure.
+5. Connected archive replacement that previously cleared data across separate operations before all replacement writes were complete.
+6. Sleep-stage summaries that could double-count overlapping intervals.
+7. Summary copy that described every latest observation as direct even when provenance marked it derived.
+8. Native heart-rate sample IDs that depended on provider array ordering and then, after the first correction, on the measured value.
+9. A removed `pwa-icons.server` module still imported by the new Health route.
+10. Local-storage batch operations where later successes could clear the first mutation failure message.
+11. Unknown connected-health units being silently interpreted as canonical values.
+12. Connected archive source metadata being normalized even when provider/status/metric metadata was malformed.
 
 ## Verification status
 
