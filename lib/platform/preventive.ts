@@ -58,7 +58,7 @@ export function completeReminder(reminder: PreventiveReminder, occurredAt = new 
   });
   if (!normalized.repeatMonths) return { record, nextReminder: null };
   const next = new Date(occurredAt);
-  next.setMonth(next.getMonth() + normalized.repeatMonths);
+  next.setUTCMonth(next.getUTCMonth() + normalized.repeatMonths);
   return {
     record,
     nextReminder: { ...normalized, id: crypto.randomUUID(), dueOn: next.toISOString().slice(0, 10), createdAt: new Date().toISOString() },
