@@ -42,8 +42,23 @@ export function previewConversationPlan(options: {
 
   const now = options.now || new Date();
   const readinessDecision = readinessDecisionFromRecords(readiness, now);
+  if (readinessDecision.level === 'recovery') {
+    return {
+      blocked: true,
+      session: null,
+      gymName: null,
+      mode: null,
+      progressionAllowed: false,
+      exercises: [],
+      notes: [
+        'Training preview withheld because a recent readiness check includes pain or illness. Human Health cannot determine whether exercise is safe or provide injury/illness clearance; use your established care or safety plan and appropriate professional support before resuming.',
+        ...readinessDecision.reasons,
+      ],
+    };
+  }
+
   const mode = interpretation.adaptContext.mode || preferences.lifeMode;
-  const rolling = contextualRollingSession(history, mode, preferences.nextSessionOverride, readinessDecision.level);
+  const rolling = contextualRollingSession(history, mode, preferences.nextSessionOverride, readinessDecision.level, now);
   const gym = interpretation.adaptContext.gym || gyms.find(item => item.id === preferences.selectedGymId) || gyms[0];
   const load = recentTrainingLoad(history, activity, now);
   const workload = strengthLoadAdjustment(rolling.session, load, readinessDecision.level);
