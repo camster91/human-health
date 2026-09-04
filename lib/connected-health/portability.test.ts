@@ -24,25 +24,53 @@ function trainingExport() {
   };
 }
 
+function connectedExport(metric: 'water' | 'protein' = 'water') {
+  const observation = createManualObservation(metric, metric === 'water' ? 250 : 30, new Date('2026-09-03T12:00:00Z'));
+  return {
+    schemaVersion: 1 as const,
+    exportedAt: '2026-09-03T12:00:00Z',
+    observations: [observation],
+    sources: [makeSource('manual:habits', { provider: 'manual', supportedMetrics: [metric], grantedMetrics: [metric] })],
+    preferences: defaultConnectedHealthPreferences,
+  };
+}
+
 describe('connected and full archive parsing', () => {
   it('round-trips a validated connected-health envelope', () => {
-    const observation = createManualObservation('water', 250, new Date('2026-09-03T12:00:00Z'));
-    const connected = { schemaVersion: 1 as const, exportedAt: '2026-09-03T12:00:00Z', observations: [observation], sources: [makeSource('manual:habits', { provider: 'manual', supportedMetrics: ['water'], grantedMetrics: ['water'] })], preferences: defaultConnectedHealthPreferences };
-    const parsed = parseConnectedJson(JSON.stringify(createConnectedJsonEnvelope(connected)));
+    const parsed = parseConnectedJson(JSON.stringify(createConnectedJsonEnvelope(connectedExport('water'))));
     expect(parsed.observations).toHaveLength(1);
     expect(parsed.observations[0].metric).toBe('water');
   });
 
-  it('validates both training and connected sections before a full import', () => {
-    const observation = createManualObservation('protein', 30, new Date('2026-09-03T12:00:00Z'));
+  it('accepts legacy v1 full archives and initializes an empty Phase 5 platform section', () => {
     const archive = {
       format: 'human-health-full-export' as const,
       schemaVersion: 1 as const,
       exportedAt: '2026-09-03T12:00:00Z',
       training: trainingExport(),
-      connected: { schemaVersion: 1 as const, exportedAt: '2026-09-03T12:00:00Z', observations: [observation], sources: [makeSource('manual:habits', { provider: 'manual', supportedMetrics: ['protein'], grantedMetrics: ['protein'] })], preferences: defaultConnectedHealthPreferences },
+      connected: connectedExport('protein'),
     };
-    expect(parseFullHealthArchive(JSON.stringify(archive)).connected.observations).toHaveLength(1);
+    const parsed = parseFullHealthArchive(JSON.stringify(archive));
+    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.connected.observations).toHaveLength(1);
+    expect(parsed.platform).toEqual({ schemaVersion: 1, records: [], reminders: [] });
+  });
+
+  it('validates Phase 5 platform data before any full-archive mutation', () => {
+    const archive = {
+      format: 'human-health-full-export' as const,
+      schemaVersion: 2 as const,
+      exportedAt: '2026-09-03T12:00:00Z',
+      training: trainingExport(),
+      connected: connectedExport(),
+      platform: {
+        schemaVersion: 1 as const,
+        records: [{ id: 'r1', title: 'Dental cleaning', category: 'dental' as const, occurredAt: '2026-09-01T12:00:00Z', source: 'manual' as const, createdAt: '2026-09-01T12:00:00Z' }],
+        reminders: [],
+      },
+    };
+    expect(parseFullHealthArchive(JSON.stringify(archive)).platform.records).toHaveLength(1);
+    expect(() => parseFullHealthArchive(JSON.stringify({ ...archive, platform: { schemaVersion: 99, records: [], reminders: [] } }))).toThrow('Unsupported platform archive version');
     expect(() => parseFullHealthArchive(JSON.stringify({ ...archive, training: { schemaVersion: 99 } }))).toThrow('Unsupported training archive version');
   });
 
