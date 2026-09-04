@@ -68,29 +68,56 @@ export async function importFullHealthArchive(text: string, mode: 'merge' | 'rep
   }
 }
 
-export async function clearAllHumanHealthData() {
-  const trainingBackup = store.exportData();
-  const connectedBackup = await healthRepository.exportData();
-  // A corrupt platform store must still be deletable. Keep the best readable
-  // snapshot for rollback, but do not block an explicit delete-all operation.
-  const platformBackup = platformStore.exportData();
-  platformStore.clearMutationError();
+export type CompleteDeletionOperations = {
+  clearTraining(): boolean | Promise<boolean>;
+  trainingError?(): string | null;
+  clearConnected(): void | Promise<void>;
+  clearPlatform(): boolean | Promise<boolean>;
+  platformError?(): string | null;
+};
+
+/**
+ * A user-requested delete-all is privacy-directed: attempt every domain even if
+ * another domain fails. Successfully deleted data is never recreated merely to
+ * make the operation transactional. Partial failures are reported truthfully so
+ * the user can retry the remaining cleanup.
+ */
+export async function runCompleteDeletion(operations: CompleteDeletionOperations) {
+  const failures: string[] = [];
+
   try {
-    if (!store.clearAll()) throw new Error(store.getMutationError() || 'Training data could not be fully deleted.');
-    await healthRepository.clearAll();
-    if (!platformStore.clear()) throw new Error(platformStore.getMutationError() || 'Preventive/platform data could not be fully deleted.');
+    if (!(await operations.clearTraining())) failures.push(`training: ${operations.trainingError?.() || 'local training data could not be fully deleted'}`);
   } catch (error) {
-    let rollbackError: unknown = null;
-    try { store.importData(trainingBackup, 'replace'); } catch (failure) { rollbackError = failure; }
-    try { await healthRepository.importData(connectedBackup, 'replace'); } catch (failure) { rollbackError ||= failure; }
-    try { platformStore.importData(platformBackup, 'replace'); } catch (failure) { rollbackError ||= failure; }
-    if (rollbackError) {
-      const original = error instanceof Error ? error.message : 'Local data deletion failed.';
-      const rollback = rollbackError instanceof Error ? rollbackError.message : 'Rollback failed.';
-      throw new Error(`${original} Automatic rollback also failed: ${rollback}`);
-    }
-    throw error;
+    failures.push(`training: ${error instanceof Error ? error.message : 'local training data deletion failed'}`);
   }
+
+  try {
+    await operations.clearConnected();
+  } catch (error) {
+    failures.push(`connected health: ${error instanceof Error ? error.message : 'connected-health data deletion failed'}`);
+  }
+
+  try {
+    if (!(await operations.clearPlatform())) failures.push(`preventive/platform: ${operations.platformError?.() || 'preventive/platform data could not be fully deleted'}`);
+  } catch (error) {
+    failures.push(`preventive/platform: ${error instanceof Error ? error.message : 'preventive/platform data deletion failed'}`);
+  }
+
+  if (failures.length) {
+    throw new Error(`Delete-all was incomplete. ${failures.join(' | ')}. Successfully deleted domains were not restored; retry delete-all after resolving the reported storage failure.`);
+  }
+}
+
+export async function clearAllHumanHealthData() {
+  // Do not require a readable/exportable backup before honoring deletion.
+  // Corrupt connected-health or platform rows must remain deletable.
+  await runCompleteDeletion({
+    clearTraining: () => store.clearAll(),
+    trainingError: () => store.getMutationError(),
+    clearConnected: () => healthRepository.clearAll(),
+    clearPlatform: () => platformStore.clear(),
+    platformError: () => platformStore.getMutationError(),
+  });
 }
 
 export function downloadJson(filename: string, value: unknown) {
