@@ -78,6 +78,23 @@ async function putMany<T>(storeName: string, values: T[]) {
   await done;
 }
 
+async function writeRepositoryState(observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences) {
+  const database = await openDatabase();
+  const transaction = database.transaction([OBSERVATIONS, SOURCES, META], 'readwrite');
+  const done = transactionDone(transaction);
+  const observationStore = transaction.objectStore(OBSERVATIONS);
+  const sourceStore = transaction.objectStore(SOURCES);
+  const metaStore = transaction.objectStore(META);
+  observationStore.clear();
+  sourceStore.clear();
+  metaStore.delete(PREFERENCES_KEY);
+  observations.forEach(value => observationStore.put(value));
+  sources.forEach(value => sourceStore.put(value));
+  metaStore.put({ key: PREFERENCES_KEY, value: preferences });
+  await done;
+  notifyConnectedHealthUpdated();
+}
+
 function observationIsNewer(current: HealthObservation, candidate: HealthObservation) {
   const currentVersion = current.provenance.externalVersion;
   const candidateVersion = candidate.provenance.externalVersion;
@@ -223,15 +240,23 @@ export const healthRepository = {
   async importData(payload: HealthRepositoryExport, mode: 'merge' | 'replace' = 'merge') {
     if (!payload || payload.schemaVersion !== 1 || !Array.isArray(payload.observations) || !Array.isArray(payload.sources)) throw new Error('Unsupported connected-health archive.');
     const observations = payload.observations.flatMap(item => { const value = normalizeObservation(item); return value ? [value] : []; });
+    if (observations.length !== payload.observations.length) throw new Error(`${payload.observations.length - observations.length} connected-health observations were invalid. No local data was changed.`);
     const sources = payload.sources.map(normalizeSourceState);
-    const preferences = normalizeConnectedPreferences(payload.preferences);
-    if (mode === 'replace') await healthRepository.clearAll();
-    const current = mode === 'replace' ? [] : await healthRepository.listObservations();
-    const merged = mergeObservationCollections(current, observations);
-    await healthRepository.replaceObservations(merged.observations);
-    await putMany(SOURCES, sources);
-    await healthRepository.savePreferences(preferences);
-    notifyConnectedHealthUpdated();
-    return { accepted: observations.length, rejected: payload.observations.length - observations.length };
+    const importedPreferences = normalizeConnectedPreferences(payload.preferences);
+
+    if (mode === 'replace') {
+      await writeRepositoryState(observations, sources, importedPreferences);
+      return { accepted: observations.length, rejected: 0 };
+    }
+
+    const currentObservations = await healthRepository.listObservations();
+    const currentSources = await healthRepository.listSources();
+    const currentPreferences = await healthRepository.getPreferences();
+    const merged = mergeObservationCollections(currentObservations, observations);
+    const sourceMap = new Map(currentSources.map(source => [source.id, source]));
+    sources.forEach(source => sourceMap.set(source.id, source));
+    // Merge import keeps the user's current preference choices. Replace import restores the archive's choices.
+    await writeRepositoryState(merged.observations, [...sourceMap.values()], currentPreferences);
+    return { accepted: merged.accepted, rejected: merged.rejected };
   },
 };
