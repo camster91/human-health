@@ -69,6 +69,30 @@ function sourceFor(observations: HealthObservation[], sources: HealthSourceState
   return chooseSourceForMetric(observations, sources, metric, preferences.primarySourceByMetric[metric], now);
 }
 
+function nonOverlappingDurationMinutes(items: HealthObservation[]) {
+  const intervals = items.flatMap(item => {
+    const start = Date.parse(item.startTime);
+    const end = Date.parse(item.endTime || '');
+    return Number.isFinite(start) && Number.isFinite(end) && end > start ? [[start, end] as [number, number]] : [];
+  });
+  // If a provider omitted interval boundaries for any stage, fall back to its canonical
+  // stage durations rather than silently dropping records from the sleep summary.
+  if (intervals.length !== items.length) return items.reduce((sum, item) => sum + item.value, 0);
+  intervals.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  let total = 0;
+  let [currentStart, currentEnd] = intervals[0];
+  for (const [start, end] of intervals.slice(1)) {
+    if (start <= currentEnd) currentEnd = Math.max(currentEnd, end);
+    else {
+      total += currentEnd - currentStart;
+      currentStart = start;
+      currentEnd = end;
+    }
+  }
+  total += currentEnd - currentStart;
+  return total / 60_000;
+}
+
 function dailyAggregate(metric: ConnectedMetric, observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences, now: Date, mode: 'sum' | 'average' = 'sum') {
   const source = sourceFor(observations, sources, metric, preferences, now);
   if (!source) return empty(metric);
@@ -103,7 +127,7 @@ function latestValue(metric: ConnectedMetric, observations: HealthObservation[],
     sourceId: source.id,
     sourceName: source.displayName,
     recordedAt: value.recordedAt,
-    note: `Latest direct observation from ${source.displayName}. This trend is descriptive, not diagnostic.`,
+    note: `Latest ${value.quality} observation from ${source.displayName}. This trend is descriptive, not diagnostic.`,
   };
 }
 
@@ -125,13 +149,13 @@ function sleepSummary(observations: HealthObservation[], sources: HealthSourceSt
   return {
     metric: 'sleep-duration',
     label: 'Sleep',
-    value: included.reduce((sum, item) => sum + item.value, 0),
+    value: nonOverlappingDurationMinutes(included),
     unit: 'minute',
     status: statusFor(source, observationFreshness(latest, now), now),
     sourceId: source.id,
     sourceName: source.displayName,
     recordedAt: latest.recordedAt,
-    note: `Summed ${included.length} non-overlapping asleep-stage record${included.length === 1 ? '' : 's'} near the latest sleep period; awake and in-bed-only records are excluded.`,
+    note: `Summarized ${included.length} asleep-stage record${included.length === 1 ? '' : 's'} near the latest sleep period. Overlapping intervals are merged; awake and in-bed-only records are excluded.`,
   };
 }
 
