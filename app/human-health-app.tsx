@@ -58,7 +58,7 @@ export function HumanHealthApp() {
     setAssessments(store.loadAssessments());
     setReadinessRecords(store.loadReadiness());
     setActive(restoredActive);
-    setRestTimer(restoredActive?.status === 'active' ? savedTimer : pauseRestTimer(savedTimer));
+    setRestTimer(pauseRestTimer(savedTimer));
     setNow(Date.now());
     if (!store.canPersist()) setStorageWarning('This browser cannot currently save workouts. Enable site storage before relying on refresh or interruption recovery.');
     setHydrated(true);
@@ -186,7 +186,6 @@ export function HumanHealthApp() {
       const events = store.loadScheduleEvents();
       const last = events.at(-1);
       const recentlyRecordedSkip = last?.type === 'skip'
-        && last.from === baseRolling.session
         && last.to === preferences.nextSessionOverride
         && Date.now() - new Date(last.recordedAt).getTime() < 10 * 60_000;
       if (preferences.nextSessionOverride !== baseRolling.session && !recentlyRecordedSkip) {
@@ -214,11 +213,12 @@ export function HumanHealthApp() {
   }
 
   function skipRecommendedSessionOnce() {
-    const target = advanceSession(baseRolling.session);
-    const events = [...store.loadScheduleEvents(), createScheduleOverride(baseRolling.session, target, 'skip')];
+    const from = rolling.session;
+    const target = advanceSession(from);
+    const events = [...store.loadScheduleEvents(), createScheduleOverride(from, target, 'skip')];
     store.saveScheduleEvents(events);
     savePreferences({ ...preferences, nextSessionOverride: target });
-    setNotes([`Skipped ${title(baseRolling.session)} for now. ${title(target)} is selected once; no workout was marked complete and the rolling recommendation remains recoverable.`]);
+    setNotes([`Skipped ${title(from)} for now. ${title(target)} is selected once; no workout was marked complete and the rolling recommendation remains recoverable.`]);
   }
 
   function updateActive(next: Workout) {
@@ -345,7 +345,7 @@ export function HumanHealthApp() {
       })}
       <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredComplete} title={!requiredComplete ? 'Use End early until every required working set is complete.' : undefined} onClick={() => finishWorkout('completed')}>Finish workout</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
       {!requiredComplete && <p className="muted">Finish becomes available after all required working sets are logged. Use End early to preserve a partial session accurately.</p>}
-      {restTimer && <div className="rest-dock" role="timer" aria-live="polite"><b>Rest</b><span>{Math.floor(restSeconds / 60)}:{String(restSeconds % 60).padStart(2, '0')}</span><div className="timer-actions">{restTimer.status === 'running' ? <button onClick={() => setRestTimer(timer => pauseRestTimer(timer))}>Pause</button> : <button onClick={() => setRestTimer(timer => resumeRestTimer(timer))}>Resume</button>}<button onClick={() => setRestTimer(timer => extendRestTimer(timer, 30))}>+30s</button><button onClick={() => setRestTimer(timer => restartRestTimer(timer, preferences.defaultRestSeconds))}>Restart</button><button onClick={() => setRestTimer(null)}>Skip</button></div></div>}
+      {restTimer && <div className="rest-dock" role="timer" aria-label={`Rest timer: ${restSeconds} seconds remaining`}><b>Rest</b><span>{Math.floor(restSeconds / 60)}:{String(restSeconds % 60).padStart(2, '0')}</span><div className="timer-actions">{restTimer.status === 'running' ? <button onClick={() => setRestTimer(timer => pauseRestTimer(timer))}>Pause</button> : <button onClick={() => setRestTimer(timer => resumeRestTimer(timer))}>Resume</button>}<button onClick={() => setRestTimer(timer => extendRestTimer(timer, 30))}>+30s</button><button onClick={() => setRestTimer(timer => restartRestTimer(timer, preferences.defaultRestSeconds))}>Restart</button><button onClick={() => setRestTimer(null)}>Skip</button></div></div>}
     </main>;
   }
 
@@ -389,5 +389,5 @@ function SetEntry({ defaultWeightKg, defaultReps, units, loadType, onLog }: { de
 
 function PlateHelper({ targetKg, preferences }: { targetKg: number; preferences: UserPreferences }) {
   const plan = platePlan(targetKg, preferences.plateBarKg, preferences.availablePlatesKg);
-  return <details><summary>Plate calculator · {kgToDisplay(targetKg, preferences.unitSystem).toFixed(1)} {preferences.unitSystem === 'imperial' ? 'lb' : 'kg'}</summary><p>{plan ? plan.length ? `Each side: ${plan.join(' + ')} kg on a ${preferences.plateBarKg} kg bar.` : `Empty ${preferences.plateBarKg} kg bar.` : 'That target cannot be loaded with the configured metric plate inventory.'}</p></details>;
+  return <details><summary>Plate calculator · {kgToDisplay(targetKg, preferences.unitSystem).toFixed(1)} {preferences.unitSystem === 'imperial' ? 'lb' : 'kg'}</summary><p>{plan ? plan.length ? `Each side: ${plan.join(' + ')} kg on a ${preferences.plateBarKg} kg bar.` : `Empty ${preferences.plateBarKg} kg bar.` : 'That target cannot be loaded with the configured metric plate denominations.'}</p></details>;
 }
