@@ -11,6 +11,9 @@
 - [x] Local JSON/archive import/export and source-scoped deletion
 - [x] Consent-first Health dashboard with provenance details
 - [x] Connected sleep can contribute to readiness only when fresh and clearly sourced
+- [x] Strict units and imported-source metadata validation
+- [x] Stable native sample identity for reordered/corrected heart-rate records
+- [x] Local-storage batch failures remain visible across later successful mutations
 - [x] Final source review and privacy/safety review
 - [x] Reconciled with the latest Phase 2 hardening head
 
