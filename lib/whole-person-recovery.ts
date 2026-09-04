@@ -13,6 +13,12 @@ export type ReadinessInput = {
 export type ReadinessDecision = { level: 'normal' | 'reduced' | 'recovery'; volumeMultiplier: number; allowProgression: boolean; reasons: string[] };
 export type ReadinessRecord = { recordedAt: string; input: ReadinessInput; source?: 'manual' | 'connected-sleep'; sourceName?: string };
 
+export type EffectiveReadinessDecision = ReadinessDecision & {
+  checkInCount: number;
+  latestRecordedAt: string | null;
+  source: 'default' | 'check-in';
+};
+
 export function readinessDecision(input: ReadinessInput): ReadinessDecision {
   const reasons: string[] = [];
   if (input.pain) reasons.push('Pain or unusual discomfort was reported.');
@@ -35,9 +41,49 @@ export function readinessDecision(input: ReadinessInput): ReadinessDecision {
   return { level: 'normal', volumeMultiplier: 1, allowProgression: true, reasons };
 }
 
+function validReadinessRecords(records: ReadinessRecord[], now = new Date()) {
+  return records
+    .filter(record => {
+      const timestamp = Date.parse(record.recordedAt);
+      return Number.isFinite(timestamp) && timestamp <= now.getTime() + 5 * 60_000 && record.input && typeof record.input === 'object';
+    })
+    .sort((a, b) => Date.parse(a.recordedAt) - Date.parse(b.recordedAt));
+}
+
+export function readinessDecisionFromRecords(records: ReadinessRecord[], now = new Date()): EffectiveReadinessDecision {
+  const valid = validReadinessRecords(records, now);
+  const recent = valid.filter(record => now.getTime() - Date.parse(record.recordedAt) <= 36 * 3_600_000);
+  if (!recent.length) {
+    return {
+      ...readinessDecision({}),
+      checkInCount: 0,
+      latestRecordedAt: valid.at(-1)?.recordedAt || null,
+      source: 'default',
+      reasons: valid.length ? ['The latest readiness data is older than 36 hours, so normal readiness is not assumed from it.'] : [],
+    };
+  }
+
+  const latest = recent.at(-1)!;
+  const latestDecision = readinessDecision(latest.input);
+  const sixDayCutoff = now.getTime() - 6 * 86_400_000;
+  const weekly = valid.filter(record => Date.parse(record.recordedAt) >= sixDayCutoff);
+  const counts = { reduced: 0, recovery: 0 };
+  weekly.forEach(record => {
+    const level = readinessDecision(record.input).level;
+    if (level !== 'normal') counts[level]++;
+  });
+  if (latestDecision.level === 'normal' && counts.recovery >= 2) {
+    return { level: 'reduced', volumeMultiplier: 0.8, allowProgression: false, reasons: ['Recovery-first check-ins have repeated this week, so progression remains conservative despite today’s normal entry.'], checkInCount: weekly.length, latestRecordedAt: latest.recordedAt, source: 'check-in' };
+  }
+  if (latestDecision.level === 'normal' && counts.reduced + counts.recovery >= 3) {
+    return { level: 'reduced', volumeMultiplier: 0.85, allowProgression: false, reasons: ['Reduced-readiness check-ins have been common this week, so progression remains conservative today.'], checkInCount: weekly.length, latestRecordedAt: latest.recordedAt, source: 'check-in' };
+  }
+  return { ...latestDecision, checkInCount: weekly.length, latestRecordedAt: latest.recordedAt, source: 'check-in' };
+}
+
 export function readinessTrend(records: ReadinessRecord[], now = new Date()) {
   const cutoff = now.getTime() - 7 * 86_400_000;
-  const recent = records.filter(record => new Date(record.recordedAt).getTime() >= cutoff);
+  const recent = validReadinessRecords(records, now).filter(record => Date.parse(record.recordedAt) >= cutoff);
   if (!recent.length) return { normal: 0, reduced: 0, recovery: 0, message: 'No readiness trend yet.' };
   const counts = { normal: 0, reduced: 0, recovery: 0 };
   recent.forEach(record => counts[readinessDecision(record.input).level]++);
