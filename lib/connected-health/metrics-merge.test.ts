@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chooseSourceForMetric, observationFreshness, sourceFreshness } from './freshness';
 import { convertToCanonical } from './metrics';
-import { mergeObservationCollections } from './merge';
+import { mergeObservationCollections, normalizeObservation, observationId, stableHash } from './merge';
 import { defaultConnectedHealthPreferences } from './types';
 import { makeObservation, makeSource } from './test-helpers';
 
@@ -12,6 +12,27 @@ describe('connected-health normalization and merge', () => {
     expect(convertToCanonical('water', 1.25, 'L')).toEqual({ value: 1_250, unit: 'ml' });
     expect(convertToCanonical('protein', 25_000, 'mg')).toEqual({ value: 25, unit: 'g' });
     expect(convertToCanonical('heart-rate', Number.NaN, 'bpm')).toBeNull();
+  });
+
+  it('derives observation identity from source ownership instead of trusting an imported ID', () => {
+    const first = makeObservation('steps', 1_000, { sourceId: 'watch:a', externalId: 'record-1' });
+    const malicious = makeObservation('steps', 2_000, { id: first.id, sourceId: 'watch:b', externalId: 'record-1' });
+    const normalized = normalizeObservation(malicious)!;
+    expect(normalized.id).toBe(observationId('watch:b', 'record-1'));
+    expect(normalized.id).not.toBe(first.id);
+    expect(stableHash('one')).not.toBe(stableHash('two'));
+    expect(stableHash('one').length).toBeGreaterThanOrEqual(13);
+    const merged = mergeObservationCollections([first], [malicious]);
+    expect(merged.observations).toHaveLength(2);
+  });
+
+  it('rejects invalid provider, ingestion, quality, dates and units', () => {
+    const base = makeObservation('steps', 1_000);
+    expect(normalizeObservation({ ...base, provenance: { ...base.provenance, provider: 'unknown' as never } })).toBeNull();
+    expect(normalizeObservation({ ...base, provenance: { ...base.provenance, ingestionMethod: 'scrape' as never } })).toBeNull();
+    expect(normalizeObservation({ ...base, quality: 'estimated' as never })).toBeNull();
+    expect(normalizeObservation({ ...base, startTime: 'bad-date' })).toBeNull();
+    expect(normalizeObservation({ ...base, value: -1 })).toBeNull();
   });
 
   it('upserts a newer provider version without duplicating the observation', () => {
@@ -27,6 +48,7 @@ describe('connected-health normalization and merge', () => {
     const sourceB = makeObservation('steps', 2_000, { sourceId: 'b', externalId: 'same-record' });
     const merged = mergeObservationCollections([sourceA, sourceB], [], ['same-record'], 'a');
     expect(merged.observations.map(item => item.sourceId)).toEqual(['b']);
+    expect(merged.deleted).toBe(1);
   });
 
   it('reports observation/source freshness and honours an explicit primary source', () => {
