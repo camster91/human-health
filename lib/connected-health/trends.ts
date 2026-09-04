@@ -81,7 +81,13 @@ export function metricTrend(
 
   const start = new Date(now.getTime() - days * 2 * 86_400_000);
   const selected = observations
-    .filter(item => item.metric === metric && item.sourceId === source.id && Date.parse(item.endTime || item.startTime) >= start.getTime() && Date.parse(item.endTime || item.startTime) <= now.getTime())
+    .filter(item => {
+      if (item.metric !== metric || item.sourceId !== source.id) return false;
+      const at = Date.parse(item.endTime || item.startTime);
+      if (!Number.isFinite(at) || at < start.getTime() || at > now.getTime()) return false;
+      const freshness = observationFreshness(item, now);
+      return freshness !== 'future' && freshness !== 'invalid';
+    })
     .sort((a, b) => Date.parse(a.recordedAt) - Date.parse(b.recordedAt));
   const daily = dailyValues(selected, metric);
   const currentStart = new Date(now.getTime() - days * 86_400_000);
