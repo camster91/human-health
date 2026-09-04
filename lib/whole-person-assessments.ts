@@ -47,7 +47,8 @@ export function workoutActivityDoses(entry: HistoryEntry): ActivityDose[] {
   const allWorkingSets = entry.exercises.reduce((sum, exercise) => sum + Math.min(exercise.sets, exercise.logs.filter(log => !log.warmup).length), 0);
   if (!allWorkingSets) return [];
   const quality = prescribedRequired > 0 ? Math.min(1, completedRequired / prescribedRequired) : 1;
-  const base = { workoutId: entry.workoutId, completedAt: entry.completedAt, kind: 'planned' as const, source: 'workout' as const, quality };
+  const workoutId = entry.workoutId || (entry.startedAt ? `${entry.session}:${entry.startedAt}` : undefined);
+  const base = { workoutId, completedAt: entry.completedAt, kind: 'planned' as const, source: 'workout' as const, quality };
   const doses: ActivityDose[] = [{ ...base, domain: 'strength', sets: allWorkingSets, sessionId: `strength:${entry.session}` }];
   const coreSets = entry.exercises.filter(exercise => exercise.movement === 'core').reduce((sum, exercise) => sum + exercise.logs.filter(log => !log.warmup).length, 0);
   if (coreSets) doses.push({ ...base, domain: 'core', sets: coreSets, sessionId: `embedded-core:${entry.session}` });
