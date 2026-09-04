@@ -46,7 +46,7 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(request)
         .then(response => {
-          if (response.ok) event.waitUntil(caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone())));
+          if (response.ok) caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone())).catch(() => {});
           return response;
         })
         .catch(async () => (await caches.match(request)) || (await caches.match('/')) || (await caches.match('/offline.html')) || new Response('Offline', { status: 503, headers: { 'content-type': 'text/plain; charset=utf-8' } })),
@@ -58,7 +58,7 @@ self.addEventListener('fetch', event => {
     caches.match(request).then(cached => {
       const network = fetch(request)
         .then(response => {
-          if (response.ok && response.type === 'basic') event.waitUntil(caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone())));
+          if (response.ok && response.type === 'basic') caches.open(CACHE_VERSION).then(cache => cache.put(request, response.clone())).catch(() => {});
           return response;
         })
         .catch(() => cached || new Response('', { status: 504, statusText: 'Offline' }));
