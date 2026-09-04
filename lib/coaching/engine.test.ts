@@ -77,6 +77,17 @@ describe('Phase 4 goal balancing and actions', () => {
     expect(snapshot.trends.find(item => item.id === 'connected-trend:sleep')?.direction).toBe('unknown');
   });
 
+  it('keeps current connected-health directions descriptive rather than calling them medically better or worse', () => {
+    const snapshot = createCoachingSnapshot({
+      history: [], activity: [], readiness: [], preferences: defaultPreferences, now: new Date('2026-09-03T12:00:00Z'),
+      connectedSignals: [{ id: 'resting-heart-rate', label: 'Resting heart rate', status: 'current', direction: 'down', currentAverage: 58, previousAverage: 62, unit: 'bpm', sampleDays: 7, note: 'Seven-day average moved down.' }],
+    });
+    const trend = snapshot.trends.find(item => item.id === 'connected-trend:resting-heart-rate');
+    expect(trend?.direction).toBe('mixed');
+    expect(trend?.message).toContain('value-neutral');
+    expect(trend?.message).not.toContain('improving');
+  });
+
   it('puts recovery first and keeps all actions reversible', () => {
     const snapshot = createCoachingSnapshot({
       history: [], activity: [], preferences: defaultPreferences, now: new Date('2026-09-03T12:00:00Z'),
