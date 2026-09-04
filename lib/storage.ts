@@ -4,6 +4,19 @@ import { SkillAssessment } from './performance';
 import { defaultPreferences, normalizePreferences, UserPreferences } from './preferences';
 import { RestTimerState, sanitizeRestTimer, startRestTimer } from './rest-timer';
 import { ScheduleEvent } from './schedule';
+import {
+  validateActiveWorkout,
+  validateActivity,
+  validateAssessments,
+  validateExportedAt,
+  validateHistory,
+  validatePreferences,
+  validateReadiness,
+  validateRestTimer,
+  validateScheduleEvents,
+  validateSkillAssessments,
+  validateStringRecord,
+} from './training-archive-validation';
 import { ActivityDose, Assessment, ReadinessRecord } from './whole-person';
 import { activeWorkoutWasFinalized, deduplicateHistory, deduplicateWorkoutActivity } from './workout-finalization';
 
@@ -175,30 +188,24 @@ export type HumanHealthExport = {
   scheduleEvents: ScheduleEvent[];
 };
 
-export function validateTrainingExport(value: unknown): HumanHealthExport {
-  if (!value || typeof value !== 'object') throw new Error('Training archive is not an object.');
+export function validateTrainingExport(value: unknown, now = new Date()): HumanHealthExport {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Training archive is not an object.');
   const candidate = value as Partial<HumanHealthExport>;
   if (candidate.schemaVersion !== 2) throw new Error('Unsupported training archive version.');
-  const arrays: (keyof HumanHealthExport)[] = ['history', 'activity', 'readiness', 'assessments', 'skillAssessments', 'scheduleEvents'];
-  for (const key of arrays) if (!Array.isArray(candidate[key])) throw new Error(`Training archive field ${String(key)} is invalid.`);
-  if (!candidate.skills || typeof candidate.skills !== 'object' || Array.isArray(candidate.skills)) throw new Error('Training skills are invalid.');
-  if (!candidate.progressions || typeof candidate.progressions !== 'object' || Array.isArray(candidate.progressions)) throw new Error('Training progressions are invalid.');
-  const active = candidate.activeWorkout === null ? null : activeWorkout(candidate.activeWorkout);
-  if (candidate.activeWorkout && !active) throw new Error('Imported active workout is invalid.');
   return {
     schemaVersion: 2,
-    exportedAt: typeof candidate.exportedAt === 'string' ? candidate.exportedAt : new Date().toISOString(),
-    activeWorkout: active,
-    restTimer: sanitizeRestTimer(candidate.restTimer) || null,
-    history: deduplicateHistory(candidate.history as HistoryEntry[]),
-    activity: deduplicateWorkoutActivity(candidate.activity as ActivityDose[]),
-    readiness: (candidate.readiness as ReadinessRecord[]).filter(record => record?.source !== 'connected-sleep'),
-    skills: candidate.skills as Record<string, string>,
-    assessments: candidate.assessments as Assessment[],
-    progressions: candidate.progressions as Record<string, string>,
-    skillAssessments: candidate.skillAssessments as SkillAssessment[],
-    preferences: normalizePreferences(candidate.preferences || defaultPreferences),
-    scheduleEvents: candidate.scheduleEvents as ScheduleEvent[],
+    exportedAt: validateExportedAt(candidate.exportedAt, now),
+    activeWorkout: validateActiveWorkout(candidate.activeWorkout, now),
+    restTimer: validateRestTimer(candidate.restTimer, now),
+    history: deduplicateHistory(validateHistory(candidate.history, now)),
+    activity: deduplicateWorkoutActivity(validateActivity(candidate.activity, now)),
+    readiness: validateReadiness(candidate.readiness, now),
+    skills: validateStringRecord(candidate.skills, 'skills'),
+    assessments: validateAssessments(candidate.assessments, now),
+    progressions: validateStringRecord(candidate.progressions, 'progressions'),
+    skillAssessments: validateSkillAssessments(candidate.skillAssessments, now),
+    preferences: validatePreferences(candidate.preferences),
+    scheduleEvents: validateScheduleEvents(candidate.scheduleEvents, now),
   };
 }
 
@@ -207,6 +214,72 @@ function mergeUnique<T>(current: T[], incoming: T[], key: (value: T) => string) 
   incoming.forEach(value => values.set(key(value), value));
   current.forEach(value => values.set(key(value), value));
   return [...values.values()];
+}
+
+type RawStorageSnapshot = Map<string, string | null>;
+
+function captureRawStorage(keys: string[]): RawStorageSnapshot {
+  if (typeof window === 'undefined') throw new Error('Browser storage is unavailable.');
+  const snapshot = new Map<string, string | null>();
+  try {
+    for (const key of keys) snapshot.set(key, localStorage.getItem(key));
+  } catch {
+    mutationFailure = 'The browser would not allow a safe pre-import storage snapshot.';
+    throw new Error(mutationFailure);
+  }
+  return snapshot;
+}
+
+function applyRawStorage(values: Map<string, string | null>) {
+  for (const [key, value] of values) {
+    try {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    } catch {
+      mutationFailure = `Browser storage rejected the archive mutation for ${key}.`;
+      return false;
+    }
+  }
+  mutationFailure = null;
+  return true;
+}
+
+function restoreRawStorage(snapshot: RawStorageSnapshot) {
+  let firstFailure: string | null = null;
+  for (const [key, value] of snapshot) {
+    try {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    } catch {
+      firstFailure ||= `Rollback could not restore ${key}.`;
+    }
+  }
+  if (firstFailure) {
+    mutationFailure = firstFailure;
+    return false;
+  }
+  mutationFailure = null;
+  return true;
+}
+
+function serializedTrainingSnapshot(next: HumanHealthExport, mode: 'merge' | 'replace') {
+  const values = new Map<string, string | null>();
+  const serialized = (value: unknown) => JSON.stringify(value);
+  values.set(ACTIVE, next.activeWorkout ? serialized(next.activeWorkout) : null);
+  values.set(HISTORY, serialized(deduplicateHistory(next.history)));
+  values.set(ACTIVITY, serialized(deduplicateWorkoutActivity(next.activity)));
+  values.set(READINESS, serialized(next.readiness.filter(record => record.source !== 'connected-sleep').slice(-90)));
+  values.set(SKILLS, serialized(next.skills));
+  values.set(ASSESSMENTS, serialized(next.assessments));
+  values.set(PROGRESSIONS, serialized(next.progressions));
+  values.set(SKILL_ASSESSMENTS, serialized(next.skillAssessments));
+  values.set(REST_TIMER, next.activeWorkout && next.restTimer ? serialized(next.restTimer) : null);
+  values.set(LEGACY_REST_UNTIL, null);
+  values.set(PREFERENCES, serialized(normalizePreferences(next.preferences || defaultPreferences)));
+  values.set(SCHEDULE_EVENTS, serialized(next.scheduleEvents.slice(-100)));
+  values.set(FINALIZATION_JOURNAL, null);
+  if (mode === 'replace') values.set(CONNECTED_SLEEP_CONTEXT_KEY, null);
+  return values;
 }
 
 export const store = {
@@ -325,8 +398,11 @@ export const store = {
   },
 
   importData(value: unknown, mode: 'merge' | 'replace' = 'merge') {
-    const incoming = validateTrainingExport(value);
+    const now = new Date();
+    const incoming = validateTrainingExport(value, now);
     const current = store.exportData();
+    const pendingFinalization = loadFinalizationJournal();
+    if (pendingFinalization) throw new Error('A workout finalization is still pending. Resolve or recover it before importing an archive.');
     const next: HumanHealthExport = mode === 'replace' ? incoming : {
       ...current,
       activeWorkout: current.activeWorkout || incoming.activeWorkout,
@@ -340,24 +416,20 @@ export const store = {
       skillAssessments: mergeUnique(current.skillAssessments, incoming.skillAssessments, item => `${item.treeId}|${item.stepId}|${item.recordedAt}`),
       preferences: current.preferences,
       scheduleEvents: mergeUnique(current.scheduleEvents, incoming.scheduleEvents, item => `${item.recordedAt}|${item.type}|${item.from}|${item.to}`),
+      exportedAt: now.toISOString(),
     };
 
-    if (mode === 'replace' && !store.clearAll()) throw new Error(store.getMutationError() || 'Existing local data could not be cleared safely.');
-    const saved = runMutations([
-      () => store.saveActive(next.activeWorkout),
-      () => store.saveRestTimer(next.activeWorkout ? next.restTimer : null),
-      () => store.saveHistory(next.history),
-      () => store.saveActivity(next.activity),
-      () => store.saveReadiness(next.readiness),
-      () => store.saveSkills(next.skills),
-      () => store.saveAssessments(next.assessments),
-      () => store.saveProgressions(next.progressions),
-      () => store.saveSkillAssessments(next.skillAssessments),
-      () => store.savePreferences(next.preferences),
-      () => store.saveScheduleEvents(next.scheduleEvents),
-    ], 'The browser could not persist the complete training archive.');
-    if (!saved) throw new Error(store.getMutationError() || 'The browser could not persist the complete training archive.');
-    return next;
+    const mutations = serializedTrainingSnapshot(next, mode);
+    const snapshot = captureRawStorage([...mutations.keys()]);
+    if (applyRawStorage(mutations)) return next;
+
+    const originalFailure = mutationFailure || 'The browser could not persist the complete training archive.';
+    if (!restoreRawStorage(snapshot)) {
+      const rollbackFailure = mutationFailure || 'Automatic rollback failed.';
+      throw new Error(`${originalFailure} Automatic rollback also failed: ${rollbackFailure}`);
+    }
+    mutationFailure = originalFailure;
+    throw new Error(`${originalFailure} The pre-import local state was restored.`);
   },
 
   clearAll() {
