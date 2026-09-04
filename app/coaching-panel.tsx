@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { connectedHealthTrends } from '@/lib/connected-health';
-import { createCoachingSnapshot, deterministicExplanation, getCoachExplanationProvider, interpretCoachMessage, movementVideoGate, requestAIExplanation } from '@/lib/coaching';
-import type { ActivityDose, Assessment, ReadinessRecord } from '@/lib/whole-person';
+import { createCoachingSnapshot, deterministicExplanation, getCoachExplanationProvider, interpretCoachMessage, movementVideoGate, previewConversationPlan, requestAIExplanation } from '@/lib/coaching';
+import type { ActivityDose, ReadinessRecord } from '@/lib/whole-person';
 import type { HistoryEntry } from '@/lib/domain';
 import { defaultPreferences, UserPreferences } from '@/lib/preferences';
 import { gyms } from '@/lib/program';
@@ -17,7 +17,6 @@ export function CoachingPanel() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [activity, setActivity] = useState<ActivityDose[]>([]);
   const [readiness, setReadiness] = useState<ReadinessRecord[]>([]);
-  const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [preferences, setPreferences] = useState<UserPreferences>(defaultPreferences);
   const [message, setMessage] = useState('');
   const [aiExplanation, setAiExplanation] = useState('');
@@ -27,7 +26,6 @@ export function CoachingPanel() {
     setHistory(store.loadHistory());
     setActivity(store.loadActivity());
     setReadiness(store.loadReadiness());
-    setAssessments(store.loadAssessments());
     setPreferences(store.loadPreferences());
   }, []);
 
@@ -45,6 +43,7 @@ export function CoachingPanel() {
 
   const snapshot = useMemo(() => createCoachingSnapshot({ history, activity, readiness, preferences, connectedSignals }), [history, activity, readiness, preferences, connectedSignals]);
   const interpretation = useMemo(() => interpretCoachMessage(message, gyms), [message]);
+  const conversationPreview = useMemo(() => previewConversationPlan({ interpretation, history, activity, readiness, preferences }), [interpretation, history, activity, readiness, preferences]);
   const videoGate = movementVideoGate();
   const aiAvailable = typeof window !== 'undefined' && Boolean(getCoachExplanationProvider());
 
@@ -59,7 +58,7 @@ export function CoachingPanel() {
     <section className="hero coaching-hero">
       <span className="pill">PHASE 4 · DETERMINISTIC FIRST</span>
       <h2>Coaching intelligence</h2>
-      <p>Human Health now combines training history, readiness, goal priorities and current connected-health signals into explainable, reversible coaching actions. Missing or stale evidence stays visible instead of being guessed.</p>
+      <p>Human Health combines training history, readiness, goal priorities and current connected-health signals into explainable, reversible coaching actions. Missing or stale evidence stays visible instead of being guessed.</p>
     </section>
 
     <section className="card" aria-labelledby="coach-actions-title">
@@ -87,7 +86,18 @@ export function CoachingPanel() {
     <section className="card" aria-labelledby="conversation-title">
       <span className="eyebrow">CONVERSATIONAL ADAPTATION</span><h2 id="conversation-title">Tell the coach what changed</h2>
       <label><b>Training context</b><textarea rows={4} value={message} onChange={event => setMessage(event.target.value)} placeholder="Example: I only have 20 minutes, low energy, at a hotel with no rack. Keep strength and cardio moving."/></label>
-      {message && <div className="conversation-result"><p><b>{interpretation.summary}</b></p>{interpretation.recognized.length > 0 && <p>Recognized: {interpretation.recognized.join(' · ')}</p>}{interpretation.safetyFlags.map((flag, index) => <p className="connection-state storage-error" role="alert" key={index}>{flag}</p>)}<dl><div><dt>Minutes</dt><dd>{interpretation.adaptContext.minutes || 'Not specified'}</dd></div><div><dt>Energy</dt><dd>{interpretation.adaptContext.lowEnergy ? 'Low-energy adaptation' : 'Not specified'}</dd></div><div><dt>Mode</dt><dd>{interpretation.adaptContext.mode ? title(interpretation.adaptContext.mode) : 'Current mode'}</dd></div><div><dt>Gym</dt><dd>{interpretation.adaptContext.gym?.name || 'Current gym'}</dd></div><div><dt>Goals</dt><dd>{interpretation.goalHints.length ? interpretation.goalHints.map(title).join(', ') : 'Current priorities'}</dd></div></dl></div>}
+      {message && <div className="conversation-result">
+        <p><b>{interpretation.summary}</b></p>
+        {interpretation.recognized.length > 0 && <p>Recognized: {interpretation.recognized.join(' · ')}</p>}
+        {interpretation.safetyFlags.map((flag, index) => <p className="connection-state storage-error" role="alert" key={index}>{flag}</p>)}
+        <dl><div><dt>Minutes</dt><dd>{interpretation.adaptContext.minutes || 'Not specified'}</dd></div><div><dt>Energy</dt><dd>{interpretation.adaptContext.lowEnergy ? 'Low-energy adaptation' : 'Not specified'}</dd></div><div><dt>Mode</dt><dd>{interpretation.adaptContext.mode ? title(interpretation.adaptContext.mode) : 'Current mode'}</dd></div><div><dt>Gym</dt><dd>{interpretation.adaptContext.gym?.name || 'Current gym'}</dd></div><div><dt>Goals</dt><dd>{interpretation.goalHints.length ? interpretation.goalHints.map(title).join(', ') : 'Current priorities'}</dd></div></dl>
+        <div className={conversationPreview.blocked ? 'coach-note' : 'conversation-preview'}>
+          <h3>{conversationPreview.blocked ? 'Workout preview withheld' : 'Reversible workout preview'}</h3>
+          {!conversationPreview.blocked && <p><b>{conversationPreview.session ? title(conversationPreview.session) : 'Session'} · {conversationPreview.gymName} · {conversationPreview.mode ? title(conversationPreview.mode) : 'Normal'}</b><br/>Automatic progression: {conversationPreview.progressionAllowed ? 'allowed by current rules' : 'held by current rules'}</p>}
+          {!conversationPreview.blocked && conversationPreview.exercises.length > 0 && <ol>{conversationPreview.exercises.map(exercise => <li key={`${exercise.id}-${exercise.originalId || ''}`}><b>{exercise.name}</b> · {exercise.sets} working set{exercise.sets === 1 ? '' : 's'}{exercise.originalId ? ` · replacement for ${title(exercise.originalId)}` : ''}</li>)}</ol>}
+          {conversationPreview.notes.map((note, index) => <p className="muted" key={index}>{note}</p>)}
+        </div>
+      </div>}
     </section>
 
     <section className="card" aria-labelledby="explanation-title">
