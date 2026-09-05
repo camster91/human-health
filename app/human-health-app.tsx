@@ -48,7 +48,7 @@ export function HumanHealthApp() {
   const [active, setActive] = useState<Workout | null>(null);
   const [restTimer, setRestTimer] = useState<RestTimerState | null>(null);
   const [now, setNow] = useState(0);
-  const [tab, setTab] = useState<'today' | 'progress' | 'settings'>('today');
+  const [tab, setTab] = useState<'today' | 'progress' | 'health' | 'settings'>('today');
   const [notes, setNotes] = useState<string[]>([]);
   const [swapIndex, setSwapIndex] = useState<number | null>(null);
   const [saveSwap, setSaveSwap] = useState(false);
@@ -436,9 +436,10 @@ export function HumanHealthApp() {
         {notes.length > 0 && <section className="card" aria-labelledby="coach-insights-title"><h2 id="coach-insights-title">Coach insights</h2>{notes.map((note, index) => <p className="coach-note" key={index}>{note}</p>)}<div className="coach-note"><b>Current training context</b><br/>{recentLoad.message}</div></section>}
 
         <section aria-labelledby="plans-changed-title"><h2 id="plans-changed-title">Plans changed?</h2><div className="quick-grid"><button onClick={() => startWorkout({ minutes: 20 })}>20 minutes</button><button onClick={() => startWorkout({ minutes: 30 })}>30 minutes</button><button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })}>Low energy</button><button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })}>Different gym</button></div></section>
+
+        <WholePersonDashboard history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences} gym={gym} nextSession={rolling.session} onActivityChange={setActivity} onReadinessChange={setReadinessRecords}/>
+        <SkillProgressPanel gym={gym}/>
       </>}
-      <WholePersonDashboard history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences} gym={gym} nextSession={rolling.session} onActivityChange={setActivity} onReadinessChange={setReadinessRecords}/>
-      <SkillProgressPanel gym={gym}/>
     </>}
 
     {tab === 'progress' && <>
@@ -447,9 +448,11 @@ export function HumanHealthApp() {
       <CapabilityAssessmentPanel assessments={assessments} onChange={setAssessments}/>
     </>}
 
+    {tab === 'health' && <section className="card"><h2>Health Tracking</h2><p>Connect health data sources, track readiness, and manage preventive care.</p><p className="muted">Visit the dedicated Health section for detailed tracking and integrations.</p><div className="button-row"><a href="/health" className="primary" style={{display: 'inline-block', textDecoration: 'none', textAlign: 'center'}}>Open Health</a></div></section>}
+
     {tab === 'settings' && <SettingsPanel preferences={preferences} gyms={gyms} onChange={savePreferences} onDataCleared={resetLocalState}/>} 
 
-    <nav className="bottom-nav" aria-label="Primary"><button className={tab === 'today' ? 'active' : ''} onClick={() => setTab('today')}>Today</button><button className={tab === 'progress' ? 'active' : ''} onClick={() => { setActivity(store.loadActivity()); setAssessments(store.loadAssessments()); setReadinessRecords(store.loadReadiness()); setTab('progress'); }}>Progress</button><button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>Settings</button></nav>
+    <nav className="bottom-nav" aria-label="Primary"><button className={tab === 'today' ? 'active' : ''} onClick={() => setTab('today')}>Today</button><button className={tab === 'progress' ? 'active' : ''} onClick={() => { setActivity(store.loadActivity()); setAssessments(store.loadAssessments()); setReadinessRecords(store.loadReadiness()); setTab('progress'); }}>Progress</button><button className={tab === 'health' ? 'active' : ''} onClick={() => setTab('health')}>Health</button><button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>Settings</button></nav>
   </main>;
 }
 

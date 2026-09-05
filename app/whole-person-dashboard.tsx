@@ -185,8 +185,8 @@ export function WholePersonDashboard({
       <p className="muted">Logging records activity you chose to do; it is not exercise clearance or a recommendation. Only planned cardio contributes to the aerobic target.</p>
     </section>
 
-    <details open>
-      <summary><h2>Additional activities</h2></summary>
+    <details>
+      <summary><h2 style={{cursor: 'pointer', display: 'inline-block'}}>Additional activities</h2></summary>
 
     <section className="card" aria-labelledby="minimum-day-title">
       <h2 id="minimum-day-title">Quick workout option</h2>

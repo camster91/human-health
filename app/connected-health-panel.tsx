@@ -247,7 +247,7 @@ export function ConnectedHealthPanel() {
 
   return <>
     <section className="hero health-hero">
-      <span className="pill">PHASE 3 · LOCAL-FIRST</span>
+      <span className="pill">LOCAL-FIRST TRACKING</span>
       <h2>Connected health context</h2>
       <p>Bring in only the signals that improve decisions. Native connections require explicit permission in a compatible app host; browser imports stay on this device and are never uploaded by this implementation.</p>
       <div className="button-row"><button className="primary" disabled={Boolean(busy)} onClick={exportFull}>Export complete archive</button><button className="ghost" disabled={Boolean(busy)} onClick={exportConnected}>Export connected data</button></div>
