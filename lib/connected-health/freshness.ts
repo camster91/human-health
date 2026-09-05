@@ -1,10 +1,19 @@
 import { metricDefinitions } from './metrics';
 import { ConnectedMetric, HealthObservation, HealthSourceState, ObservationFreshness } from './types';
 
+/**
+ * The age of health evidence is based on when the underlying event happened,
+ * not when a provider created/imported the record. Ingestion recency is already
+ * preserved separately in provenance.importedAt.
+ */
+export function observationEvidenceTime(observation: HealthObservation) {
+  return Date.parse(observation.endTime || observation.startTime);
+}
+
 export function observationFreshness(observation: HealthObservation, now = new Date()): ObservationFreshness {
-  const recorded = Date.parse(observation.recordedAt || observation.endTime || observation.startTime);
-  if (!Number.isFinite(recorded)) return 'invalid';
-  const age = now.getTime() - recorded;
+  const observed = observationEvidenceTime(observation);
+  if (!Number.isFinite(observed)) return 'invalid';
+  const age = now.getTime() - observed;
   if (age < -5 * 60_000) return 'future';
   return age <= metricDefinitions[observation.metric].defaultFreshMs ? 'current' : 'stale';
 }
@@ -26,7 +35,13 @@ export function observationsForMetric(observations: HealthObservation[], metric:
       if (freshness === 'invalid' || freshness === 'future') return false;
       return !options.currentOnly || freshness === 'current';
     })
-    .sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt));
+    .sort((a, b) => {
+      const evidenceDifference = observationEvidenceTime(b) - observationEvidenceTime(a);
+      if (evidenceDifference) return evidenceDifference;
+      const recordedDifference = Date.parse(b.recordedAt) - Date.parse(a.recordedAt);
+      if (recordedDifference) return recordedDifference;
+      return a.id.localeCompare(b.id);
+    });
 }
 
 export function chooseSourceForMetric(observations: HealthObservation[], sources: HealthSourceState[], metric: ConnectedMetric, preferredSourceId?: string, now = new Date()) {
