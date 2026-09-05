@@ -1,4 +1,4 @@
-import { ReadinessInput } from '../whole-person';
+import { ReadinessInput, ReadinessRecord } from '../whole-person';
 import { connectedSleepReadiness, ConnectedHealthSummary } from './summary';
 
 export const CONNECTED_SLEEP_CONTEXT_KEY = 'human-health:connected-sleep-context';
@@ -31,6 +31,11 @@ export function saveConnectedSleepContext(summary: ConnectedHealthSummary, enabl
   }
 }
 
+/**
+ * The persisted cache is disposable derived state. Loading it can support recovery/UI
+ * inspection, but the training planner must not treat its mere presence as proof that
+ * the underlying connected-health repository is currently trustworthy.
+ */
 export function loadConnectedSleepContext(now = new Date(), maxAgeMs = 48 * 3_600_000): ConnectedSleepContext | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -53,6 +58,41 @@ export function loadConnectedSleepContext(now = new Date(), maxAgeMs = 48 * 3_60
     remove();
     return null;
   }
+}
+
+function combineManualWithConnectedContext(manual: ReadinessRecord[], connected: ConnectedSleepContext | null, now = new Date()) {
+  if (!connected) return manual;
+  const latest = manual.at(-1);
+  const manualTime = latest ? Date.parse(latest.recordedAt) : Number.NaN;
+  const age = now.getTime() - manualTime;
+  const manualFresh = Number.isFinite(manualTime) && age >= -5 * 60_000 && age <= 24 * 3_600_000;
+  const manualHasSleep = manualFresh && (latest?.input.sleep !== undefined || typeof latest?.input.sleepHours === 'number');
+  if (manualHasSleep) return manual;
+  const manualInput = manualFresh ? latest?.input || {} : {};
+  const recordedAt = manualFresh && manualTime > Date.parse(connected.observedAt) ? latest!.recordedAt : connected.observedAt;
+  return [...manual, { recordedAt, input: { ...connected.input, ...manualInput }, source: 'connected-sleep' as const, sourceName: connected.sourceName }];
+}
+
+/**
+ * Add connected sleep only from a connected-health summary that the caller has
+ * already loaded through the live repository integrity path. This is the planning/
+ * coaching boundary; it intentionally does not read the persisted derived cache.
+ */
+export function mergeTrustedConnectedSleepReadiness(
+  manual: ReadinessRecord[],
+  summary: ConnectedHealthSummary,
+  enabled: boolean,
+  now = new Date(),
+): ReadinessRecord[] {
+  const input = connectedSleepReadiness(summary, enabled);
+  const sleep = summary.sleepLastNight;
+  if (!enabled || sleep.status !== 'current' || !sleep.sourceId || !sleep.sourceName || !sleep.recordedAt || Object.keys(input).length === 0) return manual;
+  return combineManualWithConnectedContext(manual, {
+    observedAt: sleep.recordedAt,
+    sourceId: sleep.sourceId,
+    sourceName: sleep.sourceName,
+    input,
+  }, now);
 }
 
 export function clearConnectedSleepContext() {
