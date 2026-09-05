@@ -198,7 +198,7 @@ export function HumanHealthApp() {
     ].filter(Boolean);
     setNotes(explanations);
     if (!adapted.exercises.length) {
-      setTab('coach');
+      setNotes([...explanations, 'No exercises could be generated with current equipment and constraints. Please adjust settings or equipment availability.']);
       return;
     }
 
@@ -333,7 +333,7 @@ export function HumanHealthApp() {
     setSwapIndex(null);
     setShowAddExercise(false);
     setNotes(summarizeWorkout(entry.exercises, history).messages);
-    setTab('coach');
+    setTab('today');
   }
 
   function pauseWorkout() {
