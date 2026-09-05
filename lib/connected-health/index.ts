@@ -1,6 +1,7 @@
 export * from './types';
 export * from './metrics';
 export * from './merge';
+export * from './integrity';
 export * from './freshness';
 export * from './local-day';
 export * from './bridge';
