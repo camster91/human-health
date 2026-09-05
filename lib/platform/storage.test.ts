@@ -81,6 +81,21 @@ describe('Phase 5 local platform storage', () => {
     expect(raw.records.map(item => item.id)).toEqual(['good', 'bad']);
   }));
 
+  it('restores exact corrupt raw platform bytes after an explicit replace recovery attempt', () => withMemoryStorage(memory => {
+    memory.setItem('human-health:platform:v1', '{bad json');
+    expect(platformStore.load()).toEqual({ schemaVersion: 1, records: [], reminders: [] });
+    expect(platformStore.getMutationError()).toContain('invalid');
+    const backup = platformStore.captureRecoverySnapshot();
+
+    expect(platformStore.importData({ schemaVersion: 1, records: [], reminders: [] }, 'replace')).toEqual({ schemaVersion: 1, records: [], reminders: [] });
+    expect(platformStore.getMutationError()).toBeNull();
+
+    expect(platformStore.restoreRecoverySnapshot(backup)).toBe(true);
+    expect(memory.getItem('human-health:platform:v1')).toBe('{bad json');
+    expect(platformStore.load()).toEqual({ schemaVersion: 1, records: [], reminders: [] });
+    expect(platformStore.getMutationError()).toContain('invalid');
+  }));
+
   it('rejects malformed archives instead of coercing them', () => {
     expect(() => validatePlatformData({ schemaVersion: 2, records: [], reminders: [] })).toThrow('Unsupported platform archive version');
     expect(() => validatePlatformData({ schemaVersion: 1, records: [{ id: 'bad' }], reminders: [] })).toThrow();
