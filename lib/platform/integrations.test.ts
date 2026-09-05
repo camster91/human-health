@@ -7,7 +7,7 @@ import { createIntegrationBundle, integrationBundleContainsOnlyScopes, shareInte
 const training: HumanHealthExport = { schemaVersion: 2, exportedAt: '2026-09-03T12:00:00Z', activeWorkout: null, restTimer: null, history: [], activity: [], readiness: [], skills: {}, assessments: [], progressions: {}, skillAssessments: [], preferences: defaultPreferences, scheduleEvents: [] };
 
 function preventiveBundle() {
-  return createIntegrationBundle({ scopes: ['preventive:read'], training, connectedObservations: [], connectedSources: [], preventiveRecords: [], preventiveReminders: [], generatedAt: new Date('2026-09-03T12:00:00Z') });
+  return createIntegrationBundle({ scopes: ['preventive:read'], preventiveRecords: [], preventiveReminders: [], generatedAt: new Date('2026-09-03T12:00:00Z') });
 }
 
 describe('integration bundles', () => {
@@ -19,8 +19,22 @@ describe('integration bundles', () => {
     expect(integrationBundleContainsOnlyScopes(bundle)).toBe(true);
   });
 
+  it('allows a preventive-only bundle when training or connected-health data is unavailable', () => {
+    expect(() => createIntegrationBundle({ scopes: ['preventive:read'], training: null, connectedObservations: null, connectedSources: null, preventiveRecords: [], preventiveReminders: [] })).not.toThrow();
+  });
+
+  it('requires trusted data only when the corresponding scope is selected', () => {
+    expect(() => createIntegrationBundle({ scopes: ['training:read'], training: null, preventiveRecords: [], preventiveReminders: [] })).toThrow('Trusted training data');
+    expect(() => createIntegrationBundle({ scopes: ['connected-health:read'], connectedObservations: null, connectedSources: null, preventiveRecords: [], preventiveReminders: [] })).toThrow('Trusted connected-health data');
+
+    const trainingBundle = createIntegrationBundle({ scopes: ['training:read'], training, preventiveRecords: [], preventiveReminders: [] });
+    expect(trainingBundle.training).toEqual(training);
+    const connectedBundle = createIntegrationBundle({ scopes: ['connected-health:read'], connectedObservations: [], connectedSources: [], preventiveRecords: [], preventiveReminders: [] });
+    expect(connectedBundle.connectedHealth).toEqual({ observations: [], sources: [] });
+  });
+
   it('requires at least one explicit scope and rejects malformed declared payloads', () => {
-    expect(() => createIntegrationBundle({ scopes: [], training, connectedObservations: [], connectedSources: [], preventiveRecords: [], preventiveReminders: [] })).toThrow();
+    expect(() => createIntegrationBundle({ scopes: [], preventiveRecords: [], preventiveReminders: [] })).toThrow();
     expect(integrationBundleContainsOnlyScopes({ ...preventiveBundle(), preventive: undefined })).toBe(false);
     expect(integrationBundleContainsOnlyScopes({ ...preventiveBundle(), scopes: ['preventive:read', 'preventive:read'] })).toBe(false);
   });
