@@ -52,7 +52,7 @@ export async function importFullHealthArchive(text: string, mode: 'merge' | 'rep
   // If any raw snapshot cannot be captured, fail before mutating another domain.
   const trainingBackup = store.captureRecoverySnapshot();
   const connectedBackup = await healthRepository.captureRecoverySnapshot();
-  const platformBackup = readablePlatformSnapshot();
+  const platformBackup = platformStore.captureRecoverySnapshot();
   try {
     store.importData(archive.training, mode);
     await healthRepository.importData(archive.connected, mode);
@@ -64,7 +64,9 @@ export async function importFullHealthArchive(text: string, mode: 'merge' | 'rep
       if (!store.restoreRecoverySnapshot(trainingBackup)) throw new Error(store.getMutationError() || 'Training rollback failed.');
     } catch (failure) { rollbackError = failure; }
     try { await healthRepository.restoreRecoverySnapshot(connectedBackup); } catch (failure) { rollbackError ||= failure; }
-    try { platformStore.importData(platformBackup, 'replace'); } catch (failure) { rollbackError ||= failure; }
+    try {
+      if (!platformStore.restoreRecoverySnapshot(platformBackup)) throw new Error(platformStore.getMutationError() || 'Platform rollback failed.');
+    } catch (failure) { rollbackError ||= failure; }
     if (rollbackError) {
       const original = error instanceof Error ? error.message : 'Archive import failed.';
       const rollback = rollbackError instanceof Error ? rollbackError.message : 'Rollback failed.';
