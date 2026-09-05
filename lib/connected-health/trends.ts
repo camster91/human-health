@@ -1,4 +1,4 @@
-import { chooseSourceForMetric, observationFreshness, sourceFreshness } from './freshness';
+import { chooseSourceForMetric, observationEvidenceTime, observationFreshness, sourceFreshness } from './freshness';
 import { deviceLocalDayKey } from './local-day';
 import { metricDefinitions } from './metrics';
 import { ConnectedHealthPreferences, ConnectedMetric, HealthObservation, HealthSourceState } from './types';
@@ -75,12 +75,12 @@ export function metricTrend(
   const selected = observations
     .filter(item => {
       if (item.metric !== metric || item.sourceId !== source.id) return false;
-      const at = Date.parse(item.endTime || item.startTime);
+      const at = observationEvidenceTime(item);
       if (!Number.isFinite(at) || at < start.getTime() || at > now.getTime()) return false;
       const freshness = observationFreshness(item, now);
       return freshness !== 'future' && freshness !== 'invalid';
     })
-    .sort((a, b) => Date.parse(a.recordedAt) - Date.parse(b.recordedAt));
+    .sort((a, b) => observationEvidenceTime(a) - observationEvidenceTime(b) || a.id.localeCompare(b.id));
   const daily = dailyValues(selected, metric);
   const currentStart = new Date(now.getTime() - days * 86_400_000);
   const current = daily.filter(item => Date.parse(`${item.date}T23:59:59`) >= currentStart.getTime()).map(item => item.value);
