@@ -1,3 +1,4 @@
+import { assertConnectedHealthRelationships } from '../connected-health/integrity';
 import { workingLogs } from '../engine';
 import type { ConnectedMetricSummary, ClinicianExportInput } from './types';
 
@@ -25,6 +26,7 @@ export type ClinicianFriendlySummary = {
 };
 
 export function buildClinicianSummary(input: ClinicianExportInput): ClinicianFriendlySummary {
+  assertConnectedHealthRelationships(input.connectedObservations, input.connectedSources);
   const now = input.generatedAt || new Date();
   const lookbackDays = Math.max(30, Math.min(730, Math.floor(input.lookbackDays || 90)));
   const cutoff = now.getTime() - lookbackDays * 86_400_000;
