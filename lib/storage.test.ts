@@ -3,7 +3,7 @@ import { defaultPreferences } from './preferences';
 import { store } from './storage';
 
 class MemoryStorage {
-  private values = new Map<string, string>();
+  protected values = new Map<string, string>();
   getItem(key: string) { return this.values.get(key) ?? null; }
   setItem(key: string, value: string) { this.values.set(key, String(value)); }
   removeItem(key: string) { this.values.delete(key); }
@@ -19,6 +19,14 @@ class FaultyStorage extends MemoryStorage {
   removeItem(key: string) {
     if (key === this.failRemoveKey) throw new Error(`remove failed for ${key}`);
     super.removeItem(key);
+  }
+}
+
+class ReadFaultStorage extends MemoryStorage {
+  constructor(private readonly failReadKey: string) { super(); }
+  getItem(key: string) {
+    if (key === this.failReadKey) throw new Error(`read failed for ${key}`);
+    return super.getItem(key);
   }
 }
 
@@ -66,25 +74,32 @@ describe('local-first storage', () => {
     } finally { restore(); }
   });
 
-  it('fails closed on invalid persisted preferences and active workout data', () => {
+  it('fails closed on invalid persisted preferences and active workout data without silently overwriting them', () => {
     const memory = new MemoryStorage();
     const restore = installStorage(memory);
     try {
-      memory.setItem('human-health:preferences', JSON.stringify({ lifeMode: 'bad', cardioTargetMinutes: 9999 }));
-      memory.setItem('human-health:active', JSON.stringify({ id: 'broken' }));
+      const badPreferences = JSON.stringify({ lifeMode: 'bad', cardioTargetMinutes: 9999 });
+      const badActive = JSON.stringify({ id: 'broken' });
+      memory.setItem('human-health:preferences', badPreferences);
+      memory.setItem('human-health:active', badActive);
 
       expect(store.loadPreferences()).toEqual(defaultPreferences);
       expect(store.loadActive()).toBeNull();
       expect(store.getIntegrityErrors().length).toBeGreaterThanOrEqual(2);
       expect(() => store.exportData()).toThrow('Complete training export refused');
 
-      expect(store.savePreferences(defaultPreferences)).toBe(true);
-      expect(store.saveActive(null)).toBe(true);
+      expect(store.savePreferences(defaultPreferences)).toBe(false);
+      expect(store.saveActive(null)).toBe(false);
+      expect(memory.getItem('human-health:preferences')).toBe(badPreferences);
+      expect(memory.getItem('human-health:active')).toBe(badActive);
+
+      expect(store.importData(emptyArchive(), 'replace').schemaVersion).toBe(2);
+      expect(store.getIntegrityErrors()).toEqual([]);
       expect(store.exportData().schemaVersion).toBe(2);
     } finally { restore(); }
   });
 
-  it('distinguishes malformed JSON from an absent key and refuses complete export', () => {
+  it('distinguishes malformed JSON from an absent key and keeps explicit delete-all available', () => {
     const memory = new MemoryStorage();
     const restore = installStorage(memory);
     try {
@@ -96,8 +111,9 @@ describe('local-first storage', () => {
       expect(store.getMutationError()).toContain('corrupt or unsupported');
       expect(() => store.exportData()).toThrow('Complete training export refused');
 
-      memory.removeItem('human-health:history');
-      expect(store.loadHistory()).toEqual([]);
+      expect(store.clearAll()).toBe(true);
+      expect(memory.getItem('human-health:history')).toBeNull();
+      expect(store.getIntegrityErrors()).toEqual([]);
       expect(store.exportData().history).toEqual([]);
     } finally { restore(); }
   });
@@ -113,10 +129,22 @@ describe('local-first storage', () => {
       expect(store.getIntegrityErrors().some(message => message.includes('workout history'))).toBe(true);
       expect(store.getIntegrityErrors().some(message => message.includes('activity'))).toBe(true);
       expect(() => store.exportData()).toThrow('Complete training export refused');
+      expect(store.saveActivity([])).toBe(false);
     } finally { restore(); }
   });
 
-  it('allows a validated replace import to repair corrupt current training state', () => {
+  it('treats browser read-access failure as untrusted persisted state rather than an empty store', () => {
+    const memory = new ReadFaultStorage('human-health:history');
+    const restore = installStorage(memory);
+    try {
+      expect(store.loadHistory()).toEqual([]);
+      expect(store.getMutationError()).toContain('could not be read from browser storage');
+      expect(() => store.exportData()).toThrow('corrupt or unreadable');
+      expect(store.savePreferences(defaultPreferences)).toBe(false);
+    } finally { restore(); }
+  });
+
+  it('allows a validated replace import to repair corrupt current training state while merge refuses it', () => {
     const memory = new MemoryStorage();
     const restore = installStorage(memory);
     try {
