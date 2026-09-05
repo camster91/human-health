@@ -28,7 +28,7 @@ export function createIntegrationBundle(options: {
   if (scopes.includes('training:read')) bundle.training = options.training;
   if (scopes.includes('connected-health:read')) bundle.connectedHealth = { observations: options.connectedObservations, sources: options.connectedSources };
   if (scopes.includes('preventive:read')) bundle.preventive = { records: options.preventiveRecords, reminders: options.preventiveReminders };
-  if (scopes.includes('coaching:read')) bundle.coaching = { note: 'Phase 4 coaching is deterministic fitness guidance. An integration should consume an explicit exported snapshot rather than silently invoking hidden recommendations.' };
+  if (scopes.includes('coaching:read')) bundle.coaching = { note: 'Coaching is deterministic fitness guidance. An integration should consume an explicit exported snapshot rather than silently invoking hidden recommendations.' };
   return bundle;
 }
 

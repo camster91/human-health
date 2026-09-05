@@ -21,7 +21,7 @@ function read(): PlatformLocalData {
   if (typeof window === 'undefined') return createEmptyPlatformData();
   let raw: string | null;
   try { raw = localStorage.getItem(KEY); }
-  catch { mutationFailure = 'Browser storage is unavailable, so Phase 5 preventive/platform data could not be read.'; return createEmptyPlatformData(); }
+  catch { mutationFailure = 'Browser storage is unavailable, so saved health data could not be read.'; return createEmptyPlatformData(); }
   if (!raw) { mutationFailure = null; return createEmptyPlatformData(); }
   try {
     const parsed = JSON.parse(raw) as Partial<PlatformLocalData>;
@@ -29,10 +29,10 @@ function read(): PlatformLocalData {
     const records: PreventiveRecord[] = []; const reminders: PreventiveReminder[] = []; let skipped = 0;
     for (const record of parsed.records) { try { records.push(normalizePreventiveRecord(record)); } catch { skipped++; } }
     for (const reminder of parsed.reminders) { try { reminders.push(normalizePreventiveReminder(reminder)); } catch { skipped++; } }
-    mutationFailure = skipped ? `${skipped} invalid preventive entr${skipped === 1 ? 'y was' : 'ies were'} detected. Mutations are blocked until the Phase 5 data is replaced or deleted so unreadable records are not silently lost.` : null;
+    mutationFailure = skipped ? `${skipped} invalid preventive entr${skipped === 1 ? 'y was' : 'ies were'} detected. Mutations are blocked until the platform health data is replaced or deleted so unreadable records are not silently lost.` : null;
     return { schemaVersion: 1, records: dedupeById(records), reminders: dedupeById(reminders) };
   } catch {
-    mutationFailure = 'Saved Phase 5 platform data was invalid. Mutations are blocked until it is replaced or deleted.';
+    mutationFailure = 'Saved platform health data was invalid. Mutations are blocked until it is replaced or deleted.';
     return createEmptyPlatformData();
   }
 }
@@ -46,7 +46,7 @@ function readForMutation() {
 function write(value: PlatformLocalData) {
   if (typeof window === 'undefined') return false;
   try { localStorage.setItem(KEY, JSON.stringify(validatePlatformData(value))); mutationFailure = null; return true; }
-  catch (error) { mutationFailure = error instanceof Error ? error.message : 'Phase 5 platform data could not be saved locally.'; return false; }
+  catch (error) { mutationFailure = error instanceof Error ? error.message : 'Platform health data could not be saved locally.'; return false; }
 }
 
 function merged(current: PlatformLocalData, incoming: PlatformLocalData): PlatformLocalData {
@@ -96,7 +96,7 @@ export const platformStore = {
   clear() {
     if (typeof window === 'undefined') return true;
     try { localStorage.removeItem(KEY); mutationFailure = null; return true; }
-    catch { mutationFailure = 'Phase 5 platform data could not be deleted locally.'; return false; }
+    catch { mutationFailure = 'Platform health data could not be deleted locally.'; return false; }
   },
   exportData() { return read(); },
 };

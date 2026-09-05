@@ -16,7 +16,7 @@ export type FullHealthArchive = {
 function readablePlatformSnapshot() {
   const platform = platformStore.exportData();
   const error = platformStore.getMutationError();
-  if (error) throw new Error(`Phase 5 platform data cannot be safely included in a complete archive: ${error}`);
+  if (error) throw new Error(`Platform health data cannot be safely included in a complete archive: ${error}`);
   return platform;
 }
 

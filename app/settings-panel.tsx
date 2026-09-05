@@ -49,7 +49,7 @@ export function SettingsPanel({
     }
     update({ availablePlatesKg: plates });
     setPlatesText(plates.join(', '));
-    setNotice('Plate denominations saved. Physical plate-pair quantities are assumed available.');
+    setNotice('Plate denominations saved. Physical plate-pair quantities are not currently modelled.');
   }
 
   async function toggleNotifications() {
@@ -72,7 +72,7 @@ export function SettingsPanel({
     setNotice('');
     try {
       downloadJson(`human-health-full-${new Date().toISOString().slice(0, 10)}.json`, await createFullHealthArchive());
-      setNotice('Complete local archive prepared, including training, health tracking, and preventive care data.');
+      setNotice('Complete local archive prepared, including training, connected-health, and preventive health data.');
     } catch (error) {
       setNotice(error instanceof Error ? `Complete export failed: ${error.message}` : 'Complete export failed.');
     } finally {
@@ -81,7 +81,7 @@ export function SettingsPanel({
   }
 
   async function clearData() {
-    if (!window.confirm('Delete ALL Human Health data stored in this browser, including training, health tracking, and preventive care data? This cannot be undone unless you exported a complete backup.')) return;
+    if (!window.confirm('Delete ALL Human Health data stored in this browser, including training, connected-health, and preventive health data? This cannot be undone unless you exported a complete backup.')) return;
     setDataBusy(true);
     setNotice('');
     try {
@@ -138,7 +138,7 @@ export function SettingsPanel({
 
     <section className="card" aria-labelledby="data-controls-title">
       <h2 id="data-controls-title">Your local data</h2>
-      <p className="muted">Human Health stores training, health tracking, and preventive care data locally in this browser. Export a complete archive before clearing or moving devices. Delete-all attempts every local domain even if one store is corrupt or unavailable; any partial failure is reported and already-deleted domains are not recreated.</p>
+      <p className="muted">Human Health stores training, connected-health, and preventive health data locally in this browser. Export a complete archive before clearing or moving devices. Delete-all attempts every local domain even if one store is corrupt or unavailable; any partial failure is reported and already-deleted domains are not recreated.</p>
       <div className="button-row"><button className="primary" disabled={dataBusy} onClick={() => void exportData()}>{dataBusy ? 'Working…' : 'Export complete archive'}</button><button className="danger" disabled={dataBusy} onClick={() => void clearData()}>Delete all local data</button></div>
     </section>
 
