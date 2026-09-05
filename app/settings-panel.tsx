@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { clearAllHumanHealthData, createFullHealthArchive, downloadJson } from '@/lib/connected-health';
 import { Equipment, GymProfile, SessionId } from '@/lib/domain';
 import { DomainPriority, UserPreferences } from '@/lib/preferences';
@@ -48,7 +49,7 @@ export function SettingsPanel({
     }
     update({ availablePlatesKg: plates });
     setPlatesText(plates.join(', '));
-    setNotice('Plate denominations saved. Physical plate-pair quantities are not modelled in Phase 2.');
+    setNotice('Plate denominations saved. Physical plate-pair quantities are assumed available.');
   }
 
   async function toggleNotifications() {
@@ -71,7 +72,7 @@ export function SettingsPanel({
     setNotice('');
     try {
       downloadJson(`human-health-full-${new Date().toISOString().slice(0, 10)}.json`, await createFullHealthArchive());
-      setNotice('Complete local archive prepared, including training, connected-health, and Phase 5 platform data.');
+      setNotice('Complete local archive prepared, including training, health tracking, and preventive care data.');
     } catch (error) {
       setNotice(error instanceof Error ? `Complete export failed: ${error.message}` : 'Complete export failed.');
     } finally {
@@ -80,7 +81,7 @@ export function SettingsPanel({
   }
 
   async function clearData() {
-    if (!window.confirm('Delete ALL Human Health data stored in this browser, including training, connected-health, and Phase 5 platform data? This cannot be undone unless you exported a complete backup.')) return;
+    if (!window.confirm('Delete ALL Human Health data stored in this browser, including training, health tracking, and preventive care data? This cannot be undone unless you exported a complete backup.')) return;
     setDataBusy(true);
     setNotice('');
     try {
@@ -137,8 +138,14 @@ export function SettingsPanel({
 
     <section className="card" aria-labelledby="data-controls-title">
       <h2 id="data-controls-title">Your local data</h2>
-      <p className="muted">Human Health stores training, connected-health, and Phase 5 platform data locally in this browser. Export a complete archive before clearing or moving devices. Delete-all attempts every local domain even if one store is corrupt or unavailable; any partial failure is reported and already-deleted domains are not recreated.</p>
+      <p className="muted">Human Health stores training, health tracking, and preventive care data locally in this browser. Export a complete archive before clearing or moving devices. Delete-all attempts every local domain even if one store is corrupt or unavailable; any partial failure is reported and already-deleted domains are not recreated.</p>
       <div className="button-row"><button className="primary" disabled={dataBusy} onClick={() => void exportData()}>{dataBusy ? 'Working…' : 'Export complete archive'}</button><button className="danger" disabled={dataBusy} onClick={() => void clearData()}>Delete all local data</button></div>
+    </section>
+
+    <section className="card">
+      <h2>Privacy & Data Practices</h2>
+      <p className="muted">Learn how Human Health handles your data, safety boundaries, and medical disclaimers.</p>
+      <Link href="/privacy" className="primary" style={{display: 'inline-block', textDecoration: 'none', textAlign: 'center'}}>View privacy & data practices</Link>
     </section>
   </>;
 }
