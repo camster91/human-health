@@ -1,3 +1,4 @@
+import { assertConnectedHealthRelationships } from '../integrity';
 import { mergeObservationCollections, normalizeConnectedPreferences, normalizeSourceState } from '../merge';
 import { ConnectedHealthPreferences, ConnectedMetric, HealthObservation, HealthRepositoryExport, HealthSourceState, connectedMetrics, defaultConnectedHealthPreferences } from '../types';
 
@@ -25,7 +26,7 @@ export function parseConnectedSourceState(value: unknown): HealthSourceState {
   for (const [label, candidate] of [['last attempt', source.lastAttemptAt], ['last success', source.lastSuccessAt]] as const) {
     if (candidate !== undefined && (!candidate || typeof candidate !== 'string' || !Number.isFinite(Date.parse(candidate)))) throw new Error(`Connected-health archive source ${source.id} has an invalid ${label} timestamp.`);
   }
-  if (source.recordCount !== undefined && (!Number.isFinite(source.recordCount) || source.recordCount < 0)) throw new Error(`Connected-health archive source ${source.id} has an invalid record count.`);
+  if (source.recordCount !== undefined && (!Number.isSafeInteger(source.recordCount) || source.recordCount < 0)) throw new Error(`Connected-health archive source ${source.id} has an invalid record count.`);
   if (source.cursor !== undefined && (typeof source.cursor !== 'string' || !source.cursor)) throw new Error(`Connected-health archive source ${source.id} has an invalid cursor.`);
   if (source.error !== undefined && typeof source.error !== 'string') throw new Error(`Connected-health archive source ${source.id} has an invalid error field.`);
   if (source.partialReason !== undefined && typeof source.partialReason !== 'string') throw new Error(`Connected-health archive source ${source.id} has an invalid partial-reason field.`);
@@ -84,7 +85,9 @@ export function parseConnectedJson(text: string): HealthRepositoryExport {
   if (!data || data.schemaVersion !== 1 || !Array.isArray(data.observations) || !Array.isArray(data.sources)) throw new Error('Unsupported connected-health JSON format.');
   const merged = mergeObservationCollections([], data.observations as HealthObservation[]);
   if (merged.rejected) throw new Error(`${merged.rejected} connected-health observations were invalid.`);
+  if (merged.observations.length !== data.observations.length) throw new Error('Connected-health archive contains duplicate observation identities.');
   const sources = data.sources.map(parseConnectedSourceState);
+  assertConnectedHealthRelationships(merged.observations, sources);
   return {
     schemaVersion: 1,
     exportedAt: parseExportedAt(data.exportedAt),
