@@ -2,7 +2,7 @@ import { CONNECTED_SLEEP_CONTEXT_KEY, loadConnectedSleepContext } from './connec
 import { HistoryEntry, Workout } from './domain';
 import { SkillAssessment } from './performance';
 import { defaultPreferences, normalizePreferences, UserPreferences } from './preferences';
-import { RestTimerState, sanitizeRestTimer, startRestTimer } from './rest-timer';
+import { RestTimerState, startRestTimer } from './rest-timer';
 import { ScheduleEvent } from './schedule';
 import {
   validateActiveWorkout,
@@ -37,13 +37,57 @@ const FINALIZATION_JOURNAL = `${PREFIX}finalization-journal`;
 const STORAGE_PROBE = `${PREFIX}storage-probe`;
 
 let mutationFailure: string | null = null;
+const integrityFailures = new Map<string, string>();
+
+function integrityError() {
+  return integrityFailures.values().next().value as string | undefined;
+}
+
+function markIntegrityFailure(key: string, label: string, error?: unknown) {
+  const detail = error instanceof Error ? ` ${error.message}` : '';
+  const message = `${label} is corrupt or unsupported and was not trusted.${detail}`;
+  integrityFailures.set(key, message);
+  mutationFailure = message;
+  return message;
+}
+
+function clearIntegrityFailure(key: string) {
+  integrityFailures.delete(key);
+}
+
+function readRaw<T>(key: string, fallback: T): { value: T | unknown; validJson: boolean } {
+  if (typeof window === 'undefined') return { value: fallback, validJson: true };
+  let raw: string | null;
+  try {
+    raw = localStorage.getItem(key);
+  } catch (error) {
+    return { value: fallback, validJson: false };
+  }
+  if (raw === null) {
+    clearIntegrityFailure(key);
+    return { value: fallback, validJson: true };
+  }
+  try {
+    return { value: JSON.parse(raw) as unknown, validJson: true };
+  } catch (error) {
+    markIntegrityFailure(key, `Saved ${key.replace(PREFIX, '')} data`, error);
+    return { value: fallback, validJson: false };
+  }
+}
 
 function read<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') return fallback;
+  return readRaw(key, fallback).value as T;
+}
+
+function readValidated<T>(key: string, fallback: T, label: string, validator: (value: unknown) => T): T {
+  const raw = readRaw(key, fallback);
+  if (!raw.validJson) return fallback;
   try {
-    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)) as T;
-  } catch {
-    mutationFailure = 'Saved local data could not be read. The affected value was ignored.';
+    const value = validator(raw.value);
+    clearIntegrityFailure(key);
+    return value;
+  } catch (error) {
+    markIntegrityFailure(key, label, error);
     return fallback;
   }
 }
@@ -52,6 +96,7 @@ function write(key: string, value: unknown) {
   if (typeof window === 'undefined') return false;
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    clearIntegrityFailure(key);
     mutationFailure = null;
     return true;
   } catch {
@@ -64,6 +109,7 @@ function remove(key: string) {
   if (typeof window === 'undefined') return false;
   try {
     localStorage.removeItem(key);
+    clearIntegrityFailure(key);
     mutationFailure = null;
     return true;
   } catch {
@@ -102,14 +148,6 @@ function canPersist() {
   }
 }
 
-function activeWorkout(value: unknown): Workout | null {
-  if (!value || typeof value !== 'object') return null;
-  const candidate = value as Partial<Workout>;
-  if (!candidate.id || !candidate.session || !candidate.startedAt || !candidate.gymId || !Array.isArray(candidate.exercises)) return null;
-  if (!['active', 'paused', 'interrupted'].includes(candidate.status || '')) return null;
-  return candidate as Workout;
-}
-
 type FinalizationJournal = {
   version: 1;
   workoutId: string;
@@ -117,24 +155,29 @@ type FinalizationJournal = {
   activity: ActivityDose[] | null;
 };
 
-function finalizationJournal(value: unknown): FinalizationJournal | null {
+function finalizationJournal(value: unknown, now = new Date()): FinalizationJournal | null {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Partial<FinalizationJournal>;
   if (candidate.version !== 1 || typeof candidate.workoutId !== 'string' || !candidate.workoutId || !Array.isArray(candidate.history)) return null;
   if (candidate.activity !== null && !Array.isArray(candidate.activity)) return null;
-  return {
-    version: 1,
-    workoutId: candidate.workoutId,
-    history: deduplicateHistory(candidate.history as HistoryEntry[]),
-    activity: candidate.activity === null ? null : deduplicateWorkoutActivity(candidate.activity as ActivityDose[]),
-  };
+  try {
+    return {
+      version: 1,
+      workoutId: candidate.workoutId,
+      history: deduplicateHistory(validateHistory(candidate.history, now)),
+      activity: candidate.activity === null ? null : deduplicateWorkoutActivity(validateActivity(candidate.activity, now)),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function loadFinalizationJournal() {
-  const raw = read<unknown>(FINALIZATION_JOURNAL, null);
-  if (raw === null) return null;
-  const journal = finalizationJournal(raw);
-  if (!journal) mutationFailure = 'A pending workout finalization record is invalid. The active workout was preserved instead of guessing.';
+  const raw = readRaw<null>(FINALIZATION_JOURNAL, null);
+  if (!raw.validJson || raw.value === null) return null;
+  const journal = finalizationJournal(raw.value);
+  if (!journal) markIntegrityFailure(FINALIZATION_JOURNAL, 'Pending workout finalization data');
+  else clearIntegrityFailure(FINALIZATION_JOURNAL);
   return journal;
 }
 
@@ -150,12 +193,11 @@ function commitFinalizationJournal(journal: FinalizationJournal) {
 }
 
 function storedReadiness(): ReadinessRecord[] {
-  const value = read<unknown>(READINESS, []);
-  if (!Array.isArray(value)) {
-    mutationFailure = 'Saved readiness data was invalid and was ignored.';
-    return [];
-  }
-  return (value as ReadinessRecord[]).filter(record => record && record.source !== 'connected-sleep' && typeof record.recordedAt === 'string' && record.input && typeof record.input === 'object');
+  return readValidated(READINESS, [], 'Saved readiness data', value => {
+    if (!Array.isArray(value)) throw new Error('Readiness must be an array.');
+    const manual = value.filter(record => !(record && typeof record === 'object' && (record as { source?: unknown }).source === 'connected-sleep'));
+    return validateReadiness(manual, new Date());
+  });
 }
 
 function effectiveReadiness(): ReadinessRecord[] {
@@ -284,11 +326,13 @@ function serializedTrainingSnapshot(next: HumanHealthExport, mode: 'merge' | 're
 
 export const store = {
   canPersist,
-  getMutationError() { return mutationFailure; },
+  getMutationError() { return mutationFailure || integrityError() || null; },
+  getIntegrityErrors() { return [...integrityFailures.values()]; },
   clearMutationError() { mutationFailure = null; },
 
   loadActive(): Workout | null {
-    const active = activeWorkout(read<unknown>(ACTIVE, null));
+    const now = new Date();
+    const active = readValidated(ACTIVE, null, 'Saved active workout', value => validateActiveWorkout(value, now));
     const journal = loadFinalizationJournal();
     if (journal) {
       if (active && journal.workoutId !== active.id) {
@@ -301,8 +345,7 @@ export const store = {
       return null;
     }
 
-    const historyValue = read<unknown>(HISTORY, []);
-    const history = Array.isArray(historyValue) ? deduplicateHistory(historyValue as HistoryEntry[]) : [];
+    const history = readValidated(HISTORY, [], 'Saved workout history', value => deduplicateHistory(validateHistory(value, now)));
     if (activeWorkoutWasFinalized(active, history)) {
       runMutations([() => remove(ACTIVE), () => remove(REST_TIMER), () => remove(LEGACY_REST_UNTIL)], 'Finalized workout state could not be fully cleaned up.');
       return null;
@@ -312,15 +355,22 @@ export const store = {
   saveActive(value: Workout | null) { return value ? write(ACTIVE, value) : remove(ACTIVE); },
 
   loadRestTimer(): RestTimerState | null {
-    const current = sanitizeRestTimer(read<unknown>(REST_TIMER, null));
+    const now = new Date();
+    const current = readValidated(REST_TIMER, null, 'Saved rest timer', value => validateRestTimer(value, now));
     if (current) return current;
-    const legacyEndsAt = read<number | null>(LEGACY_REST_UNTIL, null);
+    if (integrityFailures.has(REST_TIMER)) return null;
+    const legacyEndsAt = readValidated(LEGACY_REST_UNTIL, null, 'Saved legacy rest timer', value => {
+      if (value === null) return null;
+      if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error('Legacy timer end must be finite.');
+      return value;
+    });
     if (legacyEndsAt && legacyEndsAt > Date.now()) {
       const migrated = startRestTimer((legacyEndsAt - Date.now()) / 1000);
       write(REST_TIMER, migrated);
       remove(LEGACY_REST_UNTIL);
       return migrated;
     }
+    if (integrityFailures.has(LEGACY_REST_UNTIL)) return null;
     runMutations([() => remove(REST_TIMER), () => remove(LEGACY_REST_UNTIL)], 'Expired rest timer data could not be fully cleaned up.');
     return null;
   },
@@ -332,13 +382,11 @@ export const store = {
   saveRestUntil(value: number | null) { return store.saveRestTimer(value ? { status: 'running', endsAt: value, durationMs: Math.max(1, value - Date.now()) } : null); },
 
   loadHistory(): HistoryEntry[] {
-    const value = read<unknown>(HISTORY, []);
-    if (!Array.isArray(value)) { mutationFailure = 'Saved workout history was invalid and was ignored.'; return []; }
-    return deduplicateHistory(value as HistoryEntry[]);
+    return readValidated(HISTORY, [], 'Saved workout history', value => deduplicateHistory(validateHistory(value, new Date())));
   },
   saveHistory(value: HistoryEntry[]) {
     const next = deduplicateHistory(value);
-    const active = activeWorkout(read<unknown>(ACTIVE, null));
+    const active = readValidated(ACTIVE, null, 'Saved active workout', current => validateActiveWorkout(current, new Date()));
     if (active && activeWorkoutWasFinalized(active, next)) {
       const currentJournal = loadFinalizationJournal();
       const journal: FinalizationJournal = {
@@ -352,9 +400,7 @@ export const store = {
     return write(HISTORY, next);
   },
   loadActivity(): ActivityDose[] {
-    const value = read<unknown>(ACTIVITY, []);
-    if (!Array.isArray(value)) { mutationFailure = 'Saved activity data was invalid and was ignored.'; return []; }
-    return deduplicateWorkoutActivity(value as ActivityDose[]);
+    return readValidated(ACTIVITY, [], 'Saved activity data', value => deduplicateWorkoutActivity(validateActivity(value, new Date())));
   },
   saveActivity(value: ActivityDose[]) {
     const next = deduplicateWorkoutActivity(value);
@@ -366,21 +412,21 @@ export const store = {
   },
   loadReadiness(): ReadinessRecord[] { return effectiveReadiness(); },
   saveReadiness(value: ReadinessRecord[]) { return write(READINESS, value.filter(record => record.source !== 'connected-sleep').slice(-90)); },
-  loadSkills(): Record<string, string> { return read<Record<string, string>>(SKILLS, {}); },
+  loadSkills(): Record<string, string> { return readValidated(SKILLS, {}, 'Saved skill state', value => validateStringRecord(value, 'skills')); },
   saveSkills(value: Record<string, string>) { return write(SKILLS, value); },
-  loadAssessments(): Assessment[] { const value = read<unknown>(ASSESSMENTS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved capability assessments were invalid and were ignored.'; return []; } return value as Assessment[]; },
+  loadAssessments(): Assessment[] { return readValidated(ASSESSMENTS, [], 'Saved capability assessments', value => validateAssessments(value, new Date())); },
   saveAssessments(value: Assessment[]) { return write(ASSESSMENTS, value); },
-  loadProgressions(): Record<string, string> { return read<Record<string, string>>(PROGRESSIONS, {}); },
+  loadProgressions(): Record<string, string> { return readValidated(PROGRESSIONS, {}, 'Saved progression state', value => validateStringRecord(value, 'progressions')); },
   saveProgressions(value: Record<string, string>) { return write(PROGRESSIONS, value); },
-  loadSkillAssessments(): SkillAssessment[] { const value = read<unknown>(SKILL_ASSESSMENTS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved skill assessments were invalid and were ignored.'; return []; } return value as SkillAssessment[]; },
+  loadSkillAssessments(): SkillAssessment[] { return readValidated(SKILL_ASSESSMENTS, [], 'Saved skill assessments', value => validateSkillAssessments(value, new Date())); },
   saveSkillAssessments(value: SkillAssessment[]) { return write(SKILL_ASSESSMENTS, value); },
-  loadPreferences(): UserPreferences { return normalizePreferences(read<Partial<UserPreferences>>(PREFERENCES, defaultPreferences)); },
+  loadPreferences(): UserPreferences { return readValidated(PREFERENCES, defaultPreferences, 'Saved training preferences', validatePreferences); },
   savePreferences(value: UserPreferences) { return write(PREFERENCES, normalizePreferences(value)); },
-  loadScheduleEvents(): ScheduleEvent[] { const value = read<unknown>(SCHEDULE_EVENTS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved schedule events were invalid and were ignored.'; return []; } return value as ScheduleEvent[]; },
+  loadScheduleEvents(): ScheduleEvent[] { return readValidated(SCHEDULE_EVENTS, [], 'Saved schedule events', value => validateScheduleEvents(value, new Date())); },
   saveScheduleEvents(value: ScheduleEvent[]) { return write(SCHEDULE_EVENTS, value.slice(-100)); },
 
   exportData(): HumanHealthExport {
-    return {
+    const snapshot: HumanHealthExport = {
       schemaVersion: 2,
       exportedAt: new Date().toISOString(),
       activeWorkout: store.loadActive(),
@@ -395,33 +441,41 @@ export const store = {
       preferences: store.loadPreferences(),
       scheduleEvents: store.loadScheduleEvents(),
     };
+    const integrity = store.getIntegrityErrors();
+    if (integrity.length) throw new Error(`Complete training export refused because persisted training data is corrupt: ${integrity.join(' | ')}`);
+    const pendingFinalization = loadFinalizationJournal();
+    if (pendingFinalization) throw new Error('Complete training export refused while workout finalization is still pending. Resolve or recover the active workout first.');
+    return snapshot;
   },
 
   importData(value: unknown, mode: 'merge' | 'replace' = 'merge') {
     const now = new Date();
     const incoming = validateTrainingExport(value, now);
-    const current = store.exportData();
     const pendingFinalization = loadFinalizationJournal();
-    if (pendingFinalization) throw new Error('A workout finalization is still pending. Resolve or recover it before importing an archive.');
+    if (pendingFinalization && mode === 'merge') throw new Error('A workout finalization is still pending. Resolve or recover it before merging an archive.');
+    const current = mode === 'merge' ? store.exportData() : null;
     const next: HumanHealthExport = mode === 'replace' ? incoming : {
-      ...current,
-      activeWorkout: current.activeWorkout || incoming.activeWorkout,
-      restTimer: current.activeWorkout ? current.restTimer : incoming.restTimer,
-      history: deduplicateHistory(mergeUnique(current.history, incoming.history, item => `${item.completedAt}|${item.session}|${item.status || 'completed'}`)),
-      activity: deduplicateWorkoutActivity(mergeUnique(current.activity, incoming.activity, item => `${item.completedAt}|${item.domain}|${item.sessionId || ''}|${item.minutes || ''}|${item.sets || ''}|${item.source || ''}`)),
-      readiness: mergeUnique(current.readiness, incoming.readiness, item => `${item.recordedAt}|${item.source || 'manual'}`),
-      skills: { ...incoming.skills, ...current.skills },
-      assessments: mergeUnique(current.assessments, incoming.assessments, item => `${item.metricId}|${item.recordedAt}`),
-      progressions: { ...incoming.progressions, ...current.progressions },
-      skillAssessments: mergeUnique(current.skillAssessments, incoming.skillAssessments, item => `${item.treeId}|${item.stepId}|${item.recordedAt}`),
-      preferences: current.preferences,
-      scheduleEvents: mergeUnique(current.scheduleEvents, incoming.scheduleEvents, item => `${item.recordedAt}|${item.type}|${item.from}|${item.to}`),
+      ...current!,
+      activeWorkout: current!.activeWorkout || incoming.activeWorkout,
+      restTimer: current!.activeWorkout ? current!.restTimer : incoming.restTimer,
+      history: deduplicateHistory(mergeUnique(current!.history, incoming.history, item => `${item.completedAt}|${item.session}|${item.status || 'completed'}`)),
+      activity: deduplicateWorkoutActivity(mergeUnique(current!.activity, incoming.activity, item => `${item.completedAt}|${item.domain}|${item.sessionId || ''}|${item.minutes || ''}|${item.sets || ''}|${item.source || ''}`)),
+      readiness: mergeUnique(current!.readiness, incoming.readiness, item => `${item.recordedAt}|${item.source || 'manual'}`),
+      skills: { ...incoming.skills, ...current!.skills },
+      assessments: mergeUnique(current!.assessments, incoming.assessments, item => `${item.metricId}|${item.recordedAt}`),
+      progressions: { ...incoming.progressions, ...current!.progressions },
+      skillAssessments: mergeUnique(current!.skillAssessments, incoming.skillAssessments, item => `${item.treeId}|${item.stepId}|${item.recordedAt}`),
+      preferences: current!.preferences,
+      scheduleEvents: mergeUnique(current!.scheduleEvents, incoming.scheduleEvents, item => `${item.recordedAt}|${item.type}|${item.from}|${item.to}`),
       exportedAt: now.toISOString(),
     };
 
     const mutations = serializedTrainingSnapshot(next, mode);
     const snapshot = captureRawStorage([...mutations.keys()]);
-    if (applyRawStorage(mutations)) return next;
+    if (applyRawStorage(mutations)) {
+      for (const key of mutations.keys()) clearIntegrityFailure(key);
+      return next;
+    }
 
     const originalFailure = mutationFailure || 'The browser could not persist the complete training archive.';
     if (!restoreRawStorage(snapshot)) {
