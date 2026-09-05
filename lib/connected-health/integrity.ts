@@ -9,8 +9,8 @@ export type ConnectedHealthRelationshipError = {
 /**
  * Cross-check observations against their source metadata. Individual rows can be
  * structurally valid while the combined connected-health dataset is not: orphaned
- * observations, provider mismatches, or unsupported metrics must not be treated as
- * trusted coaching/export/integration evidence.
+ * observations, duplicate identities, provider mismatches, or unsupported metrics
+ * must not be treated as trusted coaching/export/integration evidence.
  */
 export function connectedHealthRelationshipErrors(
   observations: readonly HealthObservation[],
@@ -18,6 +18,7 @@ export function connectedHealthRelationshipErrors(
 ): ConnectedHealthRelationshipError[] {
   const errors: ConnectedHealthRelationshipError[] = [];
   const sourceMap = new Map<string, HealthSourceState>();
+  const observationIds = new Set<string>();
 
   for (const source of sources) {
     if (sourceMap.has(source.id)) {
@@ -28,6 +29,16 @@ export function connectedHealthRelationshipErrors(
   }
 
   for (const observation of observations) {
+    if (observationIds.has(observation.id)) {
+      errors.push({
+        observationId: observation.id,
+        sourceId: observation.sourceId,
+        message: `Connected-health observation ${observation.id} appears more than once.`,
+      });
+      continue;
+    }
+    observationIds.add(observation.id);
+
     const source = sourceMap.get(observation.sourceId);
     if (!source) {
       errors.push({
