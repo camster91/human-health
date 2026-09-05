@@ -46,11 +46,12 @@ export function parseFullHealthArchive(text: string): FullHealthArchive {
 
 export async function importFullHealthArchive(text: string, mode: 'merge' | 'replace' = 'merge') {
   const archive = parseFullHealthArchive(text);
-  // Preserve the exact raw training keys, including legacy/corrupt values, so a
-  // later connected/platform failure can restore the pre-import state without
-  // requiring that state to be exportable first.
+  // Preserve exact raw local state before mutation. Recovery snapshots are not
+  // user-facing exports and therefore may contain legacy/corrupt bytes/rows that
+  // normal complete export correctly refuses to treat as trusted health data.
+  // If any raw snapshot cannot be captured, fail before mutating another domain.
   const trainingBackup = store.captureRecoverySnapshot();
-  const connectedBackup = await healthRepository.exportData();
+  const connectedBackup = await healthRepository.captureRecoverySnapshot();
   const platformBackup = readablePlatformSnapshot();
   try {
     store.importData(archive.training, mode);
@@ -62,7 +63,7 @@ export async function importFullHealthArchive(text: string, mode: 'merge' | 'rep
     try {
       if (!store.restoreRecoverySnapshot(trainingBackup)) throw new Error(store.getMutationError() || 'Training rollback failed.');
     } catch (failure) { rollbackError = failure; }
-    try { await healthRepository.importData(connectedBackup, 'replace'); } catch (failure) { rollbackError ||= failure; }
+    try { await healthRepository.restoreRecoverySnapshot(connectedBackup); } catch (failure) { rollbackError ||= failure; }
     try { platformStore.importData(platformBackup, 'replace'); } catch (failure) { rollbackError ||= failure; }
     if (rollbackError) {
       const original = error instanceof Error ? error.message : 'Archive import failed.';
