@@ -28,4 +28,13 @@ describe('clinician-friendly export', () => {
     expect(markdown).toContain('source apple-watch');
     expect(markdown).toContain('source apple-phone');
   });
+
+  it('refuses a clinician summary when connected observations have no trusted source metadata', () => {
+    expect(() => buildClinicianSummary({
+      training,
+      connectedObservations: [observation('o1', 'missing-source', 'Unknown', 60)],
+      connectedSources: [],
+      preventiveRecords: [], preventiveReminders: [], generatedAt: new Date('2026-09-03T12:00:00Z'),
+    })).toThrow('references missing source');
+  });
 });
