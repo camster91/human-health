@@ -10,7 +10,13 @@ export type ConnectedSleepContext = {
   input: ReadinessInput;
 };
 
+// Module-lifetime trust only. A persisted derived cache is never trusted merely
+// because it survived a reload; a live connected-health integrity pass must mark
+// the current runtime trusted first.
+let connectedSleepContextTrusted = false;
+
 function remove() {
+  connectedSleepContextTrusted = false;
   if (typeof window === 'undefined') return;
   try { localStorage.removeItem(CONNECTED_SLEEP_CONTEXT_KEY); } catch { /* browser storage can be unavailable */ }
 }
@@ -26,18 +32,20 @@ export function saveConnectedSleepContext(summary: ConnectedHealthSummary, enabl
   try {
     const context: ConnectedSleepContext = { observedAt: sleep.recordedAt, sourceId: sleep.sourceId, sourceName: sleep.sourceName, input };
     localStorage.setItem(CONNECTED_SLEEP_CONTEXT_KEY, JSON.stringify(context));
+    connectedSleepContextTrusted = true;
   } catch {
+    connectedSleepContextTrusted = false;
     // Training remains usable without connected context.
   }
 }
 
 /**
- * The persisted cache is disposable derived state. Loading it can support recovery/UI
- * inspection, but the training planner must not treat its mere presence as proof that
- * the underlying connected-health repository is currently trustworthy.
+ * The persisted cache is disposable derived state. It is only readable for
+ * planning after a live connected-health repository check has trusted/saved it
+ * during the current runtime. A cache surviving reload cannot authorize advice.
  */
 export function loadConnectedSleepContext(now = new Date(), maxAgeMs = 48 * 3_600_000): ConnectedSleepContext | null {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined' || !connectedSleepContextTrusted) return null;
   try {
     const raw = localStorage.getItem(CONNECTED_SLEEP_CONTEXT_KEY);
     if (!raw) return null;
@@ -76,7 +84,7 @@ function combineManualWithConnectedContext(manual: ReadinessRecord[], connected:
 /**
  * Add connected sleep only from a connected-health summary that the caller has
  * already loaded through the live repository integrity path. This is the planning/
- * coaching boundary; it intentionally does not read the persisted derived cache.
+ * coaching boundary and does not depend on persisted-cache trust state.
  */
 export function mergeTrustedConnectedSleepReadiness(
   manual: ReadinessRecord[],
