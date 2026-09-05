@@ -18,6 +18,8 @@ export function CoachingPanel() {
   const [activity, setActivity] = useState<ActivityDose[]>([]);
   const [readiness, setReadiness] = useState<ReadinessRecord[]>([]);
   const [preferences, setPreferences] = useState<UserPreferences>(defaultPreferences);
+  const [loaded, setLoaded] = useState(false);
+  const [trainingIntegrityError, setTrainingIntegrityError] = useState('');
   const [message, setMessage] = useState('');
   const [aiExplanation, setAiExplanation] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
@@ -28,10 +30,13 @@ export function CoachingPanel() {
     setActivity(store.loadActivity());
     setReadiness(store.loadReadiness());
     setPreferences(store.loadPreferences());
+    const integrity = store.getIntegrityErrors();
+    setTrainingIntegrityError(integrity.length ? `Coaching is withheld because persisted training data is corrupt or unreadable: ${integrity.join(' | ')}` : '');
     setAiAvailable(Boolean(getCoachExplanationProvider()));
+    setLoaded(true);
   }, []);
 
-  const connectedSignals = useMemo(() => connectedHealthTrends(connected.observations, connected.sources, connected.preferences).map(item => ({
+  const connectedSignals = useMemo(() => connected.error ? [] : connectedHealthTrends(connected.observations, connected.sources, connected.preferences).map(item => ({
     id: item.metric,
     label: item.label,
     status: item.status,
@@ -41,14 +46,15 @@ export function CoachingPanel() {
     unit: item.unit,
     sampleDays: item.sampleDays,
     note: item.note,
-  })), [connected.observations, connected.sources, connected.preferences]);
+  })), [connected.error, connected.observations, connected.sources, connected.preferences]);
 
-  const snapshot = useMemo(() => createCoachingSnapshot({ history, activity, readiness, preferences, connectedSignals }), [history, activity, readiness, preferences, connectedSignals]);
+  const snapshot = useMemo(() => loaded && !trainingIntegrityError ? createCoachingSnapshot({ history, activity, readiness, preferences, connectedSignals }) : null, [loaded, trainingIntegrityError, history, activity, readiness, preferences, connectedSignals]);
   const interpretation = useMemo(() => interpretCoachMessage(message, gyms), [message]);
-  const conversationPreview = useMemo(() => previewConversationPlan({ interpretation, history, activity, readiness, preferences }), [interpretation, history, activity, readiness, preferences]);
+  const conversationPreview = useMemo(() => loaded && !trainingIntegrityError ? previewConversationPlan({ interpretation, history, activity, readiness, preferences }) : null, [loaded, trainingIntegrityError, interpretation, history, activity, readiness, preferences]);
   const videoGate = movementVideoGate();
 
   async function explainWithAI() {
+    if (!snapshot) return;
     if (!window.confirm('Send the displayed coaching actions and evidence summaries to the optional AI explanation provider? The provider may be external to this browser depending on the host integration.')) return;
     setAiBusy(true);
     try { setAiExplanation(await requestAIExplanation(snapshot)); }
@@ -56,12 +62,22 @@ export function CoachingPanel() {
     finally { setAiBusy(false); }
   }
 
+  const hero = <section className="hero coaching-hero">
+    <span className="pill">PHASE 4 · DETERMINISTIC FIRST</span>
+    <h2>Coaching intelligence</h2>
+    <p>Human Health combines training history, readiness, goal priorities and current connected-health signals into explainable, reversible coaching actions. Missing or stale evidence stays visible instead of being guessed.</p>
+  </section>;
+
+  if (!loaded) return <>{hero}<p className="connection-state" role="status">Loading and validating local training evidence…</p></>;
+  if (!snapshot) return <>
+    {hero}
+    <p className="connection-state storage-error" role="alert">{trainingIntegrityError || 'Trusted training evidence is unavailable. Coaching recommendations are withheld rather than guessed.'}</p>
+    <section className="card"><h2>Coaching paused</h2><p>Repair local training storage with a validated replace archive or delete the affected local data before generating a new recommendation. Human Health will not turn missing fallback values into training advice.</p></section>
+  </>;
+
   return <>
-    <section className="hero coaching-hero">
-      <span className="pill">PHASE 4 · DETERMINISTIC FIRST</span>
-      <h2>Coaching intelligence</h2>
-      <p>Human Health combines training history, readiness, goal priorities and current connected-health signals into explainable, reversible coaching actions. Missing or stale evidence stays visible instead of being guessed.</p>
-    </section>
+    {hero}
+    {connected.error && <p className="connection-state storage-error" role="alert">Connected-health evidence is unavailable and has been excluded from coaching until its local storage is trusted again. {connected.error}</p>}
 
     <section className="card" aria-labelledby="coach-actions-title">
       <div className="section-heading"><div><span className="eyebrow">NEXT ACTIONS</span><h2 id="coach-actions-title">What to do next</h2></div><span className={`status-badge status-${snapshot.readinessLevel === 'normal' ? 'current' : 'partial'}`}>{title(snapshot.readinessLevel)}</span></div>
@@ -88,7 +104,7 @@ export function CoachingPanel() {
     <section className="card" aria-labelledby="conversation-title">
       <span className="eyebrow">CONVERSATIONAL ADAPTATION</span><h2 id="conversation-title">Tell the coach what changed</h2>
       <label><b>Training context</b><textarea rows={4} value={message} onChange={event => setMessage(event.target.value)} placeholder="Example: I only have 20 minutes, low energy, at a hotel with no rack. Keep strength and cardio moving."/></label>
-      {message && <div className="conversation-result">
+      {message && conversationPreview && <div className="conversation-result">
         <p><b>{interpretation.summary}</b></p>
         {interpretation.recognized.length > 0 && <p>Recognized: {interpretation.recognized.join(' · ')}</p>}
         {interpretation.safetyFlags.map((flag, index) => <p className="connection-state storage-error" role="alert" key={index}>{flag}</p>)}
