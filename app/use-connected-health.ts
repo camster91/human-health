@@ -6,6 +6,7 @@ import {
   ConnectedHealthPreferences,
   HealthObservation,
   HealthSourceState,
+  assertConnectedHealthRelationships,
   clearConnectedSleepContext,
   defaultConnectedHealthPreferences,
   healthRepository,
@@ -28,17 +29,26 @@ export function useConnectedHealthSnapshot() {
     ]);
 
     const errors: string[] = [];
-    if (observationResult.status === 'fulfilled') setObservations(observationResult.value);
-    else {
-      setObservations([]);
-      errors.push(observationResult.reason instanceof Error ? observationResult.reason.message : 'Connected-health observations could not be loaded.');
+    let nextObservations: HealthObservation[] = [];
+    let nextSources: HealthSourceState[] = [];
+
+    if (observationResult.status === 'fulfilled') nextObservations = observationResult.value;
+    else errors.push(observationResult.reason instanceof Error ? observationResult.reason.message : 'Connected-health observations could not be loaded.');
+
+    if (sourceResult.status === 'fulfilled') nextSources = sourceResult.value;
+    else errors.push(sourceResult.reason instanceof Error ? sourceResult.reason.message : 'Connected-health sources could not be loaded.');
+
+    if (observationResult.status === 'fulfilled' && sourceResult.status === 'fulfilled') {
+      try {
+        assertConnectedHealthRelationships(nextObservations, nextSources);
+      } catch (relationshipError) {
+        nextObservations = [];
+        errors.push(relationshipError instanceof Error ? relationshipError.message : 'Connected-health observation/source relationships are inconsistent and were not trusted.');
+      }
     }
 
-    if (sourceResult.status === 'fulfilled') setSources(sourceResult.value);
-    else {
-      setSources([]);
-      errors.push(sourceResult.reason instanceof Error ? sourceResult.reason.message : 'Connected-health sources could not be loaded.');
-    }
+    setObservations(nextObservations);
+    setSources(nextSources);
 
     if (preferenceResult.status === 'fulfilled') setPreferences(preferenceResult.value);
     else {
