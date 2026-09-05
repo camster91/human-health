@@ -43,12 +43,15 @@ function integrityError() {
   return integrityFailures.values().next().value as string | undefined;
 }
 
-function markIntegrityFailure(key: string, label: string, error?: unknown) {
-  const detail = error instanceof Error ? ` ${error.message}` : '';
-  const message = `${label} is corrupt or unsupported and was not trusted.${detail}`;
+function setIntegrityFailure(key: string, message: string) {
   integrityFailures.set(key, message);
   mutationFailure = message;
   return message;
+}
+
+function markIntegrityFailure(key: string, label: string, error?: unknown) {
+  const detail = error instanceof Error ? ` ${error.message}` : '';
+  return setIntegrityFailure(key, `${label} is corrupt or unsupported and was not trusted.${detail}`);
 }
 
 function clearIntegrityFailure(key: string) {
@@ -61,6 +64,8 @@ function readRaw<T>(key: string, fallback: T): { value: T | unknown; validJson: 
   try {
     raw = localStorage.getItem(key);
   } catch (error) {
+    const detail = error instanceof Error ? ` ${error.message}` : '';
+    setIntegrityFailure(key, `Saved ${key.replace(PREFIX, '')} data could not be read from browser storage.${detail}`);
     return { value: fallback, validJson: false };
   }
   if (raw === null) {
@@ -73,10 +78,6 @@ function readRaw<T>(key: string, fallback: T): { value: T | unknown; validJson: 
     markIntegrityFailure(key, `Saved ${key.replace(PREFIX, '')} data`, error);
     return { value: fallback, validJson: false };
   }
-}
-
-function read<T>(key: string, fallback: T): T {
-  return readRaw(key, fallback).value as T;
 }
 
 function readValidated<T>(key: string, fallback: T, label: string, validator: (value: unknown) => T): T {
@@ -92,8 +93,15 @@ function readValidated<T>(key: string, fallback: T, label: string, validator: (v
   }
 }
 
+function normalMutationBlocked() {
+  const integrity = integrityError();
+  if (!integrity) return false;
+  mutationFailure = `Persisted training data has an unresolved integrity error. Normal writes are blocked until a validated replace import or Delete all explicitly repairs/removes the affected data. ${integrity}`;
+  return true;
+}
+
 function write(key: string, value: unknown) {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined' || normalMutationBlocked()) return false;
   try {
     localStorage.setItem(key, JSON.stringify(value));
     clearIntegrityFailure(key);
@@ -106,6 +114,19 @@ function write(key: string, value: unknown) {
 }
 
 function remove(key: string) {
+  if (typeof window === 'undefined' || normalMutationBlocked()) return false;
+  try {
+    localStorage.removeItem(key);
+    clearIntegrityFailure(key);
+    mutationFailure = null;
+    return true;
+  } catch {
+    mutationFailure = 'Browser storage rejected a local deletion.';
+    return false;
+  }
+}
+
+function forceRemove(key: string) {
   if (typeof window === 'undefined') return false;
   try {
     localStorage.removeItem(key);
@@ -332,7 +353,7 @@ export const store = {
 
   loadActive(): Workout | null {
     const now = new Date();
-    const active = readValidated(ACTIVE, null, 'Saved active workout', value => validateActiveWorkout(value, now));
+    const active = readValidated<Workout | null>(ACTIVE, null, 'Saved active workout', value => validateActiveWorkout(value, now));
     const journal = loadFinalizationJournal();
     if (journal) {
       if (active && journal.workoutId !== active.id) {
@@ -356,10 +377,10 @@ export const store = {
 
   loadRestTimer(): RestTimerState | null {
     const now = new Date();
-    const current = readValidated(REST_TIMER, null, 'Saved rest timer', value => validateRestTimer(value, now));
+    const current = readValidated<RestTimerState | null>(REST_TIMER, null, 'Saved rest timer', value => validateRestTimer(value, now));
     if (current) return current;
     if (integrityFailures.has(REST_TIMER)) return null;
-    const legacyEndsAt = readValidated(LEGACY_REST_UNTIL, null, 'Saved legacy rest timer', value => {
+    const legacyEndsAt = readValidated<number | null>(LEGACY_REST_UNTIL, null, 'Saved legacy rest timer', value => {
       if (value === null) return null;
       if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error('Legacy timer end must be finite.');
       return value;
@@ -386,7 +407,7 @@ export const store = {
   },
   saveHistory(value: HistoryEntry[]) {
     const next = deduplicateHistory(value);
-    const active = readValidated(ACTIVE, null, 'Saved active workout', current => validateActiveWorkout(current, new Date()));
+    const active = readValidated<Workout | null>(ACTIVE, null, 'Saved active workout', current => validateActiveWorkout(current, new Date()));
     if (active && activeWorkoutWasFinalized(active, next)) {
       const currentJournal = loadFinalizationJournal();
       const journal: FinalizationJournal = {
@@ -442,7 +463,7 @@ export const store = {
       scheduleEvents: store.loadScheduleEvents(),
     };
     const integrity = store.getIntegrityErrors();
-    if (integrity.length) throw new Error(`Complete training export refused because persisted training data is corrupt: ${integrity.join(' | ')}`);
+    if (integrity.length) throw new Error(`Complete training export refused because persisted training data is corrupt or unreadable: ${integrity.join(' | ')}`);
     const pendingFinalization = loadFinalizationJournal();
     if (pendingFinalization) throw new Error('Complete training export refused while workout finalization is still pending. Resolve or recover the active workout first.');
     return snapshot;
@@ -488,6 +509,6 @@ export const store = {
 
   clearAll() {
     const keys = [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS, CONNECTED_SLEEP_CONTEXT_KEY, FINALIZATION_JOURNAL];
-    return runMutations(keys.map(key => () => remove(key)), 'Local Human Health data could not be fully deleted.');
+    return runMutations(keys.map(key => () => forceRemove(key)), 'Local Human Health data could not be fully deleted.');
   },
 };
