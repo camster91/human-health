@@ -1,4 +1,4 @@
-import type { HealthObservation, HealthSourceState } from '../connected-health';
+import { assertConnectedHealthRelationships, type HealthObservation, type HealthSourceState } from '../connected-health';
 import type { HumanHealthExport } from '../storage';
 import type { IntegrationBundle, IntegrationScope, PreventiveRecord, PreventiveReminder } from './types';
 
@@ -21,6 +21,7 @@ export function createIntegrationBundle(options: {
   if (!scopes.length) throw new Error('At least one explicit integration scope is required.');
   if (scopes.includes('training:read') && !options.training) throw new Error('Trusted training data is required for the selected training integration scope.');
   if (scopes.includes('connected-health:read') && (!options.connectedObservations || !options.connectedSources)) throw new Error('Trusted connected-health data is required for the selected connected-health integration scope.');
+  if (scopes.includes('connected-health:read')) assertConnectedHealthRelationships(options.connectedObservations!, options.connectedSources!);
   const bundle: IntegrationBundle = {
     schemaVersion: 1,
     generatedAt: (options.generatedAt || new Date()).toISOString(),
@@ -47,11 +48,15 @@ export function integrationBundleContainsOnlyScopes(bundle: IntegrationBundle) {
   if (bundle.scopes.includes('connected-health:read') && !bundle.connectedHealth) return false;
   if (bundle.scopes.includes('preventive:read') && !bundle.preventive) return false;
   if (bundle.scopes.includes('coaching:read') && !bundle.coaching) return false;
+  if (bundle.connectedHealth) {
+    try { assertConnectedHealthRelationships(bundle.connectedHealth.observations, bundle.connectedHealth.sources); }
+    catch { return false; }
+  }
   return true;
 }
 
 function sanitizeBundleForShare(bundle: IntegrationBundle): IntegrationBundle {
-  if (!integrationBundleContainsOnlyScopes(bundle)) throw new Error('Integration bundle is malformed or contains data outside its declared scopes.');
+  if (!integrationBundleContainsOnlyScopes(bundle)) throw new Error('Integration bundle is malformed, contains inconsistent connected-health provenance, or contains data outside its declared scopes.');
   const safe: IntegrationBundle = {
     schemaVersion: 1,
     generatedAt: bundle.generatedAt,
