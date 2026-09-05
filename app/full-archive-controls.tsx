@@ -18,7 +18,7 @@ export function FullArchiveControls() {
     setMessage('');
     try {
       downloadJson(`human-health-full-${new Date().toISOString().slice(0, 10)}.json`, await createFullHealthArchive());
-      setMessage('Complete local archive prepared, including preventive care and health tracking data.');
+      setMessage('Complete local archive prepared, including preventive health data.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'The archive could not be created.');
     } finally { setBusy(false); }

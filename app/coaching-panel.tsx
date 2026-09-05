@@ -112,7 +112,7 @@ export function CoachingPanel() {
 
     <section className="card" aria-labelledby="video-gate-title">
       <span className="eyebrow">MOVEMENT / VIDEO</span><h2 id="video-gate-title">Reliability gate</h2>
-      <p>{videoGate.message}</p><p className="muted">No camera permission, upload, pose score, injury diagnosis or movement-quality claim is currently available.</p>
+      <p>{videoGate.message}</p><p className="muted">No camera permission, upload, pose score, injury diagnosis or movement-quality claim is currently enabled.</p>
       <div className="metrics"><span><b>Gate</b>{videoGate.enabled ? 'Passed' : 'Locked'}</span><span><b>Missing reviews</b>{videoGate.missing.length}</span></div>
     </section>
   </>;
