@@ -78,6 +78,7 @@ export async function syncAdapter(
   let cursor = previous?.cursor;
   let batches = 0;
   let complete = false;
+  let rejectedObservations = 0;
   const warnings: string[] = [];
   const maxBatches = Math.max(1, Math.min(1_000, options.maxBatches || 100));
   try {
@@ -89,7 +90,8 @@ export async function syncAdapter(
         endTime: options.endTime || new Date().toISOString(),
         cursor,
       });
-      await repository.upsertBatch(adapter.sourceId, batch);
+      const result = await repository.upsertBatch(adapter.sourceId, batch);
+      rejectedObservations += result.rejected;
       warnings.push(...(batch.warnings || []));
       complete = batch.complete;
       batches++;
@@ -104,6 +106,7 @@ export async function syncAdapter(
       cursor = batch.nextCursor || cursor;
     }
     if (!complete && batches >= maxBatches) warnings.push(`Sync stopped after the configured ${maxBatches} batch limit.`);
+    if (rejectedObservations > 0) warnings.push(`${rejectedObservations} provider observation${rejectedObservations === 1 ? ' was' : 's were'} rejected by connected-health validation.`);
     const count = (await repository.listObservations({ sourceId: adapter.sourceId })).length;
     const partial = !complete || warnings.length > 0;
     const next: HealthSourceState = {
