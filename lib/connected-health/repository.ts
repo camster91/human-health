@@ -1,4 +1,5 @@
 import { notifyConnectedHealthUpdated } from './events';
+import { assertConnectedHealthRelationships } from './integrity';
 import { parseConnectedPreferences, parseConnectedSourceState } from './import/canonical-json';
 import { mergeObservationCollections, normalizeObservation } from './merge';
 import {
@@ -86,6 +87,10 @@ async function putMany<T>(storeName: string, values: T[]) {
 }
 
 async function writeRepositoryState(observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences) {
+  // This is the final connected-health write boundary. Validate the combined graph
+  // immediately before mutation so a merge cannot replace source metadata in a way
+  // that invalidates already-stored observations.
+  assertConnectedHealthRelationships(observations, sources);
   const database = await openDatabase();
   const transaction = database.transaction([OBSERVATIONS, SOURCES, META], 'readwrite');
   const done = transactionDone(transaction);
@@ -357,7 +362,10 @@ export const healthRepository = {
     if (!payload || payload.schemaVersion !== 1 || !Array.isArray(payload.observations) || !Array.isArray(payload.sources)) throw new Error('Unsupported connected-health archive.');
     const observations = payload.observations.flatMap(item => { const value = normalizeObservation(item); return value ? [value] : []; });
     if (observations.length !== payload.observations.length) throw new Error(`${payload.observations.length - observations.length} connected-health observations were invalid. No local data was changed.`);
+    if (new Set(observations.map(item => item.id)).size !== observations.length) throw new Error('Connected-health archive contains duplicate observation identities. No local data was changed.');
     const sources = payload.sources.map(parseConnectedSourceState);
+    if (new Set(sources.map(source => source.id)).size !== sources.length) throw new Error('Connected-health archive contains duplicate source identities. No local data was changed.');
+    assertConnectedHealthRelationships(observations, sources);
     const importedPreferences = parseConnectedPreferences(payload.preferences);
 
     if (mode === 'replace') {
