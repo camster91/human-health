@@ -24,7 +24,7 @@ export async function createFullHealthArchive(): Promise<FullHealthArchive> {
   const platform = readablePlatformSnapshot();
   return {
     format: 'human-health-full-export', schemaVersion: 2, exportedAt: new Date().toISOString(),
-    training: store.exportData(), connected: await healthRepository.exportData(), platform,
+    training: store.exportCompleteData(), connected: await healthRepository.exportData(), platform,
   };
 }
 
@@ -46,7 +46,10 @@ export function parseFullHealthArchive(text: string): FullHealthArchive {
 
 export async function importFullHealthArchive(text: string, mode: 'merge' | 'replace' = 'merge') {
   const archive = parseFullHealthArchive(text);
-  const trainingBackup = store.exportData();
+  // Preserve the exact raw training keys, including legacy/corrupt values, so a
+  // later connected/platform failure can restore the pre-import state without
+  // requiring that state to be exportable first.
+  const trainingBackup = store.captureRecoverySnapshot();
   const connectedBackup = await healthRepository.exportData();
   const platformBackup = readablePlatformSnapshot();
   try {
@@ -56,7 +59,9 @@ export async function importFullHealthArchive(text: string, mode: 'merge' | 'rep
     return archive;
   } catch (error) {
     let rollbackError: unknown = null;
-    try { store.importData(trainingBackup, 'replace'); } catch (failure) { rollbackError = failure; }
+    try {
+      if (!store.restoreRecoverySnapshot(trainingBackup)) throw new Error(store.getMutationError() || 'Training rollback failed.');
+    } catch (failure) { rollbackError = failure; }
     try { await healthRepository.importData(connectedBackup, 'replace'); } catch (failure) { rollbackError ||= failure; }
     try { platformStore.importData(platformBackup, 'replace'); } catch (failure) { rollbackError ||= failure; }
     if (rollbackError) {
