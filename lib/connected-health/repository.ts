@@ -1,5 +1,6 @@
 import { notifyConnectedHealthUpdated } from './events';
-import { mergeObservationCollections, normalizeConnectedPreferences, normalizeObservation, normalizeSourceState } from './merge';
+import { parseConnectedPreferences, parseConnectedSourceState } from './import/canonical-json';
+import { mergeObservationCollections, normalizeObservation } from './merge';
 import {
   ConnectedHealthPreferences,
   ConnectedMetric,
@@ -7,7 +8,6 @@ import {
   HealthRepositoryExport,
   HealthSourceState,
   HealthSyncBatch,
-  defaultConnectedHealthPreferences,
 } from './types';
 
 const DATABASE_NAME = 'human-health-connected';
@@ -171,6 +171,16 @@ function corruptRowsError(invalidCount: number, sourceIds: string[]) {
   return new Error(`Connected-health storage contains ${invalidCount} invalid observation row${invalidCount === 1 ? '' : 's'}. Invalid rows were not used as health context or exported.${sources} Delete the affected source or use complete local-data deletion before relying on connected-health summaries.`);
 }
 
+function sourceStorageError(error: unknown) {
+  const detail = error instanceof Error ? ` ${error.message}` : '';
+  return new Error(`Connected-health source storage is corrupt or unsupported and was not trusted.${detail}`);
+}
+
+function preferencesStorageError(error: unknown) {
+  const detail = error instanceof Error ? ` ${error.message}` : '';
+  return new Error(`Connected-health preference storage is corrupt or unsupported and was not trusted.${detail}`);
+}
+
 function observationIsNewer(current: HealthObservation, candidate: HealthObservation) {
   const currentVersion = current.provenance.externalVersion;
   const candidateVersion = candidate.provenance.externalVersion;
@@ -227,17 +237,22 @@ export const healthRepository = {
   },
 
   async listSources() {
-    return (await getAll<HealthSourceState>(SOURCES)).map(normalizeSourceState).sort((a, b) => a.displayName.localeCompare(b.displayName));
+    const raw = await getAll<unknown>(SOURCES);
+    try { return raw.map(parseConnectedSourceState).sort((a, b) => a.displayName.localeCompare(b.displayName)); }
+    catch (error) { throw sourceStorageError(error); }
   },
 
   async getSource(id: string) {
     const database = await openDatabase();
-    const value = await request(database.transaction(SOURCES, 'readonly').objectStore(SOURCES).get(id)) as HealthSourceState | undefined;
-    return value ? normalizeSourceState(value) : null;
+    const value = await request(database.transaction(SOURCES, 'readonly').objectStore(SOURCES).get(id)) as unknown;
+    if (value === undefined) return null;
+    try { return parseConnectedSourceState(value); }
+    catch (error) { throw sourceStorageError(error); }
   },
 
   async saveSource(source: HealthSourceState) {
-    await putMany(SOURCES, [normalizeSourceState(source)]);
+    const strict = parseConnectedSourceState(source);
+    await putMany(SOURCES, [strict]);
     notifyConnectedHealthUpdated();
   },
 
@@ -280,15 +295,19 @@ export const healthRepository = {
 
   async getPreferences(): Promise<ConnectedHealthPreferences> {
     const database = await openDatabase();
-    const value = await request(database.transaction(META, 'readonly').objectStore(META).get(PREFERENCES_KEY)) as { key: string; value: Partial<ConnectedHealthPreferences> } | undefined;
-    return normalizeConnectedPreferences(value?.value || defaultConnectedHealthPreferences);
+    const row = await request(database.transaction(META, 'readonly').objectStore(META).get(PREFERENCES_KEY)) as unknown;
+    if (row === undefined) return parseConnectedPreferences(undefined);
+    if (!row || typeof row !== 'object' || Array.isArray(row) || !Object.prototype.hasOwnProperty.call(row, 'value')) throw preferencesStorageError(new Error('Stored preferences row is malformed.'));
+    try { return parseConnectedPreferences((row as { value: unknown }).value); }
+    catch (error) { throw preferencesStorageError(error); }
   },
 
   async savePreferences(preferences: ConnectedHealthPreferences) {
+    const strict = parseConnectedPreferences(preferences);
     const database = await openDatabase();
     const transaction = database.transaction(META, 'readwrite');
     const done = transactionDone(transaction);
-    transaction.objectStore(META).put({ key: PREFERENCES_KEY, value: normalizeConnectedPreferences(preferences) });
+    transaction.objectStore(META).put({ key: PREFERENCES_KEY, value: strict });
     await done;
     notifyConnectedHealthUpdated();
   },
@@ -335,8 +354,8 @@ export const healthRepository = {
     if (!payload || payload.schemaVersion !== 1 || !Array.isArray(payload.observations) || !Array.isArray(payload.sources)) throw new Error('Unsupported connected-health archive.');
     const observations = payload.observations.flatMap(item => { const value = normalizeObservation(item); return value ? [value] : []; });
     if (observations.length !== payload.observations.length) throw new Error(`${payload.observations.length - observations.length} connected-health observations were invalid. No local data was changed.`);
-    const sources = payload.sources.map(normalizeSourceState);
-    const importedPreferences = normalizeConnectedPreferences(payload.preferences);
+    const sources = payload.sources.map(parseConnectedSourceState);
+    const importedPreferences = parseConnectedPreferences(payload.preferences);
 
     if (mode === 'replace') {
       await writeRepositoryState(observations, sources, importedPreferences);
