@@ -63,12 +63,12 @@ function emptyArchive() {
 }
 
 describe('local-first storage', () => {
-  it('detects storage and exports a valid versioned snapshot', () => {
+  it('detects storage and exports a valid versioned complete snapshot', () => {
     const memory = new MemoryStorage();
     const restore = installStorage(memory);
     try {
       expect(store.canPersist()).toBe(true);
-      expect(store.exportData().schemaVersion).toBe(2);
+      expect(store.exportCompleteData().schemaVersion).toBe(2);
       expect(store.clearAll()).toBe(true);
       expect(memory.getItem('human-health:preferences')).toBeNull();
     } finally { restore(); }
@@ -85,8 +85,9 @@ describe('local-first storage', () => {
 
       expect(store.loadPreferences()).toEqual(defaultPreferences);
       expect(store.loadActive()).toBeNull();
+      expect(store.exportData().preferences).toEqual(defaultPreferences);
       expect(store.getIntegrityErrors().length).toBeGreaterThanOrEqual(2);
-      expect(() => store.exportData()).toThrow('Complete training export refused');
+      expect(() => store.exportCompleteData()).toThrow('Complete training export refused');
 
       expect(store.savePreferences(defaultPreferences)).toBe(false);
       expect(store.saveActive(null)).toBe(false);
@@ -95,7 +96,7 @@ describe('local-first storage', () => {
 
       expect(store.importData(emptyArchive(), 'replace').schemaVersion).toBe(2);
       expect(store.getIntegrityErrors()).toEqual([]);
-      expect(store.exportData().schemaVersion).toBe(2);
+      expect(store.exportCompleteData().schemaVersion).toBe(2);
     } finally { restore(); }
   });
 
@@ -109,12 +110,13 @@ describe('local-first storage', () => {
       memory.setItem('human-health:history', '{bad json');
       expect(store.loadHistory()).toEqual([]);
       expect(store.getMutationError()).toContain('corrupt or unsupported');
-      expect(() => store.exportData()).toThrow('Complete training export refused');
+      expect(store.exportData().history).toEqual([]);
+      expect(() => store.exportCompleteData()).toThrow('Complete training export refused');
 
       expect(store.clearAll()).toBe(true);
       expect(memory.getItem('human-health:history')).toBeNull();
       expect(store.getIntegrityErrors()).toEqual([]);
-      expect(store.exportData().history).toEqual([]);
+      expect(store.exportCompleteData().history).toEqual([]);
     } finally { restore(); }
   });
 
@@ -128,18 +130,19 @@ describe('local-first storage', () => {
       expect(store.loadActivity()).toEqual([]);
       expect(store.getIntegrityErrors().some(message => message.includes('workout history'))).toBe(true);
       expect(store.getIntegrityErrors().some(message => message.includes('activity'))).toBe(true);
-      expect(() => store.exportData()).toThrow('Complete training export refused');
+      expect(() => store.exportCompleteData()).toThrow('Complete training export refused');
       expect(store.saveActivity([])).toBe(false);
     } finally { restore(); }
   });
 
-  it('treats browser read-access failure as untrusted persisted state rather than an empty store', () => {
+  it('treats browser read-access failure as untrusted persisted state rather than an empty complete store', () => {
     const memory = new ReadFaultStorage('human-health:history');
     const restore = installStorage(memory);
     try {
       expect(store.loadHistory()).toEqual([]);
       expect(store.getMutationError()).toContain('could not be read from browser storage');
-      expect(() => store.exportData()).toThrow('corrupt or unreadable');
+      expect(store.exportData().history).toEqual([]);
+      expect(() => store.exportCompleteData()).toThrow('corrupt or unreadable');
       expect(store.savePreferences(defaultPreferences)).toBe(false);
     } finally { restore(); }
   });
@@ -154,7 +157,22 @@ describe('local-first storage', () => {
 
       expect(store.importData(emptyArchive(), 'replace').schemaVersion).toBe(2);
       expect(store.getIntegrityErrors()).toEqual([]);
-      expect(store.exportData().schemaVersion).toBe(2);
+      expect(store.exportCompleteData().schemaVersion).toBe(2);
+    } finally { restore(); }
+  });
+
+  it('captures and restores raw corrupt training state for cross-domain rollback', () => {
+    const memory = new MemoryStorage();
+    const restore = installStorage(memory);
+    try {
+      memory.setItem('human-health:history', '{bad json');
+      store.loadHistory();
+      const snapshot = store.captureRecoverySnapshot();
+      expect(store.importData(emptyArchive(), 'replace').schemaVersion).toBe(2);
+      expect(store.getIntegrityErrors()).toEqual([]);
+      expect(store.restoreRecoverySnapshot(snapshot)).toBe(true);
+      expect(memory.getItem('human-health:history')).toBe('{bad json');
+      expect(store.getIntegrityErrors().some(message => message.includes('history'))).toBe(true);
     } finally { restore(); }
   });
 
@@ -173,9 +191,9 @@ describe('local-first storage', () => {
     const memory = new FaultyStorage('human-health:history');
     const restore = installStorage(memory);
     try {
-      const archive = store.exportData();
-      expect(() => store.importData(archive, 'merge')).toThrow('Browser storage rejected the latest save');
-      expect(store.getMutationError()).toContain('Browser storage rejected the latest save');
+      const archive = store.exportCompleteData();
+      expect(() => store.importData(archive, 'merge')).toThrow('Browser storage rejected the archive mutation');
+      expect(store.getMutationError()).toContain('Browser storage rejected the archive mutation');
     } finally { restore(); }
   });
 });
