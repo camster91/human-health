@@ -31,9 +31,9 @@ export function TrainingIntegrityGate({ children }: { children: ReactNode }) {
     <section className="card" aria-labelledby="training-integrity-title">
       <h2 id="training-integrity-title">Training storage needs recovery</h2>
       <div className="connection-state storage-error" role="alert">{errors.join(' ')}</div>
-      <p>You can restore a validated complete archive in <b>Replace</b> mode or delete local Human Health data. The integrity check itself does not alter the stored values.</p>
+      <p>Restore a validated complete archive in <b>Replace</b> mode or delete local Human Health data. The integrity check itself does not alter stored values. After a successful recovery, this screen rechecks automatically.</p>
       <button className="ghost" onClick={check}>Recheck local training data</button>
     </section>
-    <FullArchiveControls />
+    <FullArchiveControls initialMode="replace" onStateRecovered={check} />
   </main>;
 }
