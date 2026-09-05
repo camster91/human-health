@@ -1,5 +1,5 @@
 import { assertConnectedHealthRelationships } from '../integrity';
-import { mergeObservationCollections, normalizeConnectedPreferences, normalizeSourceState } from '../merge';
+import { mergeObservationCollections, normalizeConnectedPreferences } from '../merge';
 import { ConnectedHealthPreferences, ConnectedMetric, HealthObservation, HealthRepositoryExport, HealthSourceState, connectedMetrics, defaultConnectedHealthPreferences } from '../types';
 
 export type ConnectedJsonEnvelope = {
@@ -13,24 +13,48 @@ const providers = new Set(['health-connect', 'apple-health', 'manual', 'human-he
 const statuses = new Set(['not-connected', 'unavailable', 'permission-required', 'syncing', 'current', 'partial', 'stale', 'failed']);
 const habitMetrics = new Set<ConnectedMetric>(defaultConnectedHealthPreferences.enabledHabits);
 
+function optionalSourceTimestamp(value: unknown, sourceId: string, label: string) {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !value.trim() || !Number.isFinite(Date.parse(value))) throw new Error(`Connected-health archive source ${sourceId} has an invalid ${label} timestamp.`);
+  return new Date(value).toISOString();
+}
+
 export function parseConnectedSourceState(value: unknown): HealthSourceState {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Connected-health archive contains an invalid source state.');
-  const source = value as Partial<HealthSourceState>;
+  const source = value as Partial<HealthSourceState> & Record<string, unknown>;
   if (typeof source.id !== 'string' || !source.id.trim()) throw new Error('Connected-health archive source is missing an ID.');
-  if (typeof source.displayName !== 'string' || !source.displayName.trim()) throw new Error(`Connected-health archive source ${source.id} is missing a display name.`);
-  if (!providers.has(String(source.provider))) throw new Error(`Connected-health archive source ${source.id} has an unsupported provider.`);
-  if (!statuses.has(String(source.status))) throw new Error(`Connected-health archive source ${source.id} has an unsupported status.`);
-  if (!Array.isArray(source.supportedMetrics) || !Array.isArray(source.grantedMetrics)) throw new Error(`Connected-health archive source ${source.id} has invalid metric permissions.`);
-  if (!source.supportedMetrics.every(metric => connectedMetrics.includes(metric)) || !source.grantedMetrics.every(metric => connectedMetrics.includes(metric) && source.supportedMetrics!.includes(metric))) throw new Error(`Connected-health archive source ${source.id} contains unsupported or inconsistent metrics.`);
-  if (!Number.isFinite(source.staleAfterMs) || Number(source.staleAfterMs) <= 0) throw new Error(`Connected-health archive source ${source.id} has an invalid freshness window.`);
-  for (const [label, candidate] of [['last attempt', source.lastAttemptAt], ['last success', source.lastSuccessAt]] as const) {
-    if (candidate !== undefined && (!candidate || typeof candidate !== 'string' || !Number.isFinite(Date.parse(candidate)))) throw new Error(`Connected-health archive source ${source.id} has an invalid ${label} timestamp.`);
-  }
-  if (source.recordCount !== undefined && (!Number.isSafeInteger(source.recordCount) || source.recordCount < 0)) throw new Error(`Connected-health archive source ${source.id} has an invalid record count.`);
-  if (source.cursor !== undefined && (typeof source.cursor !== 'string' || !source.cursor)) throw new Error(`Connected-health archive source ${source.id} has an invalid cursor.`);
-  if (source.error !== undefined && typeof source.error !== 'string') throw new Error(`Connected-health archive source ${source.id} has an invalid error field.`);
-  if (source.partialReason !== undefined && typeof source.partialReason !== 'string') throw new Error(`Connected-health archive source ${source.id} has an invalid partial-reason field.`);
-  return normalizeSourceState(source as HealthSourceState);
+  const id = source.id.trim();
+  if (typeof source.displayName !== 'string' || !source.displayName.trim()) throw new Error(`Connected-health archive source ${id} is missing a display name.`);
+  if (!providers.has(String(source.provider))) throw new Error(`Connected-health archive source ${id} has an unsupported provider.`);
+  if (!statuses.has(String(source.status))) throw new Error(`Connected-health archive source ${id} has an unsupported status.`);
+  if (!Array.isArray(source.supportedMetrics) || !Array.isArray(source.grantedMetrics)) throw new Error(`Connected-health archive source ${id} has invalid metric permissions.`);
+  if (!source.supportedMetrics.every(metric => connectedMetrics.includes(metric)) || !source.grantedMetrics.every(metric => connectedMetrics.includes(metric) && source.supportedMetrics!.includes(metric))) throw new Error(`Connected-health archive source ${id} contains unsupported or inconsistent metrics.`);
+  if (!Number.isSafeInteger(source.staleAfterMs) || Number(source.staleAfterMs) <= 0) throw new Error(`Connected-health archive source ${id} has an invalid freshness window.`);
+
+  const lastAttemptAt = optionalSourceTimestamp(source.lastAttemptAt, id, 'last attempt');
+  const lastSuccessAt = optionalSourceTimestamp(source.lastSuccessAt, id, 'last success');
+
+  if (source.recordCount !== undefined && (!Number.isSafeInteger(source.recordCount) || source.recordCount < 0)) throw new Error(`Connected-health archive source ${id} has an invalid record count.`);
+  if (source.cursor !== undefined && (typeof source.cursor !== 'string' || !source.cursor)) throw new Error(`Connected-health archive source ${id} has an invalid cursor.`);
+  if (source.error !== undefined && typeof source.error !== 'string') throw new Error(`Connected-health archive source ${id} has an invalid error field.`);
+  if (source.partialReason !== undefined && typeof source.partialReason !== 'string') throw new Error(`Connected-health archive source ${id} has an invalid partial-reason field.`);
+
+  const canonical: HealthSourceState = {
+    id,
+    provider: source.provider as HealthSourceState['provider'],
+    displayName: source.displayName.trim(),
+    status: source.status as HealthSourceState['status'],
+    supportedMetrics: [...new Set(source.supportedMetrics as ConnectedMetric[])],
+    grantedMetrics: [...new Set(source.grantedMetrics as ConnectedMetric[])],
+    staleAfterMs: source.staleAfterMs as number,
+  };
+  if (lastAttemptAt !== undefined) canonical.lastAttemptAt = lastAttemptAt;
+  if (lastSuccessAt !== undefined) canonical.lastSuccessAt = lastSuccessAt;
+  if (source.cursor !== undefined) canonical.cursor = source.cursor;
+  if (source.error) canonical.error = source.error;
+  if (source.partialReason) canonical.partialReason = source.partialReason;
+  if (source.recordCount !== undefined) canonical.recordCount = source.recordCount;
+  return canonical;
 }
 
 function boundedNumber(input: Record<string, unknown>, key: string, fallback: number, min: number, max: number) {
