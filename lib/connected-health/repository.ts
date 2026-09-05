@@ -17,6 +17,13 @@ const SOURCES = 'sources';
 const META = 'meta';
 const PREFERENCES_KEY = 'preferences';
 
+export type ConnectedHealthRecoverySnapshot = {
+  schemaVersion: 1;
+  observations: unknown[];
+  sources: unknown[];
+  meta: unknown[];
+};
+
 function request<T>(value: IDBRequest<T>) {
   return new Promise<T>((resolve, reject) => {
     value.onsuccess = () => resolve(value.result);
@@ -91,6 +98,35 @@ async function writeRepositoryState(observations: HealthObservation[], sources: 
   observations.forEach(value => observationStore.put(value));
   sources.forEach(value => sourceStore.put(value));
   metaStore.put({ key: PREFERENCES_KEY, value: preferences });
+  await done;
+  notifyConnectedHealthUpdated();
+}
+
+async function captureRecoverySnapshot(): Promise<ConnectedHealthRecoverySnapshot> {
+  const [observations, sources, meta] = await Promise.all([
+    getAll<unknown>(OBSERVATIONS),
+    getAll<unknown>(SOURCES),
+    getAll<unknown>(META),
+  ]);
+  return { schemaVersion: 1, observations, sources, meta };
+}
+
+async function restoreRecoverySnapshot(snapshot: ConnectedHealthRecoverySnapshot) {
+  if (!snapshot || snapshot.schemaVersion !== 1 || !Array.isArray(snapshot.observations) || !Array.isArray(snapshot.sources) || !Array.isArray(snapshot.meta)) {
+    throw new Error('Connected-health recovery snapshot is invalid.');
+  }
+  const database = await openDatabase();
+  const transaction = database.transaction([OBSERVATIONS, SOURCES, META], 'readwrite');
+  const done = transactionDone(transaction);
+  const observationStore = transaction.objectStore(OBSERVATIONS);
+  const sourceStore = transaction.objectStore(SOURCES);
+  const metaStore = transaction.objectStore(META);
+  observationStore.clear();
+  sourceStore.clear();
+  metaStore.clear();
+  snapshot.observations.forEach(value => observationStore.put(value));
+  snapshot.sources.forEach(value => sourceStore.put(value));
+  snapshot.meta.forEach(value => metaStore.put(value));
   await done;
   notifyConnectedHealthUpdated();
 }
@@ -171,6 +207,9 @@ export const healthRepository = {
   async available() {
     try { await openDatabase(); return true; } catch { return false; }
   },
+
+  captureRecoverySnapshot,
+  restoreRecoverySnapshot,
 
   async listObservations(query: { metrics?: ConnectedMetric[]; sourceId?: string; startTime?: string; endTime?: string } = {}) {
     const rawValues = await getAll<unknown>(OBSERVATIONS);
