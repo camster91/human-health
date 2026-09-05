@@ -35,6 +35,11 @@ const PREFERENCES = `${PREFIX}preferences`;
 const SCHEDULE_EVENTS = `${PREFIX}schedule-events`;
 const FINALIZATION_JOURNAL = `${PREFIX}finalization-journal`;
 const STORAGE_PROBE = `${PREFIX}storage-probe`;
+const TRAINING_STORAGE_KEYS = [
+  ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS,
+  SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES,
+  SCHEDULE_EVENTS, CONNECTED_SLEEP_CONTEXT_KEY, FINALIZATION_JOURNAL,
+];
 
 let mutationFailure: string | null = null;
 const integrityFailures = new Map<string, string>();
@@ -139,11 +144,6 @@ function forceRemove(key: string) {
   }
 }
 
-/**
- * Execute a related group of localStorage mutations while preserving the first
- * failure message. Individual successful writes/removals clear mutationFailure,
- * so batch operations must not let a later success hide an earlier failure.
- */
 function runMutations(operations: (() => boolean)[], fallback: string) {
   let firstFailure: string | null = null;
   let succeeded = true;
@@ -251,6 +251,12 @@ export type HumanHealthExport = {
   scheduleEvents: ScheduleEvent[];
 };
 
+export type TrainingRecoverySnapshot = {
+  values: [string, string | null][];
+  integrity: [string, string][];
+  mutationFailure: string | null;
+};
+
 export function validateTrainingExport(value: unknown, now = new Date()): HumanHealthExport {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Training archive is not an object.');
   const candidate = value as Partial<HumanHealthExport>;
@@ -351,6 +357,22 @@ export const store = {
   getIntegrityErrors() { return [...integrityFailures.values()]; },
   clearMutationError() { mutationFailure = null; },
 
+  captureRecoverySnapshot(): TrainingRecoverySnapshot {
+    return {
+      values: [...captureRawStorage(TRAINING_STORAGE_KEYS)],
+      integrity: [...integrityFailures],
+      mutationFailure,
+    };
+  },
+
+  restoreRecoverySnapshot(snapshot: TrainingRecoverySnapshot) {
+    if (!restoreRawStorage(new Map(snapshot.values))) return false;
+    integrityFailures.clear();
+    snapshot.integrity.forEach(([key, value]) => integrityFailures.set(key, value));
+    mutationFailure = snapshot.mutationFailure;
+    return true;
+  },
+
   loadActive(): Workout | null {
     const now = new Date();
     const active = readValidated<Workout | null>(ACTIVE, null, 'Saved active workout', value => validateActiveWorkout(value, now));
@@ -447,7 +469,7 @@ export const store = {
   saveScheduleEvents(value: ScheduleEvent[]) { return write(SCHEDULE_EVENTS, value.slice(-100)); },
 
   exportData(): HumanHealthExport {
-    const snapshot: HumanHealthExport = {
+    return {
       schemaVersion: 2,
       exportedAt: new Date().toISOString(),
       activeWorkout: store.loadActive(),
@@ -462,6 +484,10 @@ export const store = {
       preferences: store.loadPreferences(),
       scheduleEvents: store.loadScheduleEvents(),
     };
+  },
+
+  exportCompleteData(): HumanHealthExport {
+    const snapshot = store.exportData();
     const integrity = store.getIntegrityErrors();
     if (integrity.length) throw new Error(`Complete training export refused because persisted training data is corrupt or unreadable: ${integrity.join(' | ')}`);
     const pendingFinalization = loadFinalizationJournal();
@@ -474,7 +500,7 @@ export const store = {
     const incoming = validateTrainingExport(value, now);
     const pendingFinalization = loadFinalizationJournal();
     if (pendingFinalization && mode === 'merge') throw new Error('A workout finalization is still pending. Resolve or recover it before merging an archive.');
-    const current = mode === 'merge' ? store.exportData() : null;
+    const current = mode === 'merge' ? store.exportCompleteData() : null;
     const next: HumanHealthExport = mode === 'replace' ? incoming : {
       ...current!,
       activeWorkout: current!.activeWorkout || incoming.activeWorkout,
@@ -508,7 +534,6 @@ export const store = {
   },
 
   clearAll() {
-    const keys = [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS, CONNECTED_SLEEP_CONTEXT_KEY, FINALIZATION_JOURNAL];
-    return runMutations(keys.map(key => () => forceRemove(key)), 'Local Human Health data could not be fully deleted.');
+    return runMutations(TRAINING_STORAGE_KEYS.map(key => () => forceRemove(key)), 'Local Human Health data could not be fully deleted.');
   },
 };
