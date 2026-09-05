@@ -20,6 +20,12 @@ describe('connected-health observation/source relationship integrity', () => {
     expect(() => assertConnectedHealthRelationships([observation], [])).toThrow('references missing source');
   });
 
+  it('rejects duplicate observation identities instead of silently choosing one', () => {
+    const source = makeSource('watch');
+    const observation = makeObservation('steps', 1_000, { sourceId: 'watch', externalId: 'same' });
+    expect(() => assertConnectedHealthRelationships([observation, { ...observation }], [source])).toThrow('appears more than once');
+  });
+
   it('rejects observation/source provider mismatches', () => {
     const source = makeSource('watch', { provider: 'health-connect', supportedMetrics: ['steps'], grantedMetrics: ['steps'] });
     const observation = makeObservation('steps', 1_000, { sourceId: 'watch' });
