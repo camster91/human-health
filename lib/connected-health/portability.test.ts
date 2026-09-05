@@ -52,8 +52,22 @@ describe('connected and full archive parsing', () => {
     };
     const parsed = parseFullHealthArchive(JSON.stringify(archive));
     expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.exportedAt).toBe('2026-09-03T12:00:00.000Z');
     expect(parsed.connected.observations).toHaveLength(1);
     expect(parsed.platform).toEqual({ schemaVersion: 1, records: [], reminders: [] });
+  });
+
+  it('requires a truthful full-archive exportedAt timestamp instead of inventing one', () => {
+    const base = {
+      format: 'human-health-full-export' as const,
+      schemaVersion: 1 as const,
+      exportedAt: '2026-09-03T12:00:00Z',
+      training: trainingExport(),
+      connected: connectedExport(),
+    };
+    expect(() => parseFullHealthArchive(JSON.stringify({ ...base, exportedAt: 'not-a-date' }))).toThrow('invalid exportedAt');
+    const { exportedAt: _removed, ...missing } = base;
+    expect(() => parseFullHealthArchive(JSON.stringify(missing))).toThrow('invalid exportedAt');
   });
 
   it('validates Phase 5 platform data before any full-archive mutation', () => {
@@ -107,7 +121,7 @@ describe('connected and full archive parsing', () => {
 });
 
 describe('full archive mutation recovery', () => {
-  it('restores every domain after a later platform import failure', async () => {
+  it('restores every attempted domain after a later platform import failure', async () => {
     const calls: string[] = [];
     await expect(runFullArchiveMutation({
       importTraining: () => { calls.push('import-training'); },
@@ -120,20 +134,33 @@ describe('full archive mutation recovery', () => {
     expect(calls).toEqual(['import-training', 'import-connected', 'import-platform', 'restore-training', 'restore-connected', 'restore-platform']);
   });
 
-  it('reports rollback failures separately from the original import failure', async () => {
+  it('restores training and connected health, but not untouched platform data, after connected import failure', async () => {
+    const calls: string[] = [];
+    await expect(runFullArchiveMutation({
+      importTraining: () => { calls.push('import-training'); },
+      importConnected: async () => { calls.push('import-connected'); throw new Error('connected replacement failed'); },
+      importPlatform: () => { calls.push('import-platform'); },
+      restoreTraining: () => { calls.push('restore-training'); return true; },
+      restoreConnected: async () => { calls.push('restore-connected'); },
+      restorePlatform: () => { calls.push('restore-platform'); return true; },
+    })).rejects.toThrow('connected replacement failed');
+    expect(calls).toEqual(['import-training', 'import-connected', 'restore-training', 'restore-connected']);
+  });
+
+  it('reports rollback failures separately and only for attempted domains', async () => {
     await expect(runFullArchiveMutation({
       importTraining: () => {},
       importConnected: async () => { throw new Error('connected replacement failed'); },
-      importPlatform: () => {},
+      importPlatform: () => { throw new Error('platform must not be attempted'); },
       restoreTraining: () => false,
       trainingRollbackError: () => 'training raw restore failed',
       restoreConnected: async () => { throw new Error('connected raw restore failed'); },
-      restorePlatform: () => false,
+      restorePlatform: () => { throw new Error('platform restore must not run'); },
       platformRollbackError: () => 'platform raw restore failed',
-    })).rejects.toThrow(/connected replacement failed.*training raw restore failed.*connected raw restore failed.*platform raw restore failed/);
+    })).rejects.toThrow(/connected replacement failed.*training raw restore failed.*connected raw restore failed/);
   });
 
-  it('does not continue to later imports after the first import failure', async () => {
+  it('does not import or restore untouched later domains after an earlier training failure', async () => {
     const calls: string[] = [];
     await expect(runFullArchiveMutation({
       importTraining: () => { calls.push('import-training'); throw new Error('training failed'); },
@@ -143,7 +170,7 @@ describe('full archive mutation recovery', () => {
       restoreConnected: async () => { calls.push('restore-connected'); },
       restorePlatform: () => { calls.push('restore-platform'); return true; },
     })).rejects.toThrow('training failed');
-    expect(calls).toEqual(['import-training', 'restore-training', 'restore-connected', 'restore-platform']);
+    expect(calls).toEqual(['import-training', 'restore-training']);
   });
 });
 
