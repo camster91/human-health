@@ -1,5 +1,6 @@
 import { createEmptyPlatformData, platformStore, validatePlatformData, type PlatformLocalData } from '../platform/storage';
 import { HumanHealthExport, store, validateTrainingExport } from '../storage';
+import { preflightTrainingStorage } from '../training-storage-preflight';
 import { createConnectedJsonEnvelope, parseConnectedJson } from './import/canonical-json';
 import { healthRepository } from './repository';
 import { HealthRepositoryExport } from './types';
@@ -21,6 +22,8 @@ function readablePlatformSnapshot() {
 }
 
 export async function createFullHealthArchive(): Promise<FullHealthArchive> {
+  const preflight = preflightTrainingStorage({ blockPendingFinalization: true });
+  if (preflight.errors.length) throw new Error(`Complete training export refused: ${preflight.errors.join(' | ')}`);
   const platform = readablePlatformSnapshot();
   return {
     format: 'human-health-full-export', schemaVersion: 2, exportedAt: new Date().toISOString(),
