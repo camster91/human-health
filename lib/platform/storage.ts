@@ -3,6 +3,7 @@ import type { PreventiveRecord, PreventiveReminder } from './types';
 
 const KEY = 'human-health:platform:v1';
 export type PlatformLocalData = { schemaVersion: 1; records: PreventiveRecord[]; reminders: PreventiveReminder[] };
+export type PlatformRecoverySnapshot = { raw: string | null; mutationFailure: string | null };
 
 let mutationFailure: string | null = null;
 
@@ -49,6 +50,26 @@ function write(value: PlatformLocalData) {
   catch (error) { mutationFailure = error instanceof Error ? error.message : 'Phase 5 platform data could not be saved locally.'; return false; }
 }
 
+function captureRecoverySnapshot(): PlatformRecoverySnapshot {
+  if (typeof window === 'undefined') return { raw: null, mutationFailure };
+  try { return { raw: localStorage.getItem(KEY), mutationFailure }; }
+  catch (error) { throw new Error(error instanceof Error ? `Phase 5 platform recovery snapshot could not be captured: ${error.message}` : 'Phase 5 platform recovery snapshot could not be captured.'); }
+}
+
+function restoreRecoverySnapshot(snapshot: PlatformRecoverySnapshot) {
+  if (!snapshot || (snapshot.raw !== null && typeof snapshot.raw !== 'string')) throw new Error('Phase 5 platform recovery snapshot is invalid.');
+  if (typeof window === 'undefined') return true;
+  try {
+    if (snapshot.raw === null) localStorage.removeItem(KEY);
+    else localStorage.setItem(KEY, snapshot.raw);
+    mutationFailure = snapshot.mutationFailure;
+    return true;
+  } catch (error) {
+    mutationFailure = error instanceof Error ? `Phase 5 platform rollback failed: ${error.message}` : 'Phase 5 platform rollback failed.';
+    return false;
+  }
+}
+
 function merged(current: PlatformLocalData, incoming: PlatformLocalData): PlatformLocalData {
   const records = new Map(incoming.records.map(item => [item.id, item])); const reminders = new Map(incoming.reminders.map(item => [item.id, item]));
   current.records.forEach(item => records.set(item.id, item)); current.reminders.forEach(item => reminders.set(item.id, item));
@@ -60,6 +81,8 @@ export const platformStore = {
   getMutationError() { return mutationFailure; },
   clearMutationError() { mutationFailure = null; },
   save(value: PlatformLocalData) { return write(value); },
+  captureRecoverySnapshot,
+  restoreRecoverySnapshot,
 
   addRecord(record: PreventiveRecord) {
     const current = readForMutation(); const normalized = normalizePreventiveRecord(record); const next = { ...current, records: dedupeById([...current.records, normalized]) };
