@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { store } from '@/lib/storage';
+import { preflightTrainingStorage } from '@/lib/training-storage-preflight';
 import { FullArchiveControls } from './full-archive-controls';
 
 export function TrainingIntegrityGate({ children }: { children: ReactNode }) {
@@ -10,12 +10,10 @@ export function TrainingIntegrityGate({ children }: { children: ReactNode }) {
 
   const check = useCallback(() => {
     setChecking(true);
-    // Load every persisted training domain through its canonical runtime validator.
-    // exportData() intentionally returns a safe runtime snapshot, while the
-    // integrity ledger tells us whether those values are trustworthy enough to
-    // drive automatic planning.
-    store.exportData();
-    setErrors(store.getIntegrityErrors());
+    // This preflight is deliberately read-only. It discovers corruption across
+    // every authoritative training key before runtime loaders are allowed to
+    // replay finalization, migrate timers, or clean stale state.
+    setErrors(preflightTrainingStorage().errors);
     setChecking(false);
   }, []);
 
@@ -33,7 +31,7 @@ export function TrainingIntegrityGate({ children }: { children: ReactNode }) {
     <section className="card" aria-labelledby="training-integrity-title">
       <h2 id="training-integrity-title">Training storage needs recovery</h2>
       <div className="connection-state storage-error" role="alert">{errors.join(' ')}</div>
-      <p>You can restore a validated complete archive in <b>Replace</b> mode or delete local Human Health data. Normal training writes remain blocked so the unreadable data is not silently overwritten.</p>
+      <p>You can restore a validated complete archive in <b>Replace</b> mode or delete local Human Health data. The integrity check itself does not alter the stored values.</p>
       <button className="ghost" onClick={check}>Recheck local training data</button>
     </section>
     <FullArchiveControls />
