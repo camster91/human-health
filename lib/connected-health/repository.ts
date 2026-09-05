@@ -103,11 +103,14 @@ async function writeRepositoryState(observations: HealthObservation[], sources: 
 }
 
 async function captureRecoverySnapshot(): Promise<ConnectedHealthRecoverySnapshot> {
-  const [observations, sources, meta] = await Promise.all([
-    getAll<unknown>(OBSERVATIONS),
-    getAll<unknown>(SOURCES),
-    getAll<unknown>(META),
-  ]);
+  const database = await openDatabase();
+  const transaction = database.transaction([OBSERVATIONS, SOURCES, META], 'readonly');
+  const done = transactionDone(transaction);
+  const observationsRequest = request(transaction.objectStore(OBSERVATIONS).getAll()) as Promise<unknown[]>;
+  const sourcesRequest = request(transaction.objectStore(SOURCES).getAll()) as Promise<unknown[]>;
+  const metaRequest = request(transaction.objectStore(META).getAll()) as Promise<unknown[]>;
+  const [observations, sources, meta] = await Promise.all([observationsRequest, sourcesRequest, metaRequest]);
+  await done;
   return { schemaVersion: 1, observations, sources, meta };
 }
 
