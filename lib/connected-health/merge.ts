@@ -1,5 +1,6 @@
 import {
   ConnectedHealthPreferences,
+  ConnectedMetric,
   HealthObservation,
   HealthProvider,
   HealthSourceState,
@@ -27,34 +28,138 @@ const providers: HealthProvider[] = ['health-connect', 'apple-health', 'manual',
 const statuses: HealthSourceStatus[] = ['not-connected', 'unavailable', 'permission-required', 'syncing', 'current', 'partial', 'stale', 'failed'];
 const ingestionMethods = ['native-sync', 'file-import', 'manual', 'archive-import'] as const;
 const qualities = ['direct', 'derived'] as const;
+const MAX_TIMEZONE_OFFSET_MINUTES = 14 * 60;
+const MAX_TAGS = 200;
+const MAX_TAG_KEY_LENGTH = 200;
+const MAX_TAG_STRING_LENGTH = 4_000;
 
-export function normalizeObservation(observation: HealthObservation): HealthObservation | null {
-  if (!observation || typeof observation !== 'object' || !connectedMetrics.includes(observation.metric)) return null;
-  const provenance = observation.provenance;
-  if (!provenance || typeof provenance !== 'object') return null;
-  if (!providers.includes(provenance.provider) || !ingestionMethods.includes(provenance.ingestionMethod) || !qualities.includes(observation.quality)) return null;
-  const normalized = convertToCanonical(observation.metric, Number(observation.value), observation.unit || provenance.originalUnit);
-  const start = Date.parse(observation.startTime);
-  const end = observation.endTime ? Date.parse(observation.endTime) : start;
-  const recorded = Date.parse(observation.recordedAt);
-  const imported = Date.parse(provenance.importedAt);
-  if (!normalized || !Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(recorded) || !Number.isFinite(imported) || end < start) return null;
-  if (typeof observation.sourceId !== 'string' || !observation.sourceId.trim() || typeof provenance.externalId !== 'string' || !provenance.externalId.trim() || typeof provenance.sourceName !== 'string' || !provenance.sourceName.trim() || typeof provenance.originalType !== 'string' || !provenance.originalType.trim()) return null;
-  const tags = observation.tags && typeof observation.tags === 'object'
-    ? Object.fromEntries(Object.entries(observation.tags).filter(([, value]) => ['string', 'number', 'boolean'].includes(typeof value))) as Record<string, string | number | boolean>
-    : undefined;
-  return {
-    ...observation,
-    // Never trust an imported ID. Ownership is always derived from sourceId + provider externalId.
-    id: observationId(observation.sourceId, provenance.externalId),
-    value: normalized.value,
-    unit: normalized.unit,
-    startTime: new Date(start).toISOString(),
-    endTime: observation.endTime ? new Date(end).toISOString() : undefined,
-    recordedAt: new Date(recorded).toISOString(),
-    provenance: { ...provenance, importedAt: new Date(imported).toISOString() },
-    tags: tags && Object.keys(tags).length ? tags : undefined,
-  };
+function optionalString(value: unknown) {
+  return value === undefined ? undefined : typeof value === 'string' ? value : null;
+}
+
+function validTimestamp(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeTags(value: unknown): Record<string, string | number | boolean> | undefined | null {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length > MAX_TAGS) return null;
+  const result: Record<string, string | number | boolean> = {};
+  for (const [key, tag] of entries) {
+    if (!key.trim() || key.length > MAX_TAG_KEY_LENGTH) return null;
+    if (typeof tag === 'number') {
+      if (!Number.isFinite(tag)) return null;
+      result[key] = tag;
+      continue;
+    }
+    if (typeof tag === 'string') {
+      if (tag.length > MAX_TAG_STRING_LENGTH) return null;
+      result[key] = tag;
+      continue;
+    }
+    if (typeof tag === 'boolean') {
+      result[key] = tag;
+      continue;
+    }
+    return null;
+  }
+  return Object.keys(result).length ? result : undefined;
+}
+
+/**
+ * Convert an untrusted stored/imported observation into the exact canonical
+ * HealthObservation schema. Malformed input returns null and undeclared fields
+ * are intentionally not copied into trusted storage/export/integration data.
+ */
+export function normalizeObservation(value: unknown): HealthObservation | null {
+  try {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const observation = value as Partial<HealthObservation> & Record<string, unknown>;
+    if (!connectedMetrics.includes(observation.metric as ConnectedMetric)) return null;
+    if (!observation.provenance || typeof observation.provenance !== 'object' || Array.isArray(observation.provenance)) return null;
+    const provenance = observation.provenance as Partial<HealthObservation['provenance']> & Record<string, unknown>;
+
+    if (!providers.includes(provenance.provider as HealthProvider)
+      || !ingestionMethods.includes(provenance.ingestionMethod as typeof ingestionMethods[number])
+      || !qualities.includes(observation.quality as typeof qualities[number])) return null;
+
+    if (typeof observation.value !== 'number' || !Number.isFinite(observation.value)) return null;
+    if (observation.unit !== undefined && typeof observation.unit !== 'string') return null;
+    if (provenance.originalUnit !== undefined && typeof provenance.originalUnit !== 'string') return null;
+
+    const start = validTimestamp(observation.startTime);
+    const end = observation.endTime === undefined ? start : validTimestamp(observation.endTime);
+    const recorded = validTimestamp(observation.recordedAt);
+    const imported = validTimestamp(provenance.importedAt);
+    if (start === null || end === null || recorded === null || imported === null || end < start) return null;
+
+    if (typeof observation.sourceId !== 'string' || !observation.sourceId.trim()
+      || typeof provenance.externalId !== 'string' || !provenance.externalId.trim()
+      || typeof provenance.sourceName !== 'string' || !provenance.sourceName.trim()
+      || typeof provenance.originalType !== 'string' || !provenance.originalType.trim()) return null;
+
+    const applicationId = optionalString(provenance.applicationId);
+    const device = optionalString(provenance.device);
+    if (applicationId === null || device === null) return null;
+
+    if (provenance.externalVersion !== undefined
+      && (typeof provenance.externalVersion !== 'number'
+        || !Number.isSafeInteger(provenance.externalVersion)
+        || provenance.externalVersion < 0)) return null;
+
+    if (observation.timezoneOffsetMinutes !== undefined
+      && (typeof observation.timezoneOffsetMinutes !== 'number'
+        || !Number.isInteger(observation.timezoneOffsetMinutes)
+        || Math.abs(observation.timezoneOffsetMinutes) > MAX_TIMEZONE_OFFSET_MINUTES)) return null;
+
+    const tags = normalizeTags(observation.tags);
+    if (tags === null) return null;
+
+    const normalized = convertToCanonical(
+      observation.metric as ConnectedMetric,
+      observation.value,
+      observation.unit || provenance.originalUnit,
+    );
+    if (!normalized) return null;
+
+    const canonicalProvenance: HealthObservation['provenance'] = {
+      provider: provenance.provider as HealthProvider,
+      ingestionMethod: provenance.ingestionMethod as HealthObservation['provenance']['ingestionMethod'],
+      sourceName: provenance.sourceName,
+      originalType: provenance.originalType,
+      externalId: provenance.externalId,
+      importedAt: new Date(imported).toISOString(),
+    };
+    if (applicationId !== undefined) canonicalProvenance.applicationId = applicationId;
+    if (device !== undefined) canonicalProvenance.device = device;
+    if (provenance.originalUnit !== undefined) canonicalProvenance.originalUnit = provenance.originalUnit;
+    if (provenance.externalVersion !== undefined) canonicalProvenance.externalVersion = provenance.externalVersion;
+
+    const canonical: HealthObservation = {
+      // Never trust an imported ID. Ownership is derived from sourceId + provider externalId.
+      id: observationId(observation.sourceId, provenance.externalId),
+      sourceId: observation.sourceId,
+      metric: observation.metric as ConnectedMetric,
+      value: normalized.value,
+      unit: normalized.unit,
+      startTime: new Date(start).toISOString(),
+      recordedAt: new Date(recorded).toISOString(),
+      quality: observation.quality as HealthObservation['quality'],
+      provenance: canonicalProvenance,
+    };
+    if (observation.endTime !== undefined) canonical.endTime = new Date(end).toISOString();
+    if (observation.timezoneOffsetMinutes !== undefined) canonical.timezoneOffsetMinutes = observation.timezoneOffsetMinutes;
+    if (tags) canonical.tags = tags;
+    return canonical;
+  } catch {
+    // This is an untrusted storage/import boundary. Malformed records must fail closed,
+    // never escape as an exception that bypasses repository integrity accounting.
+    return null;
+  }
 }
 
 function newer(current: HealthObservation, candidate: HealthObservation) {
