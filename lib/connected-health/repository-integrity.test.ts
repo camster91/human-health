@@ -36,7 +36,7 @@ describe('connected-health persisted-row integrity', () => {
 
   it('scopes known invalid rows to their source when a source-specific read is requested', () => {
     const valid = makeObservation('steps', 1234, { sourceId: 'watch', externalId: 'steps-1' });
-    const otherCorrupt = { ...valid, sourceId: 'phone', startTime: 'invalid', provenance: { ...valid.provenance, externalId: 'phone-corrupt' } };
+    const otherCorrupt = { ...valid, id: 'phone:phone-corrupt', sourceId: 'phone', startTime: 'invalid', provenance: { ...valid.provenance, externalId: 'phone-corrupt' } };
     const result = normalizeStoredObservationRows([valid, otherCorrupt], 'watch');
 
     expect(result.invalidCount).toBe(0);
