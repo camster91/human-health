@@ -39,6 +39,7 @@ function download(name: string, text: string, type = 'application/json') {
 export function PlatformPanel() {
   const connected = useConnectedHealthSnapshot();
   const [training, setTraining] = useState<HumanHealthExport | null>(null);
+  const [trainingIntegrityError, setTrainingIntegrityError] = useState('');
   const [data, setData] = useState<PlatformLocalData>({ schemaVersion: 1, records: [], reminders: [] });
   const [notice, setNotice] = useState('');
 
@@ -68,7 +69,13 @@ export function PlatformPanel() {
   const [emergency, setEmergency] = useState(false);
 
   useEffect(() => {
-    setTraining(store.exportData());
+    try {
+      setTraining(store.exportCompleteData());
+      setTrainingIntegrityError('');
+    } catch (error) {
+      setTraining(null);
+      setTrainingIntegrityError(error instanceof Error ? error.message : 'Trusted training data is unavailable because local training storage could not be validated.');
+    }
     const loaded = platformStore.load();
     setData(loaded);
     const localWarning = platformStore.getMutationError();
@@ -78,7 +85,7 @@ export function PlatformPanel() {
   }, []);
 
   const personal = useMemo(() => training ? createPersonalModelSnapshot(training) : null, [training]);
-  const clinician = useMemo(() => training ? buildClinicianSummary({ training, connectedObservations: connected.observations, connectedSources: connected.sources, preventiveRecords: data.records, preventiveReminders: data.reminders }) : null, [training, connected.observations, connected.sources, data]);
+  const clinician = useMemo(() => training && !connected.error ? buildClinicianSummary({ training, connectedObservations: connected.observations, connectedSources: connected.sources, preventiveRecords: data.records, preventiveReminders: data.reminders }) : null, [training, connected.error, connected.observations, connected.sources, data]);
   const risk = useMemo(() => regulatoryGate({ id: 'ui-review', name: riskName || 'Proposed feature', diagnosticClaim: diagnostic, treatmentRecommendation: treatment, medicationOrInsulinDose: dosing, emergencyMonitoring: emergency, wellnessEducationOnly: !diagnostic && !treatment && !dosing && !emergency }), [riskName, diagnostic, treatment, dosing, emergency]);
 
   function addRecord() {
@@ -132,8 +139,16 @@ export function PlatformPanel() {
 
   function toggleScope(scope: IntegrationScope) { setScopes(current => current.includes(scope) ? current.filter(item => item !== scope) : [...current, scope]); }
   function createSelectedBundle() {
-    if (!training) throw new Error('Training data is still loading.');
-    return createIntegrationBundle({ scopes, training, connectedObservations: connected.observations, connectedSources: connected.sources, preventiveRecords: data.records, preventiveReminders: data.reminders });
+    if (scopes.includes('training:read') && !training) throw new Error('Training integration is unavailable until persisted training data passes the complete integrity check.');
+    if (scopes.includes('connected-health:read') && connected.error) throw new Error(`Connected-health integration is unavailable because local connected-health data is not trusted: ${connected.error}`);
+    return createIntegrationBundle({
+      scopes,
+      training,
+      connectedObservations: connected.error ? null : connected.observations,
+      connectedSources: connected.error ? null : connected.sources,
+      preventiveRecords: data.records,
+      preventiveReminders: data.reminders,
+    });
   }
   function exportIntegration() {
     try { const bundle = createSelectedBundle(); download('human-health-integration.json', JSON.stringify(bundle, null, 2)); setNotice('Scoped integration bundle exported locally. No background sharing occurred.'); }
@@ -151,6 +166,8 @@ export function PlatformPanel() {
 
   return <>
     <section className="hero"><span className="pill">PHASE 5 · LONG-HORIZON PLATFORM</span><h2>User-owned health context, without pretending to be a medical authority</h2><p>Phase 5 adds preventive records/reminders, clinician discussion exports, validation gates, on-device personal baselines, scoped integration contracts and regulatory escalation checkpoints.</p></section>
+    {trainingIntegrityError && <div className="connection-state storage-error" role="alert">Training-derived baseline, clinician export, and training integration data are disabled until local training storage is repaired, replaced from a validated archive, or deleted. {trainingIntegrityError}</div>}
+    {connected.error && <div className="connection-state storage-error" role="alert">Connected-health-dependent clinician export and connected-health integration data are disabled until local connected-health storage is trusted again. {connected.error}</div>}
     {notice && <div className="coach-note" role="status" aria-live="polite">{notice}</div>}
 
     <section className="card" aria-labelledby="preventive-title"><h2 id="preventive-title">Preventive records and reminders</h2><p className="muted">{preventiveSafetyNote}</p><div className={styles.grid}>
@@ -178,13 +195,13 @@ export function PlatformPanel() {
       {data.reminders.map(reminder=><article className={styles.item} key={reminder.id}><span className="pill">{reminderState(reminder)}</span><h3>{reminder.title}</h3><p>Due {reminder.dueOn} · {reminder.source}{reminder.provider ? ` · ${reminder.provider}` : ''}{reminder.repeatMonths ? ` · every ${reminder.repeatMonths} month${reminder.repeatMonths===1?'':'s'}` : ''}</p>{reminder.note&&<p className={styles.muted}>{reminder.note}</p>}<div className={styles.actions}><button className="primary" disabled={!reminder.enabled} onClick={()=>completePreventiveReminder(reminder.id)}>Complete today</button><button className="ghost" onClick={()=>toggleReminderEnabled(reminder.id,!reminder.enabled)}>{reminder.enabled?'Disable':'Enable'}</button><button className="link" onClick={()=>deleteReminder(reminder.id)}>Delete</button></div></article>)}
     </div></section>
 
-    <section className="card" aria-labelledby="clinician-title"><h2 id="clinician-title">Clinician discussion export</h2><p>Generated locally with source/provenance notes and explicit non-diagnostic framing.</p><div className={styles.actions}><button className="primary" disabled={!clinician} onClick={()=>clinician&&download('human-health-clinician-summary.md', clinicianSummaryMarkdown(clinician), 'text/markdown')}>Export Markdown summary</button><button className="ghost" disabled={!clinician} onClick={()=>clinician&&download('human-health-clinician-summary.json', JSON.stringify(clinician,null,2))}>Export JSON summary</button></div>{clinician&&<div className="metrics"><span><b>Training sessions</b>{clinician.training.sessions}</span><span><b>Source-separated metrics</b>{clinician.connectedHealth.metrics.length}</span><span><b>Preventive records</b>{clinician.preventive.records.length}</span></div>}</section>
+    <section className="card" aria-labelledby="clinician-title"><h2 id="clinician-title">Clinician discussion export</h2><p>Generated locally with source/provenance notes and explicit non-diagnostic framing. Export is disabled when required local training or connected-health data is not trusted.</p><div className={styles.actions}><button className="primary" disabled={!clinician} onClick={()=>clinician&&download('human-health-clinician-summary.md', clinicianSummaryMarkdown(clinician), 'text/markdown')}>Export Markdown summary</button><button className="ghost" disabled={!clinician} onClick={()=>clinician&&download('human-health-clinician-summary.json', JSON.stringify(clinician,null,2))}>Export JSON summary</button></div>{clinician&&<div className="metrics"><span><b>Training sessions</b>{clinician.training.sessions}</span><span><b>Source-separated metrics</b>{clinician.connectedHealth.metrics.length}</span><span><b>Preventive records</b>{clinician.preventive.records.length}</span></div>}</section>
 
     <section className="card" aria-labelledby="models-title"><h2 id="models-title">Capability-model validation registry</h2><p>No current model is allowed to claim validation merely because it exists in the app.</p><div className={styles.grid}>{capabilityModelRegistry.map(model=><article className={styles.item} key={model.id}><span className="pill">{model.validationStatus}</span><h3>{model.name}</h3><p>{model.intendedUse}</p><p className={styles.muted}>{canClaimValidated(model)?'Recorded evidence satisfies the software claim gate; intended-use applicability still requires specialist review.':'Not validated for intended clinical use.'}</p></article>)}</div></section>
 
-    <section className="card" aria-labelledby="personal-title"><h2 id="personal-title">On-device personal baseline</h2><p>Deterministic, local-only and descriptive. No cross-user training or automatic sharing.</p>{personal&&<><div className="metrics"><span><b>Window</b>{personal.historyWindowDays} days</span><span><b>Training sessions</b>{personal.trainingSessions}</span><span><b>Readiness check-ins</b>{personal.readinessCheckIns}</span><span><b>Planned cardio</b>{personal.plannedCardioMinutes} min</span></div><button className="ghost" onClick={()=>download('human-health-personal-baseline.json',JSON.stringify(personal,null,2))}>Export my local baseline</button></>}</section>
+    <section className="card" aria-labelledby="personal-title"><h2 id="personal-title">On-device personal baseline</h2><p>Deterministic, local-only and descriptive. No cross-user training or automatic sharing. The baseline is withheld when persisted training data is not trusted.</p>{personal&&<><div className="metrics"><span><b>Window</b>{personal.historyWindowDays} days</span><span><b>Training sessions</b>{personal.trainingSessions}</span><span><b>Readiness check-ins</b>{personal.readinessCheckIns}</span><span><b>Planned cardio</b>{personal.plannedCardioMinutes} min</span></div><button className="ghost" onClick={()=>download('human-health-personal-baseline.json',JSON.stringify(personal,null,2))}>Export my local baseline</button></>}</section>
 
-    <section className="card" aria-labelledby="integration-title"><h2 id="integration-title">Scoped integration export/share</h2><p>Select exactly what an integration bundle may contain. Local export is explicit. A connected host is only sent data after an additional confirmation that lists the selected scopes.</p>{integrationScopes.map(scope=><label className={styles.scope} key={scope}><input type="checkbox" checked={scopes.includes(scope)} onChange={()=>toggleScope(scope)}/>{scope}</label>)}<div className={styles.actions}><button className="primary" onClick={exportIntegration}>Export selected scopes</button>{integrationHostName&&<button className="ghost" disabled={sharing} onClick={()=>void shareIntegration()}>{sharing?'Sharing…':`Share with ${integrationHostName}`}</button>}</div></section>
+    <section className="card" aria-labelledby="integration-title"><h2 id="integration-title">Scoped integration export/share</h2><p>Select exactly what an integration bundle may contain. Local export is explicit. A connected host is only sent data after an additional confirmation that lists the selected scopes. Unavailable or untrusted domains block only the scopes that require them.</p>{integrationScopes.map(scope=><label className={styles.scope} key={scope}><input type="checkbox" checked={scopes.includes(scope)} onChange={()=>toggleScope(scope)}/>{scope}</label>)}<div className={styles.actions}><button className="primary" onClick={exportIntegration}>Export selected scopes</button>{integrationHostName&&<button className="ghost" disabled={sharing} onClick={()=>void shareIntegration()}>{sharing?'Sharing…':`Share with ${integrationHostName}`}</button>}</div></section>
 
     <section className="card" aria-labelledby="regulatory-title"><h2 id="regulatory-title">Regulatory escalation checkpoint</h2><p>This is an internal product-scope gate, not legal advice or regulatory clearance.</p><div className={styles.form}><label><b>Proposed feature</b><input value={riskName} onChange={e=>setRiskName(e.target.value)}/></label><label className={styles.scope}><input type="checkbox" checked={diagnostic} onChange={e=>setDiagnostic(e.target.checked)}/>Diagnostic claim</label><label className={styles.scope}><input type="checkbox" checked={treatment} onChange={e=>setTreatment(e.target.checked)}/>Patient-specific treatment recommendation</label><label className={styles.scope}><input type="checkbox" checked={dosing} onChange={e=>setDosing(e.target.checked)}/>Medication or insulin dosing</label><label className={styles.scope}><input type="checkbox" checked={emergency} onChange={e=>setEmergency(e.target.checked)}/>Emergency monitoring</label></div><div className={risk.decision==='blocked'?styles.danger:risk.decision==='specialist-review-required'?styles.warning:'coach-note'}><b>{risk.decision}</b><br/>{risk.message}</div><details><summary>Phase 5 review checkpoints</summary><ul>{phase5RegulatoryCheckpoints.map(item=><li key={item}>{item}</li>)}</ul></details></section>
   </>;
