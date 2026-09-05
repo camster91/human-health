@@ -23,12 +23,23 @@ describe('connected-health summaries', () => {
   it('uses the supplied summary clock instead of the machine clock for future evidence', () => {
     const observations = [
       makeObservation('resting-heart-rate', 60, { sourceId: 'watch', startTime: '2026-09-03T10:00:00Z', recordedAt: '2026-09-03T10:00:00Z' }),
-      makeObservation('resting-heart-rate', 95, { sourceId: 'watch', startTime: '2026-09-04T10:00:00Z', recordedAt: '2026-09-04T10:00:00Z', externalId: 'future-rhr' }),
+      makeObservation('resting-heart-rate', 95, { sourceId: 'watch', startTime: '2026-09-04T10:00:00Z', recordedAt: '2026-09-03T11:00:00Z', externalId: 'future-rhr' }),
     ];
     const source = makeSource('watch', { displayName: 'Watch', supportedMetrics: ['resting-heart-rate'], grantedMetrics: ['resting-heart-rate'], lastSuccessAt: '2026-09-03T12:00:00Z' });
     const summary = summarizeConnectedHealth(observations, [source], defaultConnectedHealthPreferences, now);
     expect(summary.restingHeartRate.value).toBe(60);
     expect(summary.restingHeartRate.recordedAt).toBe('2026-09-03T10:00:00Z');
+  });
+
+  it('does not let a recent provider creation timestamp promote an older measurement over a newer event', () => {
+    const observations = [
+      makeObservation('resting-heart-rate', 95, { sourceId: 'watch', startTime: '2026-08-20T10:00:00Z', recordedAt: '2026-09-03T17:59:00Z', externalId: 'old-event-new-creation' }),
+      makeObservation('resting-heart-rate', 60, { sourceId: 'watch', startTime: '2026-09-03T10:00:00Z', recordedAt: '2026-09-03T10:00:00Z', externalId: 'new-event' }),
+    ];
+    const source = makeSource('watch', { displayName: 'Watch', supportedMetrics: ['resting-heart-rate'], grantedMetrics: ['resting-heart-rate'], lastSuccessAt: '2026-09-03T17:00:00Z' });
+    const summary = summarizeConnectedHealth(observations, [source], defaultConnectedHealthPreferences, now);
+    expect(summary.restingHeartRate.value).toBe(60);
+    expect(summary.restingHeartRate.status).toBe('current');
   });
 
   it('summarizes detailed sleep stages without double-counting a general asleep record', () => {
@@ -45,8 +56,8 @@ describe('connected-health summaries', () => {
   });
 
   it('does not use stale connected sleep to generate readiness context', () => {
-    const observation = makeObservation('sleep-duration', 480, { sourceId: 'sleep', startTime: '2026-08-01T22:00:00Z', endTime: '2026-08-02T06:00:00Z', recordedAt: '2026-08-02T06:00:00Z' });
-    const source = makeSource('sleep', { supportedMetrics: ['sleep-duration'], grantedMetrics: ['sleep-duration'], lastSuccessAt: '2026-08-02T06:00:00Z' });
+    const observation = makeObservation('sleep-duration', 480, { sourceId: 'sleep', startTime: '2026-08-01T22:00:00Z', endTime: '2026-08-02T06:00:00Z', recordedAt: '2026-09-03T17:59:00Z' });
+    const source = makeSource('sleep', { supportedMetrics: ['sleep-duration'], grantedMetrics: ['sleep-duration'], lastSuccessAt: '2026-09-03T17:00:00Z' });
     const summary = summarizeConnectedHealth([observation], [source], defaultConnectedHealthPreferences, now);
     expect(summary.sleepLastNight.status).toBe('stale');
     expect(connectedSleepReadiness(summary, true)).toEqual({});
@@ -90,7 +101,7 @@ describe('connected-health trends', () => {
     expect(connectedHealthTrends(observations, [source], defaultConnectedHealthPreferences, now)).toHaveLength(4);
   });
 
-  it('excludes samples whose recorded timestamp is materially in the future', () => {
+  it('excludes samples whose event timestamp is materially in the future even when provider creation time is current', () => {
     const now = new Date('2026-09-15T12:00:00Z');
     const observations = Array.from({ length: 14 }, (_, index) => {
       const date = new Date(now.getTime() - index * 86_400_000);
@@ -98,9 +109,9 @@ describe('connected-health trends', () => {
     });
     observations.push(makeObservation('steps', 100_000, {
       sourceId: 'watch',
-      startTime: '2026-09-15T10:00:00Z',
-      recordedAt: '2026-09-16T10:00:00Z',
-      externalId: 'future-recorded',
+      startTime: '2026-09-16T10:00:00Z',
+      recordedAt: '2026-09-15T10:00:00Z',
+      externalId: 'future-event',
     }));
     const source = makeSource('watch', { lastSuccessAt: now.toISOString(), staleAfterMs: 48 * 3_600_000 });
     const trend = metricTrend(observations, [source], defaultConnectedHealthPreferences, 'steps', { now });
