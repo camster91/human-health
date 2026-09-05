@@ -1,5 +1,5 @@
 import { mergeObservationCollections, normalizeConnectedPreferences, normalizeSourceState } from '../merge';
-import { ConnectedHealthPreferences, HealthObservation, HealthRepositoryExport, HealthSourceState, connectedMetrics, defaultConnectedHealthPreferences } from '../types';
+import { ConnectedHealthPreferences, ConnectedMetric, HealthObservation, HealthRepositoryExport, HealthSourceState, connectedMetrics, defaultConnectedHealthPreferences } from '../types';
 
 export type ConnectedJsonEnvelope = {
   format: 'human-health-connected-export';
@@ -10,7 +10,7 @@ export type ConnectedJsonEnvelope = {
 
 const providers = new Set(['health-connect', 'apple-health', 'manual', 'human-health-import']);
 const statuses = new Set(['not-connected', 'unavailable', 'permission-required', 'syncing', 'current', 'partial', 'stale', 'failed']);
-const habitMetrics = new Set(defaultConnectedHealthPreferences.enabledHabits);
+const habitMetrics = new Set<ConnectedMetric>(defaultConnectedHealthPreferences.enabledHabits);
 
 export function parseConnectedSourceState(value: unknown): HealthSourceState {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Connected-health archive contains an invalid source state.');
@@ -47,12 +47,12 @@ export function parseConnectedPreferences(value: unknown): ConnectedHealthPrefer
   if ('useFreshSleepForReadiness' in input && typeof input.useFreshSleepForReadiness !== 'boolean') throw new Error('Connected-health preferences contain an invalid useFreshSleepForReadiness value.');
 
   const enabledHabits = 'enabledHabits' in input ? input.enabledHabits : defaultConnectedHealthPreferences.enabledHabits;
-  if (!Array.isArray(enabledHabits) || !enabledHabits.every(metric => typeof metric === 'string' && habitMetrics.has(metric as never))) throw new Error('Connected-health preferences contain invalid enabled habit metrics.');
+  if (!Array.isArray(enabledHabits) || !enabledHabits.every(metric => typeof metric === 'string' && habitMetrics.has(metric as ConnectedMetric))) throw new Error('Connected-health preferences contain invalid enabled habit metrics.');
 
   const primary = 'primarySourceByMetric' in input ? input.primarySourceByMetric : {};
   if (!primary || typeof primary !== 'object' || Array.isArray(primary)) throw new Error('Connected-health preferences contain an invalid primary-source map.');
   for (const [metric, source] of Object.entries(primary as Record<string, unknown>)) {
-    if (!connectedMetrics.includes(metric as typeof connectedMetrics[number]) || typeof source !== 'string' || !source.trim()) throw new Error('Connected-health preferences contain an invalid primary-source mapping.');
+    if (!connectedMetrics.includes(metric as ConnectedMetric) || typeof source !== 'string' || !source.trim()) throw new Error('Connected-health preferences contain an invalid primary-source mapping.');
   }
 
   return normalizeConnectedPreferences({
@@ -65,6 +65,11 @@ export function parseConnectedPreferences(value: unknown): ConnectedHealthPrefer
     enabledHabits: enabledHabits as ConnectedHealthPreferences['enabledHabits'],
     primarySourceByMetric: primary as ConnectedHealthPreferences['primarySourceByMetric'],
   });
+}
+
+function parseExportedAt(value: unknown) {
+  if (typeof value !== 'string' || !value.trim() || !Number.isFinite(Date.parse(value))) throw new Error('Connected-health archive has an invalid exportedAt timestamp.');
+  return new Date(value).toISOString();
 }
 
 export function createConnectedJsonEnvelope(data: HealthRepositoryExport): ConnectedJsonEnvelope {
@@ -82,7 +87,7 @@ export function parseConnectedJson(text: string): HealthRepositoryExport {
   const sources = data.sources.map(parseConnectedSourceState);
   return {
     schemaVersion: 1,
-    exportedAt: typeof data.exportedAt === 'string' && Number.isFinite(Date.parse(data.exportedAt)) ? new Date(data.exportedAt).toISOString() : new Date().toISOString(),
+    exportedAt: parseExportedAt(data.exportedAt),
     observations: merged.observations,
     sources,
     preferences: parseConnectedPreferences(data.preferences),
