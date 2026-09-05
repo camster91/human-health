@@ -1,5 +1,5 @@
 import { ReadinessInput } from '../whole-person';
-import { chooseSourceForMetric, observationFreshness, observationsForMetric, sourceFreshness } from './freshness';
+import { chooseSourceForMetric, observationEvidenceTime, observationFreshness, observationsForMetric, sourceFreshness } from './freshness';
 import { sameDeviceLocalDay } from './local-day';
 import { metricDefinitions } from './metrics';
 import { ConnectedHealthPreferences, ConnectedMetric, HealthObservation, HealthSourceState, ObservationFreshness } from './types';
@@ -188,7 +188,7 @@ function workoutHeartRateSummary(observations: HealthObservation[], sources: Hea
 
   const values = included.map(sample => sample.value).filter(value => Number.isFinite(value) && value > 0);
   if (!values.length) return { status: 'insufficient', average: null, minimum: null, maximum: null, sampleCount: 0, sourceId: source.id, sourceName: source.displayName, note: 'Linked workout heart-rate samples were invalid.' };
-  const latest = [...included].sort((a, b) => Date.parse(b.recordedAt) - Date.parse(a.recordedAt))[0];
+  const latest = [...included].sort((a, b) => observationEvidenceTime(b) - observationEvidenceTime(a) || a.id.localeCompare(b.id))[0];
   return {
     status: statusFor(source, observationFreshness(latest, now), now),
     average: values.reduce((sum, value) => sum + value, 0) / values.length,
