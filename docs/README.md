@@ -22,7 +22,8 @@ A source-complete item does not imply executable verification. Typecheck, the fu
 - `connected-health-architecture.md` — provider-neutral connected-health architecture
 - `connected-health-privacy.md` — privacy/data-ownership boundaries
 - `connected-health-day-semantics.md` — current-device local-day/timezone rule
-- `connected-health-storage-integrity-note.md` — connected-health trust/recovery boundary
+- `connected-health-storage-integrity-note.md` — connected-health row/storage trust and recovery boundary
+- `connected-health-relationship-integrity-note.md` — observation/source provenance relationship trust boundary
 - `native-health-bridge-contract.md` — Android/Apple native-host boundary
 - `dependency-update-policy.md` — pinned toolchain, lockfile and Action-update policy
 
