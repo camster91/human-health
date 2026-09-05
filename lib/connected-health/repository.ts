@@ -154,6 +154,7 @@ export function storedRowBelongsToSource(value: unknown, sourceId: string) {
 
 export function normalizeStoredObservationRows(values: unknown[], sourceId?: string) {
   const observations: HealthObservation[] = [];
+  const seenCanonicalIds = new Set<string>();
   let invalidCount = 0;
   const invalidSourceIds = new Set<string>();
 
@@ -168,7 +169,14 @@ export function normalizeStoredObservationRows(values: unknown[], sourceId?: str
       }
       continue;
     }
-    if (!sourceId || normalized.sourceId === sourceId) observations.push(normalized);
+    if (sourceId && normalized.sourceId !== sourceId) continue;
+    if (seenCanonicalIds.has(normalized.id)) {
+      invalidCount++;
+      invalidSourceIds.add(normalized.sourceId);
+      continue;
+    }
+    seenCanonicalIds.add(normalized.id);
+    observations.push(normalized);
   }
 
   return { observations, invalidCount, invalidSourceIds: [...invalidSourceIds].sort() };
