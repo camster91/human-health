@@ -44,6 +44,46 @@ export function parseFullHealthArchive(text: string): FullHealthArchive {
   };
 }
 
+export type FullArchiveMutationOperations = {
+  importTraining(): void | Promise<void>;
+  importConnected(): void | Promise<void>;
+  importPlatform(): void | Promise<void>;
+  restoreTraining(): boolean | Promise<boolean>;
+  trainingRollbackError?(): string | null;
+  restoreConnected(): void | Promise<void>;
+  restorePlatform(): boolean | Promise<boolean>;
+  platformRollbackError?(): string | null;
+};
+
+/**
+ * Apply the three persisted archive domains in order and, after any mutation
+ * failure, attempt every exact recovery snapshot. Rollback failures are reported
+ * separately from the original import failure and never converted into success.
+ */
+export async function runFullArchiveMutation(operations: FullArchiveMutationOperations) {
+  try {
+    await operations.importTraining();
+    await operations.importConnected();
+    await operations.importPlatform();
+  } catch (error) {
+    const rollbackFailures: string[] = [];
+    try {
+      if (!(await operations.restoreTraining())) rollbackFailures.push(`training: ${operations.trainingRollbackError?.() || 'rollback failed'}`);
+    } catch (failure) { rollbackFailures.push(`training: ${failure instanceof Error ? failure.message : 'rollback failed'}`); }
+    try { await operations.restoreConnected(); }
+    catch (failure) { rollbackFailures.push(`connected health: ${failure instanceof Error ? failure.message : 'rollback failed'}`); }
+    try {
+      if (!(await operations.restorePlatform())) rollbackFailures.push(`preventive/platform: ${operations.platformRollbackError?.() || 'rollback failed'}`);
+    } catch (failure) { rollbackFailures.push(`preventive/platform: ${failure instanceof Error ? failure.message : 'rollback failed'}`); }
+
+    if (rollbackFailures.length) {
+      const original = error instanceof Error ? error.message : 'Archive import failed.';
+      throw new Error(`${original} Automatic rollback also failed: ${rollbackFailures.join(' | ')}`);
+    }
+    throw error;
+  }
+}
+
 export async function importFullHealthArchive(text: string, mode: 'merge' | 'replace' = 'merge') {
   const archive = parseFullHealthArchive(text);
   // Preserve exact raw local state before mutation. Recovery snapshots are not
@@ -53,27 +93,18 @@ export async function importFullHealthArchive(text: string, mode: 'merge' | 'rep
   const trainingBackup = store.captureRecoverySnapshot();
   const connectedBackup = await healthRepository.captureRecoverySnapshot();
   const platformBackup = platformStore.captureRecoverySnapshot();
-  try {
-    store.importData(archive.training, mode);
-    await healthRepository.importData(archive.connected, mode);
-    platformStore.importData(archive.platform, mode);
-    return archive;
-  } catch (error) {
-    let rollbackError: unknown = null;
-    try {
-      if (!store.restoreRecoverySnapshot(trainingBackup)) throw new Error(store.getMutationError() || 'Training rollback failed.');
-    } catch (failure) { rollbackError = failure; }
-    try { await healthRepository.restoreRecoverySnapshot(connectedBackup); } catch (failure) { rollbackError ||= failure; }
-    try {
-      if (!platformStore.restoreRecoverySnapshot(platformBackup)) throw new Error(platformStore.getMutationError() || 'Platform rollback failed.');
-    } catch (failure) { rollbackError ||= failure; }
-    if (rollbackError) {
-      const original = error instanceof Error ? error.message : 'Archive import failed.';
-      const rollback = rollbackError instanceof Error ? rollbackError.message : 'Rollback failed.';
-      throw new Error(`${original} Automatic rollback also failed: ${rollback}`);
-    }
-    throw error;
-  }
+
+  await runFullArchiveMutation({
+    importTraining: () => { store.importData(archive.training, mode); },
+    importConnected: () => healthRepository.importData(archive.connected, mode).then(() => undefined),
+    importPlatform: () => { platformStore.importData(archive.platform, mode); },
+    restoreTraining: () => store.restoreRecoverySnapshot(trainingBackup),
+    trainingRollbackError: () => store.getMutationError(),
+    restoreConnected: () => healthRepository.restoreRecoverySnapshot(connectedBackup),
+    restorePlatform: () => platformStore.restoreRecoverySnapshot(platformBackup),
+    platformRollbackError: () => platformStore.getMutationError(),
+  });
+  return archive;
 }
 
 export type CompleteDeletionOperations = {
