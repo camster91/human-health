@@ -5,11 +5,11 @@ import { clearAllHumanHealthData, createFullHealthArchive, downloadJson, importF
 
 function isFailureMessage(message: string) {
   const value = message.toLowerCase();
-  return value.includes('could not') || value.includes('invalid') || value.includes('failed') || value.includes('incomplete') || value.includes('error');
+  return ['could not', 'cannot', 'invalid', 'failed', 'incomplete', 'error', 'refused', 'unavailable', 'corrupt', 'unreadable', 'blocked'].some(term => value.includes(term));
 }
 
-export function FullArchiveControls() {
-  const [mode, setMode] = useState<'merge' | 'replace'>('merge');
+export function FullArchiveControls({ initialMode = 'merge', onStateRecovered }: { initialMode?: 'merge' | 'replace'; onStateRecovered?: () => void }) {
+  const [mode, setMode] = useState<'merge' | 'replace'>(initialMode);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -33,7 +33,8 @@ export function FullArchiveControls() {
     setMessage('');
     try {
       await importFullHealthArchive(await file.text(), mode);
-      setMessage(`Complete archive imported in ${mode} mode. Reload the relevant route to display imported local state.`);
+      setMessage(`Complete archive imported in ${mode} mode. Local integrity checks can now be rerun.`);
+      onStateRecovered?.();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'The complete archive could not be imported.');
     } finally { setBusy(false); }
@@ -46,6 +47,7 @@ export function FullArchiveControls() {
     try {
       await clearAllHumanHealthData();
       setMessage('All local Human Health data was deleted.');
+      onStateRecovered?.();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Local data could not be fully deleted.');
     } finally { setBusy(false); }
