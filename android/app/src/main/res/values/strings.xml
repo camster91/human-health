@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Human Health</string>
+    <string name="title_activity_main">Human Health</string>
+    <string name="package_name">com.ashbi.humanhealth</string>
+    <string name="custom_url_scheme">com.ashbi.humanhealth</string>
+</resources>
