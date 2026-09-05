@@ -2,6 +2,8 @@
 
 This roadmap turns the long-term product vision into an incremental delivery plan. The app should remain adaptive, explainable, privacy-conscious, and useful even when real life disrupts the plan.
 
+**Current control state:** planned numbered product phases 0–5 are source-built and merged. Independent hardening is merged through PR #84; follow-up storage-integrity hardening is on draft PR #102. Executable/browser/device/staging verification and production deployment remain separate gates under issue #82.
+
 ## Phase 0 — Foundation
 
 1. Architecture and data model
@@ -14,6 +16,8 @@ This roadmap turns the long-term product vision into an incremental delivery pla
 8. Safety, privacy, and observability baseline
 
 ## Phase 1 — MVP adaptive training coach
+
+Status: merged.
 
 1. Today screen
 2. Live workout logging
@@ -32,6 +36,8 @@ This roadmap turns the long-term product vision into an incremental delivery pla
 15. Deployment and rollback plan
 
 ## Phase 2 — Whole-person fitness
+
+Status: merged.
 
 1. Core programming
 2. Mobility/flexibility programming
@@ -59,7 +65,7 @@ Status: merged into `main`; executable/browser/native validation remains separat
 
 ## Phase 4 — Coaching intelligence
 
-Status: merged into `main`; release verification remains separately tracked in #78/#51.
+Status: merged into `main`; release verification remains tracked under #82/#95/#51.
 
 1. Explainable trend detection with evidence/confidence/insufficient-data states
 2. Plateau/regression detection and conservative advisory deload logic
@@ -71,7 +77,7 @@ Status: merged into `main`; release verification remains separately tracked in #
 
 ## Phase 5 — Long-horizon health platform
 
-Status: **source scope and final hardening complete** on draft PR #83. Executable/runtime verification, real external validation evidence and merge/deployment remain separate gates.
+Status: merged into `main`. Source hardening is merged through PR #84; follow-up storage/data-integrity hardening continues on draft PR #102. Executable/runtime verification, real external validation evidence and deployment remain separate gates.
 
 1. User/clinician-entered preventive-health reminders and records without invented clinical schedules
 2. Clinician-friendly local discussion export with provenance and explicit non-diagnostic framing
@@ -80,17 +86,33 @@ Status: **source scope and final hardening complete** on draft PR #83. Executabl
 5. Versioned scoped integration bundle plus optional explicitly confirmed integration-host contract
 6. Regulatory escalation checkpoints that fail closed on ambiguous or high-risk intended use
 7. Complete local archive/import/delete coverage for Phase 5 preventive/platform data
-8. Independent repository-wide line-by-line review prompt for the final release audit
+8. Independent repository-wide line-by-line review and release-hardening programme
+
+## Post-Phase-5 hardening and release path
+
+This is not a new numbered product phase. It is the evidence and risk-reduction path required before release.
+
+1. Resolve all known Blocker/Critical/High source findings from the independent review.
+2. Preserve fail-closed trust boundaries for training, connected-health and preventive/platform storage.
+3. Keep complete export, replace recovery, rollback and delete-all truthful across corrupt/legacy storage states.
+4. Generate/review a trustworthy npm lockfile and use deterministic `npm ci` (#94).
+5. Provide an eligible Human Health runner (#51).
+6. Execute TypeScript, complete unit suite, production build and PWA checks.
+7. Complete browser/accessibility/device/native-health QA.
+8. Rehearse non-production update and rollback.
+9. Record the explicit release verdict under #82.
+10. Treat production deployment as a separate approval.
 
 ## Delivery principles
 
 - Build mobile-first and Figma-first.
-- Keep historical data immutable.
+- Keep historical data immutable wherever practical.
 - Every automatic recommendation must be explainable and reversible.
 - Prefer rules and measured data over opaque scoring.
-- Treat missing, stale, inferred, and manually entered data differently.
+- Treat missing, stale, inferred, imported and manually entered data differently.
 - Never silently treat two exercise loads as equivalent across different equipment.
 - Safety and recovery override progression.
-- Do not turn fitness coaching into medical diagnosis, medication dosing, or injury clearance.
+- Do not turn fitness coaching into medical diagnosis, medication dosing, emergency monitoring or injury clearance.
 - Do not call algorithms clinically validated without appropriate evidence for the recorded intended use.
+- Do not treat source-complete, verified, release-ready and deployed as synonyms.
 - Review the 5–10 year roadmap annually; do not treat speculative future features as fixed commitments.
