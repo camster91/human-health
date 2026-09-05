@@ -1,6 +1,7 @@
 import { createEmptyPlatformData, platformStore, validatePlatformData, type PlatformLocalData } from '../platform/storage';
 import { HumanHealthExport, store, validateTrainingExport } from '../storage';
 import { preflightTrainingStorage } from '../training-storage-preflight';
+import { assertConnectedHealthRelationships } from './integrity';
 import { createConnectedJsonEnvelope, parseConnectedJson } from './import/canonical-json';
 import { healthRepository } from './repository';
 import { HealthRepositoryExport } from './types';
@@ -21,17 +22,24 @@ function readablePlatformSnapshot() {
   return platform;
 }
 
+async function trustedConnectedSnapshot() {
+  const connected = await healthRepository.exportData();
+  assertConnectedHealthRelationships(connected.observations, connected.sources);
+  return connected;
+}
+
 export async function createFullHealthArchive(): Promise<FullHealthArchive> {
   const preflight = preflightTrainingStorage({ blockPendingFinalization: true });
   if (preflight.errors.length) throw new Error(`Complete training export refused: ${preflight.errors.join(' | ')}`);
   const platform = readablePlatformSnapshot();
+  const connected = await trustedConnectedSnapshot();
   return {
     format: 'human-health-full-export', schemaVersion: 2, exportedAt: new Date().toISOString(),
-    training: store.exportCompleteData(), connected: await healthRepository.exportData(), platform,
+    training: store.exportCompleteData(), connected, platform,
   };
 }
 
-export async function createConnectedHealthJson() { return createConnectedJsonEnvelope(await healthRepository.exportData()); }
+export async function createConnectedHealthJson() { return createConnectedJsonEnvelope(await trustedConnectedSnapshot()); }
 
 function parseFullArchiveExportedAt(value: unknown) {
   if (typeof value !== 'string' || !value.trim()) throw new Error('Human Health full archive has an invalid exportedAt timestamp.');
