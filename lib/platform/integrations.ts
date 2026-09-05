@@ -10,23 +10,25 @@ export function normalizeScopes(scopes: IntegrationScope[]) {
 
 export function createIntegrationBundle(options: {
   scopes: IntegrationScope[];
-  training: HumanHealthExport;
-  connectedObservations: HealthObservation[];
-  connectedSources: HealthSourceState[];
+  training?: HumanHealthExport | null;
+  connectedObservations?: HealthObservation[] | null;
+  connectedSources?: HealthSourceState[] | null;
   preventiveRecords: PreventiveRecord[];
   preventiveReminders: PreventiveReminder[];
   generatedAt?: Date;
 }): IntegrationBundle {
   const scopes = normalizeScopes(options.scopes);
   if (!scopes.length) throw new Error('At least one explicit integration scope is required.');
+  if (scopes.includes('training:read') && !options.training) throw new Error('Trusted training data is required for the selected training integration scope.');
+  if (scopes.includes('connected-health:read') && (!options.connectedObservations || !options.connectedSources)) throw new Error('Trusted connected-health data is required for the selected connected-health integration scope.');
   const bundle: IntegrationBundle = {
     schemaVersion: 1,
     generatedAt: (options.generatedAt || new Date()).toISOString(),
     scopes,
     safety: 'This bundle was generated after an explicit user export/share action. Receiving systems must preserve provenance and must not infer diagnosis, medication/insulin dosing, emergency monitoring, or injury clearance from Human Health data.',
   };
-  if (scopes.includes('training:read')) bundle.training = options.training;
-  if (scopes.includes('connected-health:read')) bundle.connectedHealth = { observations: options.connectedObservations, sources: options.connectedSources };
+  if (scopes.includes('training:read')) bundle.training = options.training!;
+  if (scopes.includes('connected-health:read')) bundle.connectedHealth = { observations: options.connectedObservations!, sources: options.connectedSources! };
   if (scopes.includes('preventive:read')) bundle.preventive = { records: options.preventiveRecords, reminders: options.preventiveReminders };
   if (scopes.includes('coaching:read')) bundle.coaching = { note: 'Phase 4 coaching is deterministic fitness guidance. An integration should consume an explicit exported snapshot rather than silently invoking hidden recommendations.' };
   return bundle;
