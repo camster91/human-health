@@ -131,14 +131,14 @@ describe('recoverable streamed Apple Health import', () => {
         sourceSummaries: [{ sourceId, provider: 'apple-health' as const, displayName: 'Apple Watch', importedAt: imported.provenance.importedAt, metrics: ['steps' as const], count: 1 }],
       };
     };
-    const saveSummaries = async () => { currentSource = source(sourceId, observations.length); };
+    const saveSummaries = async (_summaries: unknown) => { currentSource = source(sourceId, observations.length); };
 
     await importAppleHealthXmlRecoverably({} as File, { repository, parser: parser as never, saveSummaries });
     await importAppleHealthXmlRecoverably({} as File, { repository, parser: parser as never, saveSummaries });
 
     expect(observations).toHaveLength(1);
     expect(observations[0].provenance.externalId).toBe('stable-record');
-    expect(currentSource?.recordCount).toBe(1);
+    expect((currentSource as HealthSourceState | null)?.recordCount).toBe(1);
   });
 
   it('surfaces rollback failure separately with the affected source id', async () => {

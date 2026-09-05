@@ -129,7 +129,7 @@ export function createCoachingSnapshot(input: CoachingInput): CoachingSnapshot {
       instruction: 'Do not use Human Health as exercise clearance while pain or illness is flagged. Use your established care/safety plan or appropriate professional support before resuming app-generated training suggestions.',
       rationale: readiness.reasons.join(' ') || 'A recent readiness record includes pain or illness.',
       evidenceIds: ['recovery'],
-      reversible: false,
+      reversible: true,
     });
   } else if (readiness.level === 'reduced') {
     actions.push({ id: 'reduced-load', kind: 'hold', priority: 1, title: 'Keep progression conservative', instruction: 'Use the reduced-readiness volume path and hold automatic load progression for this exposure.', rationale: readiness.reasons.join(' ') || 'Recent readiness data supports a conservative session.', evidenceIds: ['recovery'], reversible: true });

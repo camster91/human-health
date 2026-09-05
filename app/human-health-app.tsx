@@ -48,7 +48,7 @@ export function HumanHealthApp() {
   const [active, setActive] = useState<Workout | null>(null);
   const [restTimer, setRestTimer] = useState<RestTimerState | null>(null);
   const [now, setNow] = useState(0);
-  const [tab, setTab] = useState<'today' | 'progress' | 'coach' | 'settings'>('today');
+  const [tab, setTab] = useState<'today' | 'progress' | 'health' | 'settings'>('today');
   const [notes, setNotes] = useState<string[]>([]);
   const [swapIndex, setSwapIndex] = useState<number | null>(null);
   const [saveSwap, setSaveSwap] = useState(false);
@@ -198,7 +198,7 @@ export function HumanHealthApp() {
     ].filter(Boolean);
     setNotes(explanations);
     if (!adapted.exercises.length) {
-      setTab('coach');
+      setNotes([...explanations, 'No exercises could be generated with current equipment and constraints. Please adjust settings or equipment availability.']);
       return;
     }
 
@@ -333,7 +333,7 @@ export function HumanHealthApp() {
     setSwapIndex(null);
     setShowAddExercise(false);
     setNotes(summarizeWorkout(entry.exercises, history).messages);
-    setTab('coach');
+    setTab('today');
   }
 
   function pauseWorkout() {
@@ -370,11 +370,11 @@ export function HumanHealthApp() {
     return <main className="workout-shell">
       <OfflineIndicator />
       {storageWarning && <div className="connection-state storage-error" role="alert">{storageWarning}</div>}
-      <header className="workout-head"><div><span className="eyebrow">LIVE WORKOUT</span><h1>{title(active.session)}</h1><p className="muted">{title(active.mode || 'normal')} · {activeGym.name}</p></div><div className="header-actions">{active.status === 'active' ? <button className="ghost" onClick={pauseWorkout}>Pause</button> : <button className="primary" onClick={resumeWorkout}>Resume</button>}<button className="ghost" disabled={active.status !== 'active'} onClick={() => setShowAddExercise(value => !value)}>Add exercise</button><button className="ghost" onClick={() => finishWorkout('ended-early')}>End early</button></div></header>
+      <header className="workout-head"><div><span className="eyebrow">ACTIVE WORKOUT</span><h1>{title(active.session)}</h1><p className="muted">{title(active.mode || 'normal')} · {activeGym.name}</p></div><div className="header-actions">{active.status === 'active' ? <button className="ghost" onClick={pauseWorkout}>Pause</button> : <button className="primary" onClick={resumeWorkout}>Resume</button>}<button className="ghost" disabled={active.status !== 'active'} onClick={() => setShowAddExercise(value => !value)}>Add exercise</button><button className="ghost" onClick={() => finishWorkout('ended-early')}>End early</button></div></header>
       {active.status !== 'active' && <section className="card paused-card"><h2>{active.status === 'interrupted' ? 'Workout restored' : 'Workout paused'}</h2><p>Your completed sets are still stored locally. Resume when ready; elapsed pause time does not mark exercises complete.</p><button className="primary" onClick={resumeWorkout}>Resume workout</button></section>}
-      {showAddExercise && active.status === 'active' && <section className="card"><h2>Add optional work</h2><p className="muted">Added work starts with two optional sets and does not change the completion requirement of the original session.</p><div className="choice-grid">{addOptions.map(exercise => <button key={exercise.id} onClick={() => addExercise(exercise.id)}><b>{exercise.name}</b><small>{title(exercise.movement)} · {exercise.repRange[0]}–{exercise.repRange[1]}</small></button>)}</div>{!addOptions.length && <p>No additional compatible exercise is available with the current equipment state.</p>}</section>}
+      {showAddExercise && active.status === 'active' && <section className="card"><h2>Add optional exercise</h2><p className="muted">Added exercises start with two optional sets and do not change the completion requirement of the original session.</p><div className="choice-grid">{addOptions.map(exercise => <button key={exercise.id} onClick={() => addExercise(exercise.id)}><b>{exercise.name}</b><small>{title(exercise.movement)} · {exercise.repRange[0]}–{exercise.repRange[1]}</small></button>)}</div>{!addOptions.length && <p>No additional compatible exercise is available with the current equipment state.</p>}</section>}
       {notes.length > 0 && <div className="coach-note">{notes.join(' ')}</div>}
-      {active.progressionAllowed === false && active.progressionReason && <div className="coach-note"><b>Progression held</b><br/>{active.progressionReason}</div>}
+      {active.progressionAllowed === false && active.progressionReason && <div className="coach-note"><b>Load progression paused</b><br/>{active.progressionReason}</div>}
       {active.exercises.map((exercise, exerciseIndex) => {
         const previousEntry = [...history].reverse().flatMap(entry => entry.exercises.map(item => ({ item, completedAt: entry.completedAt }))).find(record => record.item.id === exercise.id);
         const previous = previousEntry?.item;
@@ -392,12 +392,12 @@ export function HumanHealthApp() {
           {exercise.logs.some(set => set.warmup) && <p className="muted">Warm-ups logged: {exercise.logs.filter(set => set.warmup).length}</p>}
           {active.status === 'active' && !exerciseComplete && !exercise.deferred && <SetEntry key={`${exercise.id}-${exercise.logs.length}`} defaultWeightKg={defaultWeightKg} defaultReps={exercise.repRange[0]} units={preferences.unitSystem} loadType={exercise.metadata?.loadType} onLog={log => logSet(exerciseIndex, log)}/>} 
           {exercise.equipment.includes('barbell') && <PlateHelper targetKg={working.at(-1)?.weight ?? previousWorkingWeight ?? preferences.plateBarKg} preferences={preferences}/>} 
-          <div className="coach-mini">Coach: {exercise.deferred ? 'This planned work remains visible and contributes to partial-session accounting.' : suggestion.message}</div>
+          <div className="coach-mini">{exercise.deferred ? 'This planned work remains visible and contributes to partial-session accounting.' : suggestion.message}</div>
           {swapIndex === exerciseIndex && <div className="swap-panel"><h3>Compatible replacements</h3>{options.length ? options.map(option => <button key={option.exercise.id} onClick={() => selectSwap(exerciseIndex, option.exercise.id)}><b>{option.exercise.name}{option.preferred ? ' · preferred' : ''}</b><small>{option.reason}</small></button>) : <p>No compatible replacement is available with this gym and temporary equipment state.</p>}<label className="checkbox-row"><input type="checkbox" checked={saveSwap} onChange={event => setSaveSwap(event.target.checked)}/> Remember selection for {activeGym.name}</label></div>}
         </section>;
       })}
-      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Complete or defer every required exercise, or use End early now.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>{hasDeferredRequired ? 'Finish partial workout' : 'Finish workout'}</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
-      {!requiredHandled && <p className="muted">Finish becomes available after required work is completed or explicitly deferred. End early remains available at any time.</p>}
+      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Complete or defer every required exercise, or use End early now.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>{hasDeferredRequired ? 'Finish partial workout' : 'Complete workout'}</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
+      {!requiredHandled && <p className="muted">Complete becomes available after required exercises are finished or deferred. End early remains available at any time.</p>}
       {restTimer && <div className="rest-dock" role="timer" aria-label={`Rest timer: ${restSeconds} seconds remaining`}><b>Rest</b><span>{Math.floor(restSeconds / 60)}:{String(restSeconds % 60).padStart(2, '0')}</span><div className="timer-actions">{restTimer.status === 'running' ? <button onClick={() => setRestTimer(timer => pauseRestTimer(timer))}>Pause</button> : <button onClick={() => setRestTimer(timer => resumeRestTimer(timer))}>Resume</button>}<button onClick={() => setRestTimer(timer => extendRestTimer(timer, 30))}>+30s</button><button onClick={() => setRestTimer(timer => restartRestTimer(timer, preferences.defaultRestSeconds))}>Restart</button><button onClick={() => setRestTimer(null)}>Skip</button></div></div>}
     </main>;
   }
@@ -408,10 +408,38 @@ export function HumanHealthApp() {
     <header><div><span className="eyebrow">HUMAN HEALTH</span><h1>{title(tab)}</h1></div>{tab !== 'settings' && <select value={gym.id} onChange={event => savePreferences({ ...preferences, selectedGymId: event.target.value })} aria-label="Gym profile">{gyms.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</header>
 
     {tab === 'today' && <>
-      <section className="hero"><span className="pill">{rolling.manual ? 'YOUR SESSION CHOICE' : rolling.repeating ? 'RECOMMENDED REPEAT' : 'NEXT SESSION'}</span><h2>{title(rolling.session)}</h2><p>{rolling.reason}</p>{latestReadiness.level !== 'normal' && <div className="coach-note"><b>{latestReadiness.level === 'recovery' ? 'Recovery-first context' : 'Reduced-readiness context'}</b><br/>{latestReadiness.reasons.join(' ')}</div>}<div className="hero-actions"><button className="primary" onClick={() => startWorkout()}>Start recommended workout</button>{latestReadiness.level === 'reduced' && currentAdjustment.source === 'readiness' && <button className="ghost" onClick={() => startWorkout({ overrideRecoveryVolume: true })}>Use original set volume</button>}<button className="ghost" onClick={skipRecommendedSessionOnce}>Skip once</button><button className="ghost" onClick={() => setTab('settings')}>Adjust plan</button></div>{latestReadiness.level === 'reduced' && <p className="muted">Choosing original set volume does not re-enable automatic load progression. Pain/illness recovery-first constraints cannot be overridden here.</p>}</section>
-      <section aria-labelledby="plans-changed-title"><h2 id="plans-changed-title">Plans changed?</h2><div className="quick-grid"><button onClick={() => startWorkout({ minutes: 20 })}>20 minutes</button><button onClick={() => startWorkout({ minutes: 30 })}>30 minutes</button><button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })}>Low energy</button><button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })}>Different gym</button></div></section>
-      <WholePersonDashboard history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences} gym={gym} nextSession={rolling.session} onActivityChange={setActivity} onReadinessChange={setReadinessRecords}/>
-      <SkillProgressPanel gym={gym}/>
+      {history.length === 0 ? <>
+        <section className="hero">
+          <h2>Welcome to Human Health</h2>
+          <p>An adaptive training coach that helps you build sustainable strength and fitness habits.</p>
+        </section>
+
+        <section className="card">
+          <h2>How it works</h2>
+          <p><b>Start with a workout recommendation</b><br/>Human Health generates evidence-based strength training sessions that adapt to your readiness and available equipment.</p>
+          <p><b>Track your progress locally</b><br/>All workout data stays on your device. Nothing is sent to external servers without your explicit permission.</p>
+          <p><b>Adjust as life changes</b><br/>Use readiness checks, time constraints, and life mode settings to adapt workouts to your current context.</p>
+          <p className="muted">This app provides general training guidance. It does not diagnose injury, prescribe medication, or replace medical advice from qualified healthcare professionals.</p>
+        </section>
+
+        <section className="card">
+          <h2>Ready to begin?</h2>
+          <p>Your first session is a balanced upper body workout designed to establish movement patterns and initial working loads.</p>
+          <div className="hero-actions">
+            <button className="primary" onClick={() => startWorkout()}>Start first workout</button>
+            <button className="ghost" onClick={() => setTab('settings')}>Review settings first</button>
+          </div>
+        </section>
+      </> : <>
+        <section className="hero"><span className="pill">{rolling.manual ? 'YOUR SESSION CHOICE' : rolling.repeating ? 'RECOMMENDED REPEAT' : 'NEXT SESSION'}</span><h2>{title(rolling.session)}</h2><p>{rolling.reason}</p>{latestReadiness.level !== 'normal' && <div className="coach-note"><b>{latestReadiness.level === 'recovery' ? 'Recovery-first context' : 'Reduced-readiness context'}</b><br/>{latestReadiness.reasons.join(' ')}</div>}<div className="hero-actions"><button className="primary" onClick={() => startWorkout()}>Start recommended workout</button>{latestReadiness.level === 'reduced' && currentAdjustment.source === 'readiness' && <button className="ghost" onClick={() => startWorkout({ overrideRecoveryVolume: true })}>Use original set volume</button>}<button className="ghost" onClick={skipRecommendedSessionOnce}>Skip once</button><button className="ghost" onClick={() => setTab('settings')}>Adjust plan</button></div>{latestReadiness.level === 'reduced' && <p className="muted">Choosing original set volume does not re-enable automatic load progression. Pain/illness recovery-first constraints cannot be overridden here.</p>}</section>
+
+        {notes.length > 0 && <section className="card" aria-labelledby="coach-insights-title"><h2 id="coach-insights-title">Coach insights</h2>{notes.map((note, index) => <p className="coach-note" key={index}>{note}</p>)}<div className="coach-note"><b>Current training context</b><br/>{recentLoad.message}</div></section>}
+
+        <section aria-labelledby="plans-changed-title"><h2 id="plans-changed-title">Plans changed?</h2><div className="quick-grid"><button onClick={() => startWorkout({ minutes: 20 })}>20 minutes</button><button onClick={() => startWorkout({ minutes: 30 })}>30 minutes</button><button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })}>Low energy</button><button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })}>Different gym</button></div></section>
+
+        <WholePersonDashboard history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences} gym={gym} nextSession={rolling.session} onActivityChange={setActivity} onReadinessChange={setReadinessRecords}/>
+        <SkillProgressPanel gym={gym}/>
+      </>}
     </>}
 
     {tab === 'progress' && <>
@@ -420,11 +448,11 @@ export function HumanHealthApp() {
       <CapabilityAssessmentPanel assessments={assessments} onChange={setAssessments}/>
     </>}
 
-    {tab === 'coach' && <section className="card" aria-labelledby="coach-title"><h2 id="coach-title">Coach</h2>{notes.length ? notes.map((note, index) => <p className="coach-note" key={index}>{note}</p>) : <p>Complete or adjust a workout to receive evidence-based next actions.</p>}<div className="coach-note"><b>Current training context</b><br/>{recentLoad.message}</div><p className="muted">Recommendations are general training guidance. They do not diagnose injury, prescribe insulin or medication, or replace your clinician-directed diabetes plan.</p></section>}
+    {tab === 'health' && <section className="card"><h2>Health Tracking</h2><p>Connect health data sources, track readiness, and manage preventive care.</p><p className="muted">Visit the dedicated Health section for detailed tracking and integrations.</p><div className="button-row"><a href="/health" className="primary" style={{display: 'inline-block', textDecoration: 'none', textAlign: 'center'}}>Open Health</a></div></section>}
 
     {tab === 'settings' && <SettingsPanel preferences={preferences} gyms={gyms} onChange={savePreferences} onDataCleared={resetLocalState}/>} 
 
-    <nav className="bottom-nav" aria-label="Primary"><button className={tab === 'today' ? 'active' : ''} onClick={() => setTab('today')}>Today</button><button className={tab === 'progress' ? 'active' : ''} onClick={() => { setActivity(store.loadActivity()); setAssessments(store.loadAssessments()); setReadinessRecords(store.loadReadiness()); setTab('progress'); }}>Progress</button><button className={tab === 'coach' ? 'active' : ''} onClick={() => setTab('coach')}>Coach</button><button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>Settings</button></nav>
+    <nav className="bottom-nav" aria-label="Primary"><button className={tab === 'today' ? 'active' : ''} onClick={() => setTab('today')}>Today</button><button className={tab === 'progress' ? 'active' : ''} onClick={() => { setActivity(store.loadActivity()); setAssessments(store.loadAssessments()); setReadinessRecords(store.loadReadiness()); setTab('progress'); }}>Progress</button><button className={tab === 'health' ? 'active' : ''} onClick={() => setTab('health')}>Health</button><button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>Settings</button></nav>
   </main>;
 }
 

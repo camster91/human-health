@@ -87,7 +87,7 @@ function nonOverlappingDurationMinutes(items: HealthObservation[]) {
   return total / 60_000;
 }
 
-function dailyAggregate(metric: ConnectedMetric, observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences, now: Date, mode: 'sum' | 'average' = 'sum') {
+function dailyAggregate(metric: ConnectedMetric, observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences, now: Date, mode: 'sum' | 'average' = 'sum'): ConnectedMetricSummary {
   const source = sourceFor(observations, sources, metric, preferences, now);
   if (!source) return empty(metric);
   const values = observationsForMetric(observations, metric, { sourceId: source.id, now }).filter(item => sameDeviceLocalDay(item.startTime, now));
@@ -107,7 +107,7 @@ function dailyAggregate(metric: ConnectedMetric, observations: HealthObservation
   };
 }
 
-function latestValue(metric: ConnectedMetric, observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences, now: Date) {
+function latestValue(metric: ConnectedMetric, observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences, now: Date): ConnectedMetricSummary {
   const source = sourceFor(observations, sources, metric, preferences, now);
   if (!source) return empty(metric);
   const value = observationsForMetric(observations, metric, { sourceId: source.id, now })[0];
@@ -125,7 +125,7 @@ function latestValue(metric: ConnectedMetric, observations: HealthObservation[],
   };
 }
 
-function sleepSummary(observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences, now: Date) {
+function sleepSummary(observations: HealthObservation[], sources: HealthSourceState[], preferences: ConnectedHealthPreferences, now: Date): ConnectedMetricSummary {
   const source = sourceFor(observations, sources, 'sleep-duration', preferences, now) || sourceFor(observations, sources, 'sleep-stage', preferences, now);
   if (!source) return empty('sleep-duration');
   const sessions = observationsForMetric(observations, 'sleep-duration', { sourceId: source.id, now });

@@ -40,13 +40,13 @@ describe('Phase 5 local platform storage', () => {
 
   it('completes a reminder atomically and preserves clinician provenance', () => withMemoryStorage(() => {
     platformStore.clear();
-    platformStore.addReminder({ id: 'm1', title: 'Follow-up', category: 'checkup', dueOn: '2026-10-01', repeatMonths: 6, provider: 'Clinic A', source: 'clinician-provided', enabled: true, createdAt: '2026-09-01T12:00:00Z' });
-    const next = platformStore.completeReminder('m1', new Date('2026-10-01T12:00:00Z'));
+    platformStore.addReminder({ id: 'm1', title: 'Follow-up', category: 'checkup', dueOn: '2026-09-01', repeatMonths: 6, provider: 'Clinic A', source: 'clinician-provided', enabled: true, createdAt: '2026-09-01T12:00:00Z' });
+    const next = platformStore.completeReminder('m1', new Date('2026-09-01T12:00:00Z'));
     expect(next.records).toHaveLength(1);
     expect(next.records[0].provider).toBe('Clinic A');
     expect(next.records[0].source).toBe('clinician-provided');
     expect(next.reminders).toHaveLength(1);
-    expect(next.reminders[0].dueOn).toBe('2027-04-01');
+    expect(next.reminders[0].dueOn).toBe('2027-03-01');
   }));
 
   it('supports strict replace/merge archive import and current local values win id conflicts', () => withMemoryStorage(() => {

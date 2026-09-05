@@ -21,3 +21,14 @@ tsconfig.tsbuildinfo
 Thumbs.db
 .vscode/
 .idea/
+
+# Capacitor
+ios/App/Pods
+ios/App/App/public
+android/app/src/main/assets/public
+android/.gradle
+android/.idea
+android/build
+android/app/build
+*.xcworkspace
+*.xcuserstate

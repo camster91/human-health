@@ -66,8 +66,8 @@ describe('local-first storage', () => {
     const restore = installStorage(memory);
     try {
       const archive = store.exportData();
-      expect(() => store.importData(archive, 'merge')).toThrow('Browser storage rejected the latest save');
-      expect(store.getMutationError()).toContain('Browser storage rejected the latest save');
+      expect(() => store.importData(archive, 'merge')).toThrow('Browser storage rejected the archive');
+      expect(store.getMutationError()).toContain('Browser storage rejected the archive');
     } finally { restore(); }
   });
 });

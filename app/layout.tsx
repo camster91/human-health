@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import './connected-health.css';
-import { GlobalHealthLink } from './global-health-link';
 import { ServiceWorkerRegistration } from './service-worker-registration';
 
 export const metadata: Metadata = {
@@ -16,5 +15,5 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { themeColor: '#c84712', width: 'device-width', initialScale: 1, viewportFit: 'cover' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="en"><body>{children}<GlobalHealthLink /><ServiceWorkerRegistration /></body></html>;
+  return <html lang="en"><body>{children}<ServiceWorkerRegistration /></body></html>;
 }

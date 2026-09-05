@@ -9,12 +9,12 @@ let mutationFailure: string | null = null;
 export function createEmptyPlatformData(): PlatformLocalData { return { schemaVersion: 1, records: [], reminders: [] }; }
 function dedupeById<T extends { id: string }>(items: T[]) { const values = new Map<string, T>(); items.forEach(item => values.set(item.id, item)); return [...values.values()]; }
 
-export function validatePlatformData(value: unknown): PlatformLocalData {
+export function validatePlatformData(value: unknown, now = new Date()): PlatformLocalData {
   if (!value || typeof value !== 'object') throw new Error('Platform archive is not an object.');
   const candidate = value as Partial<PlatformLocalData>;
   if (candidate.schemaVersion !== 1) throw new Error('Unsupported platform archive version.');
   if (!Array.isArray(candidate.records) || !Array.isArray(candidate.reminders)) throw new Error('Platform archive records/reminders are invalid.');
-  return { schemaVersion: 1, records: dedupeById(candidate.records.map(normalizePreventiveRecord)), reminders: dedupeById(candidate.reminders.map(normalizePreventiveReminder)) };
+  return { schemaVersion: 1, records: dedupeById(candidate.records.map(r => normalizePreventiveRecord(r, now))), reminders: dedupeById(candidate.reminders.map(r => normalizePreventiveReminder(r, now))) };
 }
 
 function read(): PlatformLocalData {

@@ -58,9 +58,9 @@ export function CoachingPanel() {
 
   return <>
     <section className="hero coaching-hero">
-      <span className="pill">PHASE 4 · DETERMINISTIC FIRST</span>
+      <span className="pill">EVIDENCE-BASED COACHING</span>
       <h2>Coaching intelligence</h2>
-      <p>Human Health combines training history, readiness, goal priorities and current connected-health signals into explainable, reversible coaching actions. Missing or stale evidence stays visible instead of being guessed.</p>
+      <p>Human Health combines training history, readiness, goal priorities and current health signals into explainable, reversible coaching actions. Missing or stale evidence stays visible instead of being guessed.</p>
     </section>
 
     <section className="card" aria-labelledby="coach-actions-title">
@@ -112,7 +112,7 @@ export function CoachingPanel() {
 
     <section className="card" aria-labelledby="video-gate-title">
       <span className="eyebrow">MOVEMENT / VIDEO</span><h2 id="video-gate-title">Reliability gate</h2>
-      <p>{videoGate.message}</p><p className="muted">No camera permission, upload, pose score, injury diagnosis or movement-quality claim is enabled by Phase 4.</p>
+      <p>{videoGate.message}</p><p className="muted">No camera permission, upload, pose score, injury diagnosis or movement-quality claim is currently available.</p>
       <div className="metrics"><span><b>Gate</b>{videoGate.enabled ? 'Passed' : 'Locked'}</span><span><b>Missing reviews</b>{videoGate.missing.length}</span></div>
     </section>
   </>;
