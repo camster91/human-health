@@ -44,6 +44,25 @@ describe('connected-health persisted-row integrity', () => {
     expect(result.observations[0].sourceId).toBe('watch');
   });
 
+  it('fails closed when different raw rows normalize to the same canonical observation identity', () => {
+    const canonical = makeObservation('steps', 1234, { sourceId: 'watch', externalId: 'steps-1' });
+    const duplicateRaw = { ...canonical, id: 'legacy-noncanonical-id' };
+    const result = normalizeStoredObservationRows([canonical, duplicateRaw]);
+
+    expect(result.observations).toHaveLength(1);
+    expect(result.invalidCount).toBe(1);
+    expect(result.invalidSourceIds).toEqual(['watch']);
+  });
+
+  it('does not let a duplicate owned by another source block an unrelated source-specific read', () => {
+    const watch = makeObservation('steps', 1234, { sourceId: 'watch', externalId: 'steps-1' });
+    const phone = makeObservation('steps', 2222, { sourceId: 'phone', externalId: 'phone-steps' });
+    const result = normalizeStoredObservationRows([watch, phone, { ...phone, id: 'legacy-phone-duplicate' }], 'watch');
+
+    expect(result.invalidCount).toBe(0);
+    expect(result.observations).toEqual([expect.objectContaining({ sourceId: 'watch' })]);
+  });
+
   it('can attribute corrupt rows by explicit sourceId or canonical id prefix for deletion', () => {
     expect(storedRowBelongsToSource({ id: 'watch:abc', sourceId: 'watch' }, 'watch')).toBe(true);
     expect(storedRowBelongsToSource({ id: 'watch:abc' }, 'watch')).toBe(true);
