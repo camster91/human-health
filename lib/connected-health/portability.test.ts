@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultPreferences } from '../preferences';
 import { createConnectedJsonEnvelope, parseConnectedJson, parseConnectedPreferences, parseConnectedSourceState } from './import/canonical-json';
 import { createManualObservation } from './habits';
-import { parseFullHealthArchive, runCompleteDeletion } from './portability';
+import { parseFullHealthArchive, runCompleteDeletion, runFullArchiveMutation } from './portability';
 import { defaultConnectedHealthPreferences } from './types';
 import { makeSource } from './test-helpers';
 
@@ -103,6 +103,47 @@ describe('connected and full archive parsing', () => {
     expect(() => parseConnectedPreferences({ enabledHabits: ['water', 'diagnosis-score'] })).toThrow('enabled habit');
     expect(() => parseConnectedPreferences({ primarySourceByMetric: { steps: '' } })).toThrow('primary-source mapping');
     expect(() => parseConnectedPreferences({ primarySourceByMetric: { 'diagnosis-score': 'source' } })).toThrow('primary-source mapping');
+  });
+});
+
+describe('full archive mutation recovery', () => {
+  it('restores every domain after a later platform import failure', async () => {
+    const calls: string[] = [];
+    await expect(runFullArchiveMutation({
+      importTraining: () => { calls.push('import-training'); },
+      importConnected: async () => { calls.push('import-connected'); },
+      importPlatform: () => { calls.push('import-platform'); throw new Error('platform write failed'); },
+      restoreTraining: () => { calls.push('restore-training'); return true; },
+      restoreConnected: async () => { calls.push('restore-connected'); },
+      restorePlatform: () => { calls.push('restore-platform'); return true; },
+    })).rejects.toThrow('platform write failed');
+    expect(calls).toEqual(['import-training', 'import-connected', 'import-platform', 'restore-training', 'restore-connected', 'restore-platform']);
+  });
+
+  it('reports rollback failures separately from the original import failure', async () => {
+    await expect(runFullArchiveMutation({
+      importTraining: () => {},
+      importConnected: async () => { throw new Error('connected replacement failed'); },
+      importPlatform: () => {},
+      restoreTraining: () => false,
+      trainingRollbackError: () => 'training raw restore failed',
+      restoreConnected: async () => { throw new Error('connected raw restore failed'); },
+      restorePlatform: () => false,
+      platformRollbackError: () => 'platform raw restore failed',
+    })).rejects.toThrow(/connected replacement failed.*training raw restore failed.*connected raw restore failed.*platform raw restore failed/);
+  });
+
+  it('does not continue to later imports after the first import failure', async () => {
+    const calls: string[] = [];
+    await expect(runFullArchiveMutation({
+      importTraining: () => { calls.push('import-training'); throw new Error('training failed'); },
+      importConnected: async () => { calls.push('import-connected'); },
+      importPlatform: () => { calls.push('import-platform'); },
+      restoreTraining: () => { calls.push('restore-training'); return true; },
+      restoreConnected: async () => { calls.push('restore-connected'); },
+      restorePlatform: () => { calls.push('restore-platform'); return true; },
+    })).rejects.toThrow('training failed');
+    expect(calls).toEqual(['import-training', 'restore-training', 'restore-connected', 'restore-platform']);
   });
 });
 
