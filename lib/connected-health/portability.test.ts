@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultPreferences } from '../preferences';
-import { createConnectedJsonEnvelope, parseConnectedJson } from './import/canonical-json';
+import { createConnectedJsonEnvelope, parseConnectedJson, parseConnectedPreferences, parseConnectedSourceState } from './import/canonical-json';
 import { createManualObservation } from './habits';
 import { parseFullHealthArchive, runCompleteDeletion } from './portability';
 import { defaultConnectedHealthPreferences } from './types';
@@ -88,6 +88,21 @@ describe('connected and full archive parsing', () => {
     expect(() => parseConnectedJson(JSON.stringify({ ...base, sources: [{ ...makeSource('bad-metric'), supportedMetrics: ['mystery-metric'], grantedMetrics: [] }] }))).toThrow('unsupported or inconsistent metrics');
     expect(() => parseConnectedJson(JSON.stringify({ ...base, sources: [{ ...makeSource('bad-grant', { supportedMetrics: ['steps'] }), grantedMetrics: ['water'] }] }))).toThrow('unsupported or inconsistent metrics');
     expect(() => parseConnectedJson(JSON.stringify({ ...base, sources: [{ ...makeSource('bad-date'), lastSuccessAt: 'not-a-date' }] }))).toThrow('invalid last success timestamp');
+    expect(() => parseConnectedSourceState({ ...makeSource('bad-cursor'), cursor: 42 })).toThrow('invalid cursor');
+  });
+
+  it('keeps omitted legacy preference fields compatible but rejects malformed stored preference values', () => {
+    const legacy = parseConnectedPreferences({ stepTarget: 9_000 });
+    expect(legacy.stepTarget).toBe(9_000);
+    expect(legacy.waterTargetMl).toBe(defaultConnectedHealthPreferences.waterTargetMl);
+    expect(legacy.enabledHabits).toEqual(defaultConnectedHealthPreferences.enabledHabits);
+
+    expect(() => parseConnectedPreferences({ useFreshSleepForReadiness: 'yes' })).toThrow('useFreshSleepForReadiness');
+    expect(() => parseConnectedPreferences({ stepTarget: -1 })).toThrow('stepTarget');
+    expect(() => parseConnectedPreferences({ waterTargetMl: Number.NaN })).toThrow('waterTargetMl');
+    expect(() => parseConnectedPreferences({ enabledHabits: ['water', 'diagnosis-score'] })).toThrow('enabled habit');
+    expect(() => parseConnectedPreferences({ primarySourceByMetric: { steps: '' } })).toThrow('primary-source mapping');
+    expect(() => parseConnectedPreferences({ primarySourceByMetric: { 'diagnosis-score': 'source' } })).toThrow('primary-source mapping');
   });
 });
 
