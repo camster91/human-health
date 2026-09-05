@@ -33,6 +33,13 @@ export async function createFullHealthArchive(): Promise<FullHealthArchive> {
 
 export async function createConnectedHealthJson() { return createConnectedJsonEnvelope(await healthRepository.exportData()); }
 
+function parseFullArchiveExportedAt(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) throw new Error('Human Health full archive has an invalid exportedAt timestamp.');
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) throw new Error('Human Health full archive has an invalid exportedAt timestamp.');
+  return new Date(parsed).toISOString();
+}
+
 export function parseFullHealthArchive(text: string): FullHealthArchive {
   let value: unknown;
   try { value = JSON.parse(text); } catch { throw new Error('Human Health archive is not valid JSON.'); }
@@ -40,7 +47,7 @@ export function parseFullHealthArchive(text: string): FullHealthArchive {
   if (archive.format !== 'human-health-full-export' || (archive.schemaVersion !== 1 && archive.schemaVersion !== 2) || !archive.training || !archive.connected) throw new Error('Unsupported Human Health full archive.');
   return {
     format: 'human-health-full-export', schemaVersion: 2,
-    exportedAt: typeof archive.exportedAt === 'string' ? archive.exportedAt : new Date().toISOString(),
+    exportedAt: parseFullArchiveExportedAt(archive.exportedAt),
     training: validateTrainingExport(archive.training),
     connected: parseConnectedJson(JSON.stringify(archive.connected)),
     platform: archive.schemaVersion === 2 ? validatePlatformData(archive.platform) : createEmptyPlatformData(),
@@ -59,25 +66,43 @@ export type FullArchiveMutationOperations = {
 };
 
 /**
- * Apply the three persisted archive domains in order and, after any mutation
- * failure, attempt every exact recovery snapshot. Rollback failures are reported
- * separately from the original import failure and never converted into success.
+ * Apply the three persisted archive domains in order. After a mutation failure,
+ * restore only domains whose import step was actually attempted: an attempted
+ * write may have partially mutated before throwing, while untouched later
+ * domains must never be rewritten merely because an earlier domain failed.
+ * Rollback failures remain distinct from the original import failure.
  */
 export async function runFullArchiveMutation(operations: FullArchiveMutationOperations) {
+  let attemptedTraining = false;
+  let attemptedConnected = false;
+  let attemptedPlatform = false;
+
   try {
+    attemptedTraining = true;
     await operations.importTraining();
+    attemptedConnected = true;
     await operations.importConnected();
+    attemptedPlatform = true;
     await operations.importPlatform();
   } catch (error) {
     const rollbackFailures: string[] = [];
-    try {
-      if (!(await operations.restoreTraining())) rollbackFailures.push(`training: ${operations.trainingRollbackError?.() || 'rollback failed'}`);
-    } catch (failure) { rollbackFailures.push(`training: ${failure instanceof Error ? failure.message : 'rollback failed'}`); }
-    try { await operations.restoreConnected(); }
-    catch (failure) { rollbackFailures.push(`connected health: ${failure instanceof Error ? failure.message : 'rollback failed'}`); }
-    try {
-      if (!(await operations.restorePlatform())) rollbackFailures.push(`preventive/platform: ${operations.platformRollbackError?.() || 'rollback failed'}`);
-    } catch (failure) { rollbackFailures.push(`preventive/platform: ${failure instanceof Error ? failure.message : 'rollback failed'}`); }
+
+    if (attemptedTraining) {
+      try {
+        if (!(await operations.restoreTraining())) rollbackFailures.push(`training: ${operations.trainingRollbackError?.() || 'rollback failed'}`);
+      } catch (failure) { rollbackFailures.push(`training: ${failure instanceof Error ? failure.message : 'rollback failed'}`); }
+    }
+
+    if (attemptedConnected) {
+      try { await operations.restoreConnected(); }
+      catch (failure) { rollbackFailures.push(`connected health: ${failure instanceof Error ? failure.message : 'rollback failed'}`); }
+    }
+
+    if (attemptedPlatform) {
+      try {
+        if (!(await operations.restorePlatform())) rollbackFailures.push(`preventive/platform: ${operations.platformRollbackError?.() || 'rollback failed'}`);
+      } catch (failure) { rollbackFailures.push(`preventive/platform: ${failure instanceof Error ? failure.message : 'rollback failed'}`); }
+    }
 
     if (rollbackFailures.length) {
       const original = error instanceof Error ? error.message : 'Archive import failed.';
