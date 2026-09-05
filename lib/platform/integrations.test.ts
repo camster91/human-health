@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { makeObservation, makeSource } from '../connected-health/test-helpers';
 import { defaultPreferences } from '../preferences';
 import type { HumanHealthExport } from '../storage';
 import type { IntegrationBundle } from './types';
@@ -31,6 +32,17 @@ describe('integration bundles', () => {
     expect(trainingBundle.training).toEqual(training);
     const connectedBundle = createIntegrationBundle({ scopes: ['connected-health:read'], connectedObservations: [], connectedSources: [], preventiveRecords: [], preventiveReminders: [] });
     expect(connectedBundle.connectedHealth).toEqual({ observations: [], sources: [] });
+  });
+
+  it('rejects inconsistent connected observation/source provenance at create and share boundaries', () => {
+    const orphan = makeObservation('steps', 1_000, { sourceId: 'missing' });
+    expect(() => createIntegrationBundle({ scopes: ['connected-health:read'], connectedObservations: [orphan], connectedSources: [], preventiveRecords: [], preventiveReminders: [] })).toThrow('relationship integrity failed');
+
+    const source = makeSource('watch');
+    const valid = makeObservation('steps', 1_000, { sourceId: 'watch' });
+    const bundle = createIntegrationBundle({ scopes: ['connected-health:read'], connectedObservations: [valid], connectedSources: [source], preventiveRecords: [], preventiveReminders: [] });
+    bundle.connectedHealth = { observations: [{ ...valid, sourceId: 'missing' }], sources: [source] };
+    expect(integrationBundleContainsOnlyScopes(bundle)).toBe(false);
   });
 
   it('requires at least one explicit scope and rejects malformed declared payloads', () => {
