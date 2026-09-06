@@ -4,17 +4,17 @@ Human Health is a long-horizon, local-first health and performance PWA designed 
 
 The current product foundation combines adaptive strength training, whole-person fitness, opt-in connected-health context, deterministic-first coaching, and a user-owned long-horizon platform layer. Workouts and recommendations adapt to time, equipment, readiness, travel, interruptions, partial completion and current evidence without pretending that unlike exercises, devices or health domains are directly equivalent.
 
-## Current lifecycle state
+## Current state
 
-- **Phase 1:** adaptive training coach foundation — merged
-- **Phase 2:** whole-person fitness foundation and hardening — merged
-- **Phase 3:** connected-health context and local data portability — merged; automated/browser/native verification remains separately tracked
-- **Phase 4:** coaching intelligence — merged; release verification remains separately tracked
-- **Phase 5:** long-horizon health platform — source scope and final hardening complete on draft PR #83; executable/runtime verification and merge approval remain pending
+Human Health is a working fitness and health management PWA built in five phases:
 
-Phase 5 adds user/clinician-entered preventive records/reminders, local clinician discussion exports, capability-model evidence/validation gates, on-device personal baselines, versioned scoped integration contracts, complete Phase 5 archive/delete coverage and regulatory escalation checkpoints. Current capability models remain explicitly experimental until real external validation and independent replication evidence are recorded.
+- **Training foundation:** Adaptive strength programming with equipment awareness and readiness-based volume adjustments
+- **Whole-person fitness:** Movement skills, cardio tracking, recovery monitoring, and multi-goal balance
+- **Connected health:** Local Apple Health import, readiness trends, and source-separated health signals
+- **Coaching intelligence:** Evidence-based recommendations, plateau detection, and explainable action priorities
+- **Long-horizon platform:** Preventive care tracking, clinician export summaries, personal baselines, and scoped integration contracts
 
-A final hardening pass added fail-closed handling for corrupt Phase 5 storage, source-separated clinician exports, atomic preventive reminder completion, strict calendar/month-end handling, enforced integration-share confirmation, stronger validation-evidence gates, and fail-closed regulatory classification for ambiguous intended use.
+All data stays local unless explicitly exported or shared. Current capability models remain experimental pending external validation and replication evidence.
 
 ## Safety and privacy
 

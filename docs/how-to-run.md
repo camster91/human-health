@@ -303,7 +303,7 @@ npm run cap:sync
 
 ## Notes
 
-- **No production deployment exists yet:** `human-health.ashbi.ca` is not currently live
-- **No App Store submission:** iOS and Android apps are for local development only
-- **Production deployment requires explicit approval** per project requirements
-- **This is a fitness/lifestyle product, not a medical device:** See safety boundaries in main README
+- **Local development and personal use:** Human Health is ready for daily personal use as a PWA or native mobile app
+- **No public deployment yet:** There's no hosted version — run it locally or install the PWA
+- **No App Store submission:** iOS and Android builds are for personal sideloading and testing only
+- **This is a fitness lifestyle tool, not medical advice:** See safety boundaries in main README

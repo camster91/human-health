@@ -150,7 +150,7 @@ export function PlatformPanel() {
   }
 
   return <>
-    <section className="hero"><span className="pill">LONG-HORIZON HEALTH</span><h2>User-owned health context, without pretending to be a medical authority</h2><p>Track preventive records and reminders, export clinician discussion summaries, and manage your health data with validation gates, on-device personal baselines, and scoped integration contracts.</p></section>
+    <section className="hero"><span className="pill">LONG-HORIZON HEALTH</span><h2>Track preventive care without pretending to be a doctor</h2><p>Optional: log checkups, vaccines, and reminders you've chosen or been given. Export your training and health summaries for actual conversations with your healthcare team. All data stays local unless you explicitly share it.</p></section>
     {notice && <div className="coach-note" role="status" aria-live="polite">{notice}</div>}
 
     <section className="card" aria-labelledby="preventive-title"><h2 id="preventive-title">Preventive records and reminders</h2><p className="muted">{preventiveSafetyNote}</p><div className={styles.grid}>

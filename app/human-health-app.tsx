@@ -371,8 +371,8 @@ export function HumanHealthApp() {
       <OfflineIndicator />
       {storageWarning && <div className="connection-state storage-error" role="alert">{storageWarning}</div>}
       <header className="workout-head"><div><span className="eyebrow">ACTIVE WORKOUT</span><h1>{title(active.session)}</h1><p className="muted">{title(active.mode || 'normal')} · {activeGym.name}</p></div><div className="header-actions">{active.status === 'active' ? <button className="ghost" onClick={pauseWorkout}>Pause</button> : <button className="primary" onClick={resumeWorkout}>Resume</button>}<button className="ghost" disabled={active.status !== 'active'} onClick={() => setShowAddExercise(value => !value)}>Add exercise</button><button className="ghost" onClick={() => finishWorkout('ended-early')}>End early</button></div></header>
-      {active.status !== 'active' && <section className="card paused-card"><h2>{active.status === 'interrupted' ? 'Workout restored' : 'Workout paused'}</h2><p>Your completed sets are still stored locally. Resume when ready; elapsed pause time does not mark exercises complete.</p><button className="primary" onClick={resumeWorkout}>Resume workout</button></section>}
-      {showAddExercise && active.status === 'active' && <section className="card"><h2>Add optional exercise</h2><p className="muted">Added exercises start with two optional sets and do not change the completion requirement of the original session.</p><div className="choice-grid">{addOptions.map(exercise => <button key={exercise.id} onClick={() => addExercise(exercise.id)}><b>{exercise.name}</b><small>{title(exercise.movement)} · {exercise.repRange[0]}–{exercise.repRange[1]}</small></button>)}</div>{!addOptions.length && <p>No additional compatible exercise is available with the current equipment state.</p>}</section>}
+      {active.status !== 'active' && <section className="card paused-card"><h2>{active.status === 'interrupted' ? 'Welcome back' : 'Paused'}</h2><p>Your completed sets are saved. Resume when you're ready — the pause time doesn't count against you.</p><button className="primary" onClick={resumeWorkout}>Resume workout</button></section>}
+      {showAddExercise && active.status === 'active' && <section className="card"><h2>Add an exercise</h2><p className="muted">Extra exercises are optional — they won't make this session "incomplete" if you skip them.</p><div className="choice-grid">{addOptions.map(exercise => <button key={exercise.id} onClick={() => addExercise(exercise.id)}><b>{exercise.name}</b><small>{title(exercise.movement)} · {exercise.repRange[0]}–{exercise.repRange[1]}</small></button>)}</div>{!addOptions.length && <p>No compatible exercises are available with your current equipment.</p>}</section>}
       {notes.length > 0 && <div className="coach-note">{notes.join(' ')}</div>}
       {active.progressionAllowed === false && active.progressionReason && <div className="coach-note"><b>Load progression paused</b><br/>{active.progressionReason}</div>}
       {active.exercises.map((exercise, exerciseIndex) => {
@@ -396,8 +396,8 @@ export function HumanHealthApp() {
           {swapIndex === exerciseIndex && <div className="swap-panel"><h3>Compatible replacements</h3>{options.length ? options.map(option => <button key={option.exercise.id} onClick={() => selectSwap(exerciseIndex, option.exercise.id)}><b>{option.exercise.name}{option.preferred ? ' · preferred' : ''}</b><small>{option.reason}</small></button>) : <p>No compatible replacement is available with this gym and temporary equipment state.</p>}<label className="checkbox-row"><input type="checkbox" checked={saveSwap} onChange={event => setSaveSwap(event.target.checked)}/> Remember selection for {activeGym.name}</label></div>}
         </section>;
       })}
-      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Complete or defer every required exercise, or use End early now.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>{hasDeferredRequired ? 'Finish partial workout' : 'Complete workout'}</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
-      {!requiredHandled && <p className="muted">Complete becomes available after required exercises are finished or deferred. End early remains available at any time.</p>}
+      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Finish or defer required exercises first, or use End early.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>{hasDeferredRequired ? 'Finish partial workout' : 'Complete workout'}</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
+      {!requiredHandled && <p className="muted">Complete the required exercises (or defer them) to mark this workout done. You can also end early anytime.</p>}
       {restTimer && <div className="rest-dock" role="timer" aria-label={`Rest timer: ${restSeconds} seconds remaining`}><b>Rest</b><span>{Math.floor(restSeconds / 60)}:{String(restSeconds % 60).padStart(2, '0')}</span><div className="timer-actions">{restTimer.status === 'running' ? <button onClick={() => setRestTimer(timer => pauseRestTimer(timer))}>Pause</button> : <button onClick={() => setRestTimer(timer => resumeRestTimer(timer))}>Resume</button>}<button onClick={() => setRestTimer(timer => extendRestTimer(timer, 30))}>+30s</button><button onClick={() => setRestTimer(timer => restartRestTimer(timer, preferences.defaultRestSeconds))}>Restart</button><button onClick={() => setRestTimer(null)}>Skip</button></div></div>}
     </main>;
   }
@@ -410,25 +410,25 @@ export function HumanHealthApp() {
     {tab === 'today' && <>
       {history.length === 0 ? <>
         <section className="hero">
-          <h2>Welcome to Human Health</h2>
-          <p>An adaptive training coach that helps you build sustainable strength and fitness habits.</p>
-        </section>
-
-        <section className="card">
-          <h2>How it works</h2>
-          <p><b>Start with a workout recommendation</b><br/>Human Health generates evidence-based strength training sessions that adapt to your readiness and available equipment.</p>
-          <p><b>Track your progress locally</b><br/>All workout data stays on your device. Nothing is sent to external servers without your explicit permission.</p>
-          <p><b>Adjust as life changes</b><br/>Use readiness checks, time constraints, and life mode settings to adapt workouts to your current context.</p>
-          <p className="muted">This app provides general training guidance. It does not diagnose injury, prescribe medication, or replace medical advice from qualified healthcare professionals.</p>
-        </section>
-
-        <section className="card">
-          <h2>Ready to begin?</h2>
-          <p>Your first session is a balanced upper body workout designed to establish movement patterns and initial working loads.</p>
+          <h2>Ready to train?</h2>
+          <p>Your first workout is ready: a balanced upper body session that adapts to your equipment and builds a foundation for long-term strength.</p>
           <div className="hero-actions">
-            <button className="primary" onClick={() => startWorkout()}>Start first workout</button>
-            <button className="ghost" onClick={() => setTab('settings')}>Review settings first</button>
+            <button className="primary" onClick={() => startWorkout()}>Start your first workout</button>
+            <button className="ghost" onClick={() => setTab('settings')}>Check settings first</button>
           </div>
+        </section>
+
+        <section className="card">
+          <h2>What to expect</h2>
+          <p><b>Evidence-based sessions</b> — Each workout adapts to your readiness, time, and available equipment. No guesswork, just clear reps and sets.</p>
+          <p><b>Private and local</b> — All your data stays on this device. Nothing leaves your browser without your explicit action.</p>
+          <p><b>Life-adaptive training</b> — Traveling? Low energy? Short on time? The coach adjusts volume and exercise selection to keep you moving forward.</p>
+        </section>
+
+        <section className="card">
+          <h2>Before you begin</h2>
+          <p>This is a fitness lifestyle tool, not medical advice. It won't diagnose injuries, dose medication, or replace conversations with your healthcare team.</p>
+          <p className="muted">Make sure your current gym profile in Settings matches your available equipment — the app will recommend exercises you can actually perform today.</p>
         </section>
       </> : <>
         <section className="hero"><span className="pill">{rolling.manual ? 'YOUR SESSION CHOICE' : rolling.repeating ? 'RECOMMENDED REPEAT' : 'NEXT SESSION'}</span><h2>{title(rolling.session)}</h2><p>{rolling.reason}</p>{latestReadiness.level !== 'normal' && <div className="coach-note"><b>{latestReadiness.level === 'recovery' ? 'Recovery-first context' : 'Reduced-readiness context'}</b><br/>{latestReadiness.reasons.join(' ')}</div>}<div className="hero-actions"><button className="primary" onClick={() => startWorkout()}>Start recommended workout</button>{latestReadiness.level === 'reduced' && currentAdjustment.source === 'readiness' && <button className="ghost" onClick={() => startWorkout({ overrideRecoveryVolume: true })}>Use original set volume</button>}<button className="ghost" onClick={skipRecommendedSessionOnce}>Skip once</button><button className="ghost" onClick={() => setTab('settings')}>Adjust plan</button></div>{latestReadiness.level === 'reduced' && <p className="muted">Choosing original set volume does not re-enable automatic load progression. Pain/illness recovery-first constraints cannot be overridden here.</p>}</section>
@@ -448,7 +448,7 @@ export function HumanHealthApp() {
       <CapabilityAssessmentPanel assessments={assessments} onChange={setAssessments}/>
     </>}
 
-    {tab === 'health' && <section className="card"><h2>Health Tracking</h2><p>Connect health data sources, track readiness, and manage preventive care.</p><p className="muted">Visit the dedicated Health section for detailed tracking and integrations.</p><div className="button-row"><a href="/health" className="primary" style={{display: 'inline-block', textDecoration: 'none', textAlign: 'center'}}>Open Health</a></div></section>}
+    {tab === 'health' && <section className="card"><h2>Health tracking</h2><p>Connect Apple Health, track daily readiness, and see how sleep and activity influence your training recommendations.</p><p><b>Optional:</b> All health data stays local. Import files are processed in your browser, not uploaded to a server.</p><div className="button-row"><a href="/health" className="primary" style={{display: 'inline-block', textDecoration: 'none', textAlign: 'center'}}>Open health tracking</a></div></section>}
 
     {tab === 'settings' && <SettingsPanel preferences={preferences} gyms={gyms} onChange={savePreferences} onDataCleared={resetLocalState}/>} 
 

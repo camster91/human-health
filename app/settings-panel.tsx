@@ -104,8 +104,8 @@ export function SettingsPanel({
   return <>
     {notice && <div className={noticeIsFailure ? 'connection-state storage-error' : 'connection-state'} role={noticeIsFailure ? 'alert' : 'status'} aria-live={noticeIsFailure ? 'assertive' : 'polite'}>{notice}</div>}
     <section className="card" aria-labelledby="training-settings-title">
-      <h2 id="training-settings-title">Training settings</h2>
-      <p className="muted">These settings change future recommendations. Existing workout history is never rewritten.</p>
+      <h2 id="training-settings-title">Training preferences</h2>
+      <p className="muted">These settings affect future workouts. Your existing workout history stays exactly as you logged it.</p>
       <div className="settings-grid">
         <label><b>Current gym</b><select value={preferences.selectedGymId} onChange={event => update({ selectedGymId: event.target.value })}>{gyms.map(gym => <option key={gym.id} value={gym.id}>{gym.name}</option>)}</select></label>
         <label><b>Life mode</b><select value={preferences.lifeMode} onChange={event => update({ lifeMode: event.target.value as UserPreferences['lifeMode'] })}><option value="normal">Normal</option><option value="travel">Travel</option><option value="return">Return to training</option><option value="maintenance">Maintenance</option></select></label>
@@ -124,22 +124,24 @@ export function SettingsPanel({
     </section>
 
     <section className="card" aria-labelledby="equipment-state-title">
-      <h2 id="equipment-state-title">Temporarily unavailable</h2>
-      <p className="muted">Mark busy or unavailable equipment for the next workout without changing the permanent gym profile.</p>
+      <h2 id="equipment-state-title">Equipment unavailable today</h2>
+      <p className="muted">Mark equipment that's busy or broken so your next workout routes around it.</p>
       <div className="chip-grid">{temporaryEquipment.map(item => <button key={item} className={preferences.lastUnavailableEquipment.includes(item) ? 'active' : ''} aria-pressed={preferences.lastUnavailableEquipment.includes(item)} onClick={() => toggleUnavailable(item)}>{label(item)}</button>)}</div>
       {preferences.lastUnavailableEquipment.length > 0 && <button className="link" onClick={() => update({ lastUnavailableEquipment: [] })}>Clear temporary equipment limits</button>}
     </section>
 
     <section className="card" aria-labelledby="domain-priority-title">
-      <h2 id="domain-priority-title">Capability priorities</h2>
+      <h2 id="domain-priority-title">Training priorities</h2>
       <p className="muted">Focus areas are recommended first. “Off” removes that domain from automatic catch-up planning, not from your history.</p>
       <div className="settings-grid">{domains.map(domain => <label key={domain}><b>{label(domain)}</b><select value={preferences.domainPriorities[domain]} onChange={event => update({ domainPriorities: { ...preferences.domainPriorities, [domain]: event.target.value as DomainPriority } })}>{priorities.map(priority => <option key={priority} value={priority}>{label(priority)}</option>)}</select></label>)}</div>
     </section>
 
     <section className="card" aria-labelledby="data-controls-title">
-      <h2 id="data-controls-title">Your local data</h2>
-      <p className="muted">Human Health stores training, connected-health, and preventive health data locally in this browser. Export a complete archive before clearing or moving devices. Delete-all attempts every local domain even if one store is corrupt or unavailable; any partial failure is reported and already-deleted domains are not recreated.</p>
-      <div className="button-row"><button className="primary" disabled={dataBusy} onClick={() => void exportData()}>{dataBusy ? 'Working…' : 'Export complete archive'}</button><button className="danger" disabled={dataBusy} onClick={() => void clearData()}>Delete all local data</button></div>
+      <h2 id="data-controls-title">Back up your data</h2>
+      <p><b>Export a backup:</b> Download all your training history, health data, and settings as a single JSON file. Keep this safe before switching devices or clearing browser data.</p>
+      <p><b>Delete everything:</b> Removes all Human Health data from this browser permanently. Make sure you've exported a backup first if you want to keep your progress.</p>
+      <p className="muted">All data stays on this device. Exports are files you control, not uploads to a server.</p>
+      <div className="button-row"><button className="primary" disabled={dataBusy} onClick={() => void exportData()}>{dataBusy ? 'Preparing backup…' : 'Export complete backup'}</button><button className="danger" disabled={dataBusy} onClick={() => void clearData()}>Delete all data</button></div>
     </section>
 
     <section className="card">
