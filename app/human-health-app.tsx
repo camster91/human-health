@@ -373,7 +373,6 @@ export function HumanHealthApp() {
     const hasDeferredRequired = active.exercises.some(exercise => !exercise.optional && exercise.deferred);
     const addOptions = exercises.filter(exercise => exerciseIsAvailable(exercise, activeGym, active.unavailableEquipment || []) && !active.exercises.some(item => item.id === exercise.id));
     return <main className="workout-shell">
-      <OfflineIndicator />
       {storageWarning && <div className="connection-state storage-error" role="alert">{storageWarning}</div>}
       <header className="workout-head">
         <div>
@@ -431,7 +430,6 @@ export function HumanHealthApp() {
   }
 
   return <main className="app-shell">
-    <OfflineIndicator />
     <header><div><span className="eyebrow">HUMAN HEALTH</span><h1>{title(tab)}</h1></div>{tab !== 'settings' && <select value={gym.id} onChange={event => savePreferences({ ...preferences, selectedGymId: event.target.value })} aria-label="Gym profile">{gyms.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</header>
 
     {tab === 'today' && <>
