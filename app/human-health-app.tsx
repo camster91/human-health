@@ -10,11 +10,10 @@ import { extendRestTimer, pauseRestTimer, remainingRestSeconds, restartRestTimer
 import { advanceSession, contextualRollingSession, createScheduleOverride, nextRollingSession } from '@/lib/schedule';
 import { store } from '@/lib/storage';
 import { ActivityDose, Assessment, ReadinessRecord, readinessDecisionFromRecords, workoutActivityDoses } from '@/lib/whole-person';
-import { CapabilityTrendPanel } from './capability-trend-panel';
 import { Icon } from './icon-component';
 import { OfflineIndicator } from './offline-indicator';
 import { SettingsPanel } from './settings-panel';
-import { CapabilityAssessmentPanel, SkillProgressPanel, WholePersonDashboard } from './whole-person-dashboard';
+import { SkillProgressPanel, WholePersonDashboard } from './whole-person-dashboard';
 
 function title(value: string) {
   return value.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
@@ -387,13 +386,15 @@ export function HumanHealthApp() {
         <button className="ghost icon-only" style={{visibility: 'hidden'}}>⋯</button>
       </header>
 
-      {currentExercise && active.status === 'active' && (
-        <div className="current-exercise-focus">
+      {currentExercise && active.status === 'active' && (() => {
+        const lastWeight = currentExercise.logs.at(-1)?.weight;
+        const weightDisplay = lastWeight !== undefined ? `${kgToDisplay(lastWeight, preferences.unitSystem).toFixed(1)} ${preferences.unitSystem === 'imperial' ? 'lb' : 'kg'}` : '';
+        return <div className="current-exercise-focus">
           <span className="set-pill">→ SET {working.length + 1} / {currentExercise.sets}</span>
           <h2 className="exercise-name">{currentExercise.name}</h2>
-          <p className="exercise-details">{currentExercise.sets} × L · 50 lb</p>
-        </div>
-      )}
+          <p className="exercise-details">{currentExercise.sets} × L{weightDisplay ? ` · ${weightDisplay}` : ''}</p>
+        </div>;
+      })()}
 
       {active.status !== 'active' && <section className="card paused-card"><h2>{active.status === 'interrupted' ? 'Welcome back' : 'Paused'}</h2><p>Sets saved. Resume when ready.</p><button className="primary" onClick={resumeWorkout}>Resume</button></section>}
       {showAddExercise && active.status === 'active' && <section className="card"><h2>Add exercise</h2><div className="choice-grid">{addOptions.map(exercise => <button key={exercise.id} onClick={() => addExercise(exercise.id)}><b>{exercise.name}</b><small>{title(exercise.movement)} · {exercise.repRange[0]}–{exercise.repRange[1]}</small></button>)}</div>{!addOptions.length && <p className="muted">No exercises available with current equipment.</p>}</section>}
@@ -470,7 +471,6 @@ export function HumanHealthApp() {
               <span className="pill-accent">→ UP NEXT</span>
               <h2>Upper · 40m</h2>
               <p className="hero-subtitle">Push · DB · 7 moves</p>
-              <p className="coach-inline">Load up 5% on press — last set was clean.</p>
               <button className="primary" onClick={() => startWorkout()}>Start →</button>
             </div>
             <div className="hero-illustration">
@@ -538,7 +538,6 @@ export function HumanHealthApp() {
               <h2>{title(rolling.session)} · 40m</h2>
               <p className="hero-subtitle">Push · DB · 7 moves</p>
               {latestReadiness.level !== 'normal' && <p className="coach-inline"><b>Adjusted volume</b> — {latestReadiness.reasons.join(' ')}</p>}
-              {latestReadiness.level === 'normal' && <p className="coach-inline">Load up 5% on press — last set was clean.</p>}
               <button className="primary" onClick={() => startWorkout()}>Start →</button>
             </div>
             <div className="hero-illustration">
