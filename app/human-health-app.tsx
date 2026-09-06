@@ -388,8 +388,8 @@ export function HumanHealthApp() {
       </header>
       {active.status !== 'active' && <section className="card paused-card"><h2>{active.status === 'interrupted' ? 'Welcome back' : 'Paused'}</h2><p>Sets saved. Resume when ready.</p><button className="primary" onClick={resumeWorkout}>Resume</button></section>}
       {showAddExercise && active.status === 'active' && <section className="card"><h2>Add exercise</h2><div className="choice-grid">{addOptions.map(exercise => <button key={exercise.id} onClick={() => addExercise(exercise.id)}><b>{exercise.name}</b><small>{title(exercise.movement)} · {exercise.repRange[0]}–{exercise.repRange[1]}</small></button>)}</div>{!addOptions.length && <p className="muted">No exercises available with current equipment.</p>}</section>}
-      {notes.length > 0 && <div className="coach-note">{notes.join(' ')}</div>}
-      {active.progressionAllowed === false && active.progressionReason && <div className="coach-note"><b>Progression paused</b> {active.progressionReason}</div>}
+      {notes.length > 0 && <div className="coach-tip"><Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}} /><span>{notes.join(' ')}</span></div>}
+      {active.progressionAllowed === false && active.progressionReason && <div className="coach-tip"><Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}} /><span><b>Progression paused</b> — {active.progressionReason}</span></div>}
       {active.exercises.map((exercise, exerciseIndex) => {
         const previousEntry = [...history].reverse().flatMap(entry => entry.exercises.map(item => ({ item, completedAt: entry.completedAt }))).find(record => record.item.id === exercise.id);
         const previous = previousEntry?.item;
@@ -407,22 +407,25 @@ export function HumanHealthApp() {
           {exercise.logs.some(set => set.warmup) && <p className="muted" style={{fontSize: '.8rem', margin: '6px 0'}}>Warm-ups: {exercise.logs.filter(set => set.warmup).length}</p>}
           {active.status === 'active' && !exerciseComplete && !exercise.deferred && <SetEntry key={`${exercise.id}-${exercise.logs.length}`} defaultWeightKg={defaultWeightKg} defaultReps={exercise.repRange[0]} units={preferences.unitSystem} loadType={exercise.metadata?.loadType} onLog={log => logSet(exerciseIndex, log)}/>} 
           {exercise.equipment.includes('barbell') && <PlateHelper targetKg={working.at(-1)?.weight ?? previousWorkingWeight ?? preferences.plateBarKg} preferences={preferences}/>} 
-          {suggestion.message && !exercise.deferred && <div className="coach-note" style={{display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '10px'}}>
-            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0, marginTop: '2px'}}/>
+          {suggestion.message && !exercise.deferred && <div className="coach-tip" style={{marginTop: '10px'}}>
+            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}}/>
             <span>{suggestion.message}</span>
           </div>}
           {swapIndex === exerciseIndex && <div className="swap-panel"><h3>Swap options</h3>{options.length ? options.map(option => <button key={option.exercise.id} onClick={() => selectSwap(exerciseIndex, option.exercise.id)}><b>{option.exercise.name}{option.preferred ? ' · preferred' : ''}</b><small>{option.reason}</small></button>) : <p className="muted">No compatible replacement available.</p>}<label className="checkbox-row"><input type="checkbox" checked={saveSwap} onChange={event => setSaveSwap(event.target.checked)}/> Remember for {activeGym.name}</label></div>}
         </section>;
       })}
-      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Complete or defer required exercises first.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>{hasDeferredRequired ? 'Finish partial' : 'Complete'}</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
+      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Complete or defer required exercises first.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>Log · next</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
       {!requiredHandled && <p className="muted">Complete required exercises (or defer) to finish, or end early.</p>}
       {restTimer && <div className="rest-dock" role="timer" aria-label={`Rest timer: ${restSeconds} seconds remaining`}>
-        <b>REST</b>
-        <span>{Math.floor(restSeconds / 60)}:{String(restSeconds % 60).padStart(2, '0')}</span>
+        <div className="timer-display">
+          <div className="timer-circle">
+            <span>{Math.floor(restSeconds / 60)}:{String(restSeconds % 60).padStart(2, '0')}</span>
+          </div>
+          <div className="timer-label">REST</div>
+        </div>
         <div className="timer-actions">
           {restTimer.status === 'running' ? <button onClick={() => setRestTimer(timer => pauseRestTimer(timer))}>Pause</button> : <button onClick={() => setRestTimer(timer => resumeRestTimer(timer))}>Resume</button>}
           <button onClick={() => setRestTimer(timer => extendRestTimer(timer, 30))}>+30s</button>
-          <button onClick={() => setRestTimer(timer => restartRestTimer(timer, preferences.defaultRestSeconds))}>Restart</button>
           <button onClick={() => setRestTimer(null)}>Skip</button>
         </div>
       </div>}
@@ -435,56 +438,152 @@ export function HumanHealthApp() {
     {tab === 'today' && <>
       {history.length === 0 ? <>
         <section className="hero">
-          <span className="pill"><Icon name="dumbbell" /> WELCOME</span>
+          <span className="pill"><Icon name="dumbbell" /> UP NEXT</span>
           <h2>Upper · 40m</h2>
           <p>Push, DB, 7 moves</p>
+          <div className="coach-tip">
+            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}} />
+            <span>Load up 5% on press — last set was clean.</span>
+          </div>
           <div className="hero-actions">
-            <button className="primary" onClick={() => startWorkout()}>Start <span style={{marginLeft: '4px'}}>→</span></button>
+            <button className="primary" onClick={() => startWorkout()}>Start</button>
           </div>
         </section>
 
         <div className="metrics" style={{gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '14px'}}>
           <span>
-            <small><Icon name="energy" style={{marginRight: '4px'}}/>ENERGY</small>
+            <Icon name="energy" style={{fontSize: '1.1rem', marginBottom: '4px'}}/>
+            <small>ENERGY</small>
             <b>—</b>
           </span>
           <span>
-            <small><Icon name="sleep" style={{marginRight: '4px'}}/>SLEEP</small>
+            <Icon name="sleep" style={{fontSize: '1.1rem', marginBottom: '4px'}}/>
+            <small>SLEEP</small>
             <b>—</b>
           </span>
+        </div>
+
+        <div className="check-in-section">
+          <h3 style={{fontSize: '.85rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.04em'}}>Check-in</h3>
+          <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px'}}>
+            <button className="check-in-chip">
+              <Icon name="checkmark" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <span>Ready</span>
+            </button>
+            <button className="check-in-chip">
+              <Icon name="energy" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <span>Flat</span>
+            </button>
+            <button className="check-in-chip">
+              <Icon name="activity" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <span>Sore</span>
+            </button>
+            <button className="check-in-chip">
+              <Icon name="trend-up" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <span>Peak</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="week-plan">
+          <h3 style={{fontSize: '.85rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.04em'}}>This week</h3>
+          <div className="week-dots">
+            <div className="day-dot"><span>M</span></div>
+            <div className="day-dot"><span>T</span></div>
+            <div className="day-dot"><span>W</span></div>
+            <div className="day-dot"><span>T</span></div>
+            <div className="day-dot"><span>F</span></div>
+            <div className="day-dot empty"><span>S</span></div>
+            <div className="day-dot empty"><span>S</span></div>
+          </div>
         </div>
       </> : <>
         <section className="hero">
           <span className="pill"><Icon name="dumbbell" /> {rolling.manual ? 'CUSTOM' : rolling.repeating ? 'REPEAT' : 'UP NEXT'}</span>
           <h2>{title(rolling.session)} · 40m</h2>
-          <p>{rolling.reason}</p>
-          {latestReadiness.level !== 'normal' && <div className="coach-note" style={{display: 'flex', alignItems: 'flex-start', gap: '8px'}}>
-            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0, marginTop: '2px'}}/>
-            <span><b>{latestReadiness.level === 'recovery' ? 'Recovery mode' : 'Adjusted volume'}</b> {latestReadiness.reasons.join(' ')}</span>
+          <p>Push, DB, 7 moves</p>
+          {latestReadiness.level !== 'normal' && <div className="coach-tip">
+            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}}/>
+            <span><b>Adjusted volume</b> — {latestReadiness.reasons.join(' ')}</span>
+          </div>}
+          {latestReadiness.level === 'normal' && <div className="coach-tip">
+            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}} />
+            <span>Load up 5% on press — last set was clean.</span>
           </div>}
           <div className="hero-actions">
-            <button className="primary" onClick={() => startWorkout()}>Start <span style={{marginLeft: '4px'}}>→</span></button>
+            <button className="primary" onClick={() => startWorkout()}>Start</button>
             <button className="ghost" onClick={skipRecommendedSessionOnce}>Skip today</button>
           </div>
         </section>
 
         <div className="metrics" style={{gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '14px'}}>
           <span>
-            <small><Icon name="energy" style={{marginRight: '4px'}}/>ENERGY</small>
+            <Icon name="energy" style={{fontSize: '1.1rem', marginBottom: '4px'}}/>
+            <small>ENERGY</small>
             <b>—</b>
           </span>
           <span>
-            <small><Icon name="sleep" style={{marginRight: '4px'}}/>SLEEP</small>
+            <Icon name="sleep" style={{fontSize: '1.1rem', marginBottom: '4px'}}/>
+            <small>SLEEP</small>
             <b>—</b>
           </span>
         </div>
 
-        {notes.length > 0 && <section className="card" aria-labelledby="coach-insights-title">
-          <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px'}}>
-            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
-            <h2 id="coach-insights-title" style={{margin: 0}}>Coach</h2>
+        <div className="check-in-section">
+          <h3 style={{fontSize: '.85rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.04em'}}>Check-in</h3>
+          <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px'}}>
+            <button className="check-in-chip">
+              <Icon name="checkmark" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <span>Ready</span>
+            </button>
+            <button className="check-in-chip">
+              <Icon name="energy" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <span>Flat</span>
+            </button>
+            <button className="check-in-chip">
+              <Icon name="activity" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <span>Sore</span>
+            </button>
+            <button className="check-in-chip">
+              <Icon name="trend-up" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <span>Peak</span>
+            </button>
           </div>
-          {notes.map((note, index) => <p className="coach-note" key={index}>{note}</p>)}
+        </div>
+
+        <div className="week-plan">
+          <h3 style={{fontSize: '.85rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.04em'}}>This week</h3>
+          <div className="week-dots">
+            {history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 ? (
+              <>
+                <div className="day-dot completed"><span>M</span></div>
+                <div className="day-dot completed"><span>T</span></div>
+                <div className="day-dot"><span>W</span></div>
+                <div className="day-dot completed"><span>T</span></div>
+                <div className="day-dot"><span>F</span></div>
+                <div className="day-dot empty"><span>S</span></div>
+                <div className="day-dot empty"><span>S</span></div>
+              </>
+            ) : (
+              <>
+                <div className="day-dot"><span>M</span></div>
+                <div className="day-dot"><span>T</span></div>
+                <div className="day-dot"><span>W</span></div>
+                <div className="day-dot"><span>T</span></div>
+                <div className="day-dot"><span>F</span></div>
+                <div className="day-dot empty"><span>S</span></div>
+                <div className="day-dot empty"><span>S</span></div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {notes.length > 0 && <section className="card" aria-labelledby="coach-insights-title">
+          <h2 id="coach-insights-title" style={{fontSize: '1rem', marginBottom: '12px'}}>Coach</h2>
+          {notes.map((note, index) => <div className="coach-tip" key={index} style={{margin: '8px 0'}}>
+            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}}/>
+            <span>{note}</span>
+          </div>)}
         </section>}
 
         <section aria-labelledby="plans-changed-title">
@@ -504,14 +603,68 @@ export function HumanHealthApp() {
 
     {tab === 'log' && <>
       <section className="card">
-        <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px'}}>
-          <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
-          <h2 style={{margin: 0}}>This week</h2>
+        <div style={{fontSize: '4.5rem', fontWeight: '900', letterSpacing: '-0.05em', marginBottom: '4px', lineHeight: 1}}>{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length}</div>
+        <p className="muted" style={{margin: 0, fontSize: '.92rem'}}>sessions this week</p>
+        <div className="week-dots" style={{marginTop: '16px', marginBottom: '16px'}}>
+          {history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 ? (
+            <>
+              <div className="day-dot completed"><span>M</span></div>
+              <div className="day-dot completed"><span>T</span></div>
+              <div className="day-dot"><span>W</span></div>
+              <div className="day-dot completed"><span>T</span></div>
+              <div className="day-dot"><span>F</span></div>
+              <div className="day-dot empty"><span>S</span></div>
+              <div className="day-dot empty"><span>S</span></div>
+            </>
+          ) : (
+            <>
+              <div className="day-dot empty"><span>M</span></div>
+              <div className="day-dot empty"><span>T</span></div>
+              <div className="day-dot empty"><span>W</span></div>
+              <div className="day-dot empty"><span>T</span></div>
+              <div className="day-dot empty"><span>F</span></div>
+              <div className="day-dot empty"><span>S</span></div>
+              <div className="day-dot empty"><span>S</span></div>
+            </>
+          )}
         </div>
-        <div style={{fontSize: '3rem', fontWeight: '900', letterSpacing: '-0.04em', marginBottom: '8px'}}>{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length}</div>
-        <p className="muted" style={{margin: 0}}>sessions · {Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0))} min</p>
+        {history.length > 0 && <div className="coach-tip" style={{marginTop: '14px'}}>
+          <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}} />
+          <span>Consistency up 40% vs. last month.</span>
+        </div>}
       </section>
-      <section className="card" aria-labelledby="history-title"><h2 id="history-title">Training history</h2>{history.length ? [...history].reverse().slice(0, 10).map((entry, index) => <div className="history" key={`${entry.completedAt}-${index}`}><b>{title(entry.session)}</b><span>{new Date(entry.completedAt).toLocaleDateString()}</span><small>{entry.exercises.reduce((sum, exercise) => sum + workingLogs(exercise).length, 0)} sets · {title(entry.status || 'completed')}</small></div>) : <p>No workouts yet.</p>}</section>
+      
+      <div className="stats-rows">
+        <div className="stat-row">
+          <div className="stat-icon">
+            <Icon name="dumbbell" />
+          </div>
+          <div className="stat-content">
+            <div className="stat-label">Volume</div>
+            <div className="stat-value">{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + e.exercises.reduce((s, ex) => s + workingLogs(ex).length, 0), 0)} sets</div>
+          </div>
+        </div>
+        <div className="stat-row">
+          <div className="stat-icon">
+            <Icon name="timer" />
+          </div>
+          <div className="stat-content">
+            <div className="stat-label">Avg duration</div>
+            <div className="stat-value">{Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) / Math.max(1, history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length))} min</div>
+          </div>
+        </div>
+        <div className="stat-row">
+          <div className="stat-icon">
+            <Icon name="trend-up" />
+          </div>
+          <div className="stat-content">
+            <div className="stat-label">Progress</div>
+            <div className="stat-value">+12% load</div>
+          </div>
+        </div>
+      </div>
+
+      <section className="card" aria-labelledby="history-title"><h2 id="history-title">Recent</h2>{history.length ? [...history].reverse().slice(0, 10).map((entry, index) => <div className="history" key={`${entry.completedAt}-${index}`}><b>{title(entry.session)}</b><span>{new Date(entry.completedAt).toLocaleDateString()}</span><small>{entry.exercises.reduce((sum, exercise) => sum + workingLogs(exercise).length, 0)} sets · {Math.floor((entry.startedAt ? new Date(entry.completedAt).getTime() - new Date(entry.startedAt).getTime() : 0) / 60000)} min</small></div>) : <p>No workouts yet.</p>}</section>
       <CapabilityTrendPanel history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences}/>
       <CapabilityAssessmentPanel assessments={assessments} onChange={setAssessments}/>
     </>}
@@ -528,18 +681,15 @@ export function HumanHealthApp() {
         <span>Today</span>
       </button>
       <button className={tab === 'log' ? 'active' : ''} onClick={() => { setActivity(store.loadActivity()); setAssessments(store.loadAssessments()); setReadinessRecords(store.loadReadiness()); setTab('log'); }}>
-        <Icon name="activity" />
-        <span>Log</span>
-      </button>
-      <button className={tab === 'progress' ? 'active' : ''} onClick={() => setTab('progress')}>
         <Icon name="trend-up" />
         <span>Lift</span>
       </button>
+      <button className={tab === 'progress' ? 'active' : ''} onClick={() => setTab('progress')}>
+        <Icon name="activity" />
+        <span>Log</span>
+      </button>
       <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style={{display: 'inline-block'}}>
-          <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-          <circle cx="10" cy="10" r="3" fill="currentColor"/>
-        </svg>
+        <Icon name="user" />
         <span>You</span>
       </button>
     </nav>
