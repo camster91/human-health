@@ -397,9 +397,12 @@ export function HumanHealthApp() {
 
       {active.status !== 'active' && <section className="card paused-card"><h2>{active.status === 'interrupted' ? 'Welcome back' : 'Paused'}</h2><p>Sets saved. Resume when ready.</p><button className="primary" onClick={resumeWorkout}>Resume</button></section>}
       {showAddExercise && active.status === 'active' && <section className="card"><h2>Add exercise</h2><div className="choice-grid">{addOptions.map(exercise => <button key={exercise.id} onClick={() => addExercise(exercise.id)}><b>{exercise.name}</b><small>{title(exercise.movement)} · {exercise.repRange[0]}–{exercise.repRange[1]}</small></button>)}</div>{!addOptions.length && <p className="muted">No exercises available with current equipment.</p>}</section>}
-      {notes.length > 0 && <div className="coach-tip"><Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}} /><span>{notes.join(' ')}</span></div>}
-      {active.progressionAllowed === false && active.progressionReason && <div className="coach-tip"><Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}} /><span><b>Progression paused</b> — {active.progressionReason}</span></div>}
-      {active.exercises.map((exercise, exerciseIndex) => {
+      {notes.length > 0 && <div className="coach-tip" style={{margin: '0 16px 16px'}}><Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}} /><span>{notes.join(' ')}</span></div>}
+      {active.progressionAllowed === false && active.progressionReason && <div className="coach-tip" style={{margin: '0 16px 16px'}}><Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}} /><span><b>Progression paused</b> — {active.progressionReason}</span></div>}
+      
+      {currentExercise && active.status === 'active' && (() => {
+        const exerciseIndex = currentIndex;
+        const exercise = currentExercise;
         const previousEntry = [...history].reverse().flatMap(entry => entry.exercises.map(item => ({ item, completedAt: entry.completedAt }))).find(record => record.item.id === exercise.id);
         const previous = previousEntry?.item;
         const working = workingLogs(exercise);
@@ -409,20 +412,24 @@ export function HumanHealthApp() {
         const suggestion = nextLoadRecommendation(exercise, previous, { progressionAllowed: active.progressionAllowed ?? (latestReadiness.allowProgression && (active.mode || 'normal') === 'normal'), daysSincePrevious: daysBetween(active.startedAt, previousEntry?.completedAt) });
         const options = rankedSubstitutions(exercise, activeGym, { unavailable: active.unavailableEquipment || [], preferredId: preferences.swapPreferences[swapPreferenceKey(activeGym.id, exercise.originalId || exercise.id)] });
         const exerciseComplete = working.length >= exercise.sets;
-        return <section className={exercise.deferred ? 'exercise deferred' : 'exercise'} key={`${exercise.id}-${exerciseIndex}`}>
-          <div className="exercise-title"><div><span className="pill">{exercise.deferred ? 'DEFERRED' : exercise.optional ? 'OPTIONAL' : `SET ${working.length + 1}/${exercise.sets}`}</span><h2>{exercise.name}</h2><p>{exercise.sets} sets · {exercise.repRange[0]}–{exercise.repRange[1]} {exercise.repRange[1] > 25 && exercise.movement === 'core' ? 'sec' : 'reps'}{previousWorkingWeight ? ` · ${kgToDisplay(previousWorkingWeight, preferences.unitSystem).toFixed(0)} ${preferences.unitSystem === 'imperial' ? 'lb' : 'kg'}` : ''}</p></div><div className="exercise-tools"><button className="link" disabled={active.status !== 'active' || exerciseComplete || exercise.deferred} onClick={() => setSwapIndex(swapIndex === exerciseIndex ? null : exerciseIndex)}>Swap</button><button className="link" disabled={active.status !== 'active' || exerciseComplete} onClick={() => toggleDeferred(exerciseIndex)}>{exercise.deferred ? 'Restore' : exercise.optional ? 'Remove' : 'Defer'}</button></div></div>
-          {previous && <div className="previous">Last: {workingLogs(previous).map(set => formatSet(previous, set, preferences.unitSystem)).join(' · ') || 'No prior sets'}</div>}
-          <div className="set-grid">{Array.from({ length: exercise.sets }).map((_, index) => <div className={index < working.length ? 'set done' : 'set'} key={index}><b>Set {index + 1}</b><span>{working[index] ? `${formatSet(exercise, working[index], preferences.unitSystem)}${working[index].pain ? ' · pain' : ''}${working[index].formQuality === 'poor' ? ' · form broke' : ''}` : exercise.deferred ? 'Deferred' : '—'}</span></div>)}</div>
-          {exercise.logs.some(set => set.warmup) && <p className="muted" style={{fontSize: '.8rem', margin: '6px 0'}}>Warm-ups: {exercise.logs.filter(set => set.warmup).length}</p>}
-          {active.status === 'active' && !exerciseComplete && !exercise.deferred && <SetEntry key={`${exercise.id}-${exercise.logs.length}`} defaultWeightKg={defaultWeightKg} defaultReps={exercise.repRange[0]} units={preferences.unitSystem} loadType={exercise.metadata?.loadType} onLog={log => logSet(exerciseIndex, log)}/>} 
-          {exercise.equipment.includes('barbell') && <PlateHelper targetKg={working.at(-1)?.weight ?? previousWorkingWeight ?? preferences.plateBarKg} preferences={preferences}/>} 
-          {suggestion.message && !exercise.deferred && <div className="coach-tip" style={{marginTop: '10px'}}>
+        return <section className="exercise session-exercise" key={`${exercise.id}-${exerciseIndex}`} style={{margin: '0 16px 20px'}}>
+          {suggestion.message && !exercise.deferred && <div className="coach-tip" style={{marginBottom: '16px'}}>
             <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}}/>
             <span>{suggestion.message}</span>
           </div>}
+          {previous && <div className="previous">LAST: {workingLogs(previous).map(set => formatSet(previous, set, preferences.unitSystem)).join(' · ') || 'No prior sets'}</div>}
+          <div className="set-grid">{Array.from({ length: exercise.sets }).map((_, index) => <div className={index < working.length ? 'set done' : 'set'} key={index}><b>Set {index + 1}</b><span>{working[index] ? `${formatSet(exercise, working[index], preferences.unitSystem)}${working[index].pain ? ' · pain' : ''}${working[index].formQuality === 'poor' ? ' · form broke' : ''}` : exercise.deferred ? 'Deferred' : '—'}</span></div>)}</div>
+          {active.status === 'active' && !exerciseComplete && !exercise.deferred && <SetEntry key={`${exercise.id}-${exercise.logs.length}`} defaultWeightKg={defaultWeightKg} defaultReps={exercise.repRange[0]} units={preferences.unitSystem} loadType={exercise.metadata?.loadType} onLog={log => logSet(exerciseIndex, log)}/>}
           {swapIndex === exerciseIndex && <div className="swap-panel"><h3>Swap options</h3>{options.length ? options.map(option => <button key={option.exercise.id} onClick={() => selectSwap(exerciseIndex, option.exercise.id)}><b>{option.exercise.name}{option.preferred ? ' · preferred' : ''}</b><small>{option.reason}</small></button>) : <p className="muted">No compatible replacement available.</p>}<label className="checkbox-row"><input type="checkbox" checked={saveSwap} onChange={event => setSaveSwap(event.target.checked)}/> Remember for {activeGym.name}</label></div>}
         </section>;
-      })}
+      })()}
+      
+      <div className="session-progress">
+        <div className="progress-bar">
+          <div className="progress-fill" style={{width: `${(active.exercises.filter(ex => workingLogs(ex).length >= ex.sets).length / active.exercises.length) * 100}%`}}></div>
+        </div>
+        <p className="progress-label">{active.exercises.filter(ex => workingLogs(ex).length >= ex.sets).length} / {active.exercises.length} · {title(active.session)}</p>
+      </div>
       <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Complete or defer required exercises first.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>Log · next</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
       {!requiredHandled && <p className="muted">Complete required exercises (or defer) to finish, or end early.</p>}
       {restTimer && <div className="rest-dock" role="timer" aria-label={`Rest timer: ${restSeconds} seconds remaining`}>
@@ -481,21 +488,14 @@ export function HumanHealthApp() {
               <Icon name="energy" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
               <span className="metric-label">ENERGY</span>
             </div>
-            <div className="metric-value">7 <span className="metric-unit">/10</span></div>
-            <p className="metric-desc">Solid for heavy upper</p>
+            <div className="metric-value">—</div>
           </div>
           <div className="metric-card">
             <div className="metric-header">
               <Icon name="sleep" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
               <span className="metric-label">SLEEP</span>
             </div>
-            <div className="sleep-ring">
-              <svg viewBox="0 0 64 64" width="64" height="64">
-                <circle cx="32" cy="32" r="28" fill="none" stroke="var(--line)" strokeWidth="6"/>
-                <circle cx="32" cy="32" r="28" fill="none" stroke="var(--accent)" strokeWidth="6" strokeDasharray="176" strokeDashoffset="44" transform="rotate(-90 32 32)" strokeLinecap="round"/>
-              </svg>
-              <div className="sleep-value">7h20</div>
-            </div>
+            <div className="metric-value">—</div>
           </div>
         </div>
 
@@ -556,21 +556,14 @@ export function HumanHealthApp() {
               <Icon name="energy" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
               <span className="metric-label">ENERGY</span>
             </div>
-            <div className="metric-value">7 <span className="metric-unit">/10</span></div>
-            <p className="metric-desc">Solid for heavy upper</p>
+            <div className="metric-value">—</div>
           </div>
           <div className="metric-card">
             <div className="metric-header">
               <Icon name="sleep" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
               <span className="metric-label">SLEEP</span>
             </div>
-            <div className="sleep-ring">
-              <svg viewBox="0 0 64 64" width="64" height="64">
-                <circle cx="32" cy="32" r="28" fill="none" stroke="var(--line)" strokeWidth="6"/>
-                <circle cx="32" cy="32" r="28" fill="none" stroke="var(--accent)" strokeWidth="6" strokeDasharray="176" strokeDashoffset="44" transform="rotate(-90 32 32)" strokeLinecap="round"/>
-              </svg>
-              <div className="sleep-value">7h20</div>
-            </div>
+            <div className="metric-value">—</div>
           </div>
         </div>
 
@@ -635,54 +628,31 @@ export function HumanHealthApp() {
         <div className="log-numeral-row">
           <div className="log-main-stat">
             <div className="athletic-numeral">{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length}</div>
-            <p className="stat-caption">sessions · 2h 14m</p>
+            <p className="stat-caption">sessions{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 ? ` · ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) / 60)}h ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) % 60)}m` : ''}</p>
           </div>
-          <div className="mini-bars">
+          {history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 && <div className="mini-bars">
             <div className="bar" style={{height: '45%', background: 'var(--accent)'}}></div>
             <div className="bar" style={{height: '65%', background: 'var(--accent)'}}></div>
             <div className="bar" style={{height: '80%', background: 'var(--accent)'}}></div>
             <div className="bar" style={{height: '40%', background: 'var(--line)'}}></div>
-          </div>
+          </div>}
         </div>
         
-        <div className="week-section">
+        {history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 && <div className="week-section">
           <div className="week-header">
             <span className="week-label">WEEK</span>
-            <span className="week-count">3 of 4 planned</span>
           </div>
           <div className="week-dots-compact">
-            {history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 ? (
-              <>
-                <div className="day-dot-small completed"><span>M</span></div>
-                <div className="day-dot-small empty"><span>T</span></div>
-                <div className="day-dot-small completed"><span>W</span></div>
-                <div className="day-dot-small empty"><span>T</span></div>
-                <div className="day-dot-small completed"><span>F</span></div>
-                <div className="day-dot-small empty-large"><span>S</span></div>
-                <div className="day-dot-small empty"><span>S</span></div>
-              </>
-            ) : (
-              <>
-                <div className="day-dot-small empty"><span>M</span></div>
-                <div className="day-dot-small empty"><span>T</span></div>
-                <div className="day-dot-small empty"><span>W</span></div>
-                <div className="day-dot-small empty"><span>T</span></div>
-                <div className="day-dot-small empty"><span>F</span></div>
-                <div className="day-dot-small empty"><span>S</span></div>
-                <div className="day-dot-small empty"><span>S</span></div>
-              </>
-            )}
+            <div className="day-dot-small empty"><span>M</span></div>
+            <div className="day-dot-small empty"><span>T</span></div>
+            <div className="day-dot-small empty"><span>W</span></div>
+            <div className="day-dot-small empty"><span>T</span></div>
+            <div className="day-dot-small empty"><span>F</span></div>
+            <div className="day-dot-small empty"><span>S</span></div>
+            <div className="day-dot-small empty"><span>S</span></div>
           </div>
-        </div>
+        </div>}
       </section>
-      
-      {history.length > 0 && <section className="card coach-card">
-        <div className="coach-card-header">
-          <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)'}} />
-          <span className="coach-label">COACH</span>
-        </div>
-        <p className="coach-message">Press trend +6% over 3 weeks. Keep Wed Zone-2.</p>
-      </section>}
       
       <div className="stats-rows">
         <div className="stat-row">
@@ -730,11 +700,11 @@ export function HumanHealthApp() {
         <Icon name="dumbbell" />
         <span>Today</span>
       </button>
-      <button className={tab === 'log' ? 'active' : ''} onClick={() => { setActivity(store.loadActivity()); setAssessments(store.loadAssessments()); setReadinessRecords(store.loadReadiness()); setTab('log'); }}>
+      <button className={tab === 'progress' ? 'active' : ''} onClick={() => setTab('progress')}>
         <Icon name="trend-up" />
         <span>Lift</span>
       </button>
-      <button className={tab === 'progress' ? 'active' : ''} onClick={() => setTab('progress')}>
+      <button className={tab === 'log' ? 'active' : ''} onClick={() => { setActivity(store.loadActivity()); setAssessments(store.loadAssessments()); setReadinessRecords(store.loadReadiness()); setTab('log'); }}>
         <Icon name="activity" />
         <span>Log</span>
       </button>
@@ -750,13 +720,9 @@ function SetEntry({ defaultWeightKg, defaultReps, units, loadType, onLog }: { de
   const [weight, setWeight] = useState(Number(kgToDisplay(defaultWeightKg, units).toFixed(1)));
   const [reps, setReps] = useState(defaultReps);
   const [rir, setRir] = useState(2);
-  const [warmup, setWarmup] = useState(false);
-  const [pain, setPain] = useState(false);
-  const [formQuality, setFormQuality] = useState<'poor' | 'okay' | 'good'>('good');
-  const [note, setNote] = useState('');
-  const loadLabel = loadType === 'bodyweight' ? `Added load (${units === 'imperial' ? 'lb' : 'kg'})` : `Weight (${units === 'imperial' ? 'lb' : 'kg'})`;
+  const loadLabel = loadType === 'bodyweight' ? `Added (${units === 'imperial' ? 'lb' : 'kg'})` : `Weight`;
   const valid = Number.isFinite(weight) && weight >= 0 && Number.isFinite(reps) && reps > 0;
-  return <div className="log-box"><label>{loadLabel}<input inputMode="decimal" type="number" min="0" step="0.5" value={weight} onChange={event => setWeight(Number(event.target.value))}/></label><label>{defaultReps > 25 ? 'Seconds' : 'Reps'}<input inputMode="numeric" type="number" min="1" value={reps} onChange={event => setReps(Number(event.target.value))}/></label><label>RIR<select value={rir} onChange={event => setRir(Number(event.target.value))}><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4+</option></select></label><label>Form<select value={formQuality} onChange={event => setFormQuality(event.target.value as typeof formQuality)}><option value="good">Good</option><option value="okay">Okay</option><option value="poor">Broke down</option></select></label><label className="checkbox-row"><input type="checkbox" checked={warmup} onChange={event => setWarmup(event.target.checked)}/> Warm-up</label><label className="checkbox-row"><input type="checkbox" checked={pain} onChange={event => setPain(event.target.checked)}/> Pain/discomfort</label><label className="wide-field">Set note<input value={note} onChange={event => setNote(event.target.value)} placeholder="Optional technique or context note"/></label><button className="primary" disabled={!valid} onClick={() => onLog({ weight: displayToKg(weight, units), reps, rir, warmup, pain, formQuality, note: note.trim() || undefined, completedAt: new Date().toISOString() })}>{warmup ? 'Log warm-up' : pain ? 'Log set + flag' : 'Log working set'}</button></div>;
+  return <div className="log-box-compact"><div className="log-inputs"><label>{loadLabel}<input inputMode="decimal" type="number" min="0" step="0.5" value={weight} onChange={event => setWeight(Number(event.target.value))}/></label><label>{defaultReps > 25 ? 'Sec' : 'Reps'}<input inputMode="numeric" type="number" min="1" value={reps} onChange={event => setReps(Number(event.target.value))}/></label><label>RIR<select value={rir} onChange={event => setRir(Number(event.target.value))}><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4+</option></select></label></div><button className="primary" disabled={!valid} onClick={() => onLog({ weight: displayToKg(weight, units), reps, rir, warmup: false, pain: false, formQuality: 'good', completedAt: new Date().toISOString() })}>Log set</button></div>;
 }
 
 function PlateHelper({ targetKg, preferences }: { targetKg: number; preferences: UserPreferences }) {
