@@ -1,5 +1,6 @@
 import { Equipment, SessionId, TrainingMode } from './domain';
 import { CapabilityDomain } from './whole-person-types';
+import { SoftHabitId } from './connected-health/soft-habits';
 
 export type DomainPriority = 'focus' | 'maintain' | 'deprioritize' | 'off';
 export type UnitSystem = 'metric' | 'imperial';
@@ -19,6 +20,8 @@ export type UserPreferences = {
   plateBarKg: number;
   availablePlatesKg: number[];
   lastUnavailableEquipment: Equipment[];
+  enableFuelTracking: boolean;
+  enabledSoftHabits: SoftHabitId[];
 };
 
 const capabilityDomains: CapabilityDomain[] = ['strength', 'cardio', 'mobility', 'core', 'bodyweight', 'balance', 'power', 'movement', 'recovery', 'consistency'];
@@ -55,6 +58,8 @@ export const defaultPreferences: UserPreferences = {
   plateBarKg: 20,
   availablePlatesKg: [25, 20, 15, 10, 5, 2.5, 1.25],
   lastUnavailableEquipment: [],
+  enableFuelTracking: false,
+  enabledSoftHabits: [],
 };
 
 function finiteNumber(value: unknown, fallback: number, min: number, max: number) {
@@ -92,6 +97,8 @@ export function normalizePreferences(value?: Partial<UserPreferences> | null): U
     plateBarKg: finiteNumber(record.plateBarKg, defaultPreferences.plateBarKg, 0, 50),
     availablePlatesKg: plates.length ? plates : defaultPreferences.availablePlatesKg,
     lastUnavailableEquipment: Array.isArray(value?.lastUnavailableEquipment) ? [...new Set(value.lastUnavailableEquipment.filter(item => equipmentValues.includes(item)))] : [],
+    enableFuelTracking: validBoolean(record.enableFuelTracking, defaultPreferences.enableFuelTracking),
+    enabledSoftHabits: Array.isArray(value?.enabledSoftHabits) ? value.enabledSoftHabits.filter((h): h is SoftHabitId => typeof h === 'string' && ['morning-movement', 'evening-wind-down', 'hydration-check', 'gratitude-moment', 'breath-pause'].includes(h)) : defaultPreferences.enabledSoftHabits,
   };
 }
 

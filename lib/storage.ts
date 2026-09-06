@@ -1,4 +1,6 @@
 import { CONNECTED_SLEEP_CONTEXT_KEY, loadConnectedSleepContext } from './connected-health/connected-readiness';
+import { FuelCheck } from './connected-health/fuel';
+import { SoftHabitCompletion } from './connected-health/soft-habits';
 import { HistoryEntry, Workout } from './domain';
 import { SkillAssessment } from './performance';
 import { defaultPreferences, normalizePreferences, UserPreferences } from './preferences';
@@ -35,6 +37,8 @@ const PREFERENCES = `${PREFIX}preferences`;
 const SCHEDULE_EVENTS = `${PREFIX}schedule-events`;
 const FINALIZATION_JOURNAL = `${PREFIX}finalization-journal`;
 const STORAGE_PROBE = `${PREFIX}storage-probe`;
+const FUEL_CHECKS = `${PREFIX}fuel-checks`;
+const SOFT_HABIT_COMPLETIONS = `${PREFIX}soft-habit-completions`;
 
 let mutationFailure: string | null = null;
 
@@ -186,6 +190,8 @@ export type HumanHealthExport = {
   skillAssessments: SkillAssessment[];
   preferences: UserPreferences;
   scheduleEvents: ScheduleEvent[];
+  fuelChecks?: FuelCheck[];
+  softHabitCompletions?: SoftHabitCompletion[];
 };
 
 export function validateTrainingExport(value: unknown, now = new Date()): HumanHealthExport {
@@ -206,6 +212,8 @@ export function validateTrainingExport(value: unknown, now = new Date()): HumanH
     skillAssessments: validateSkillAssessments(candidate.skillAssessments, now),
     preferences: validatePreferences(candidate.preferences),
     scheduleEvents: validateScheduleEvents(candidate.scheduleEvents, now),
+    fuelChecks: Array.isArray(candidate.fuelChecks) ? candidate.fuelChecks : undefined,
+    softHabitCompletions: Array.isArray(candidate.softHabitCompletions) ? candidate.softHabitCompletions : undefined,
   };
 }
 
@@ -277,6 +285,8 @@ function serializedTrainingSnapshot(next: HumanHealthExport, mode: 'merge' | 're
   values.set(LEGACY_REST_UNTIL, null);
   values.set(PREFERENCES, serialized(normalizePreferences(next.preferences || defaultPreferences)));
   values.set(SCHEDULE_EVENTS, serialized(next.scheduleEvents.slice(-100)));
+  values.set(FUEL_CHECKS, serialized((next.fuelChecks || []).slice(-90)));
+  values.set(SOFT_HABIT_COMPLETIONS, serialized((next.softHabitCompletions || []).slice(-180)));
   values.set(FINALIZATION_JOURNAL, null);
   if (mode === 'replace') values.set(CONNECTED_SLEEP_CONTEXT_KEY, null);
   return values;
@@ -378,6 +388,12 @@ export const store = {
   savePreferences(value: UserPreferences) { return write(PREFERENCES, normalizePreferences(value)); },
   loadScheduleEvents(): ScheduleEvent[] { const value = read<unknown>(SCHEDULE_EVENTS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved schedule events were invalid and were ignored.'; return []; } return value as ScheduleEvent[]; },
   saveScheduleEvents(value: ScheduleEvent[]) { return write(SCHEDULE_EVENTS, value.slice(-100)); },
+  
+  loadFuelChecks(): FuelCheck[] { const value = read<unknown>(FUEL_CHECKS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved fuel checks were invalid and were ignored.'; return []; } return value as FuelCheck[]; },
+  saveFuelChecks(value: FuelCheck[]) { return write(FUEL_CHECKS, value.slice(-90)); },
+  
+  loadSoftHabitCompletions(): SoftHabitCompletion[] { const value = read<unknown>(SOFT_HABIT_COMPLETIONS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved habit completions were invalid and were ignored.'; return []; } return value as SoftHabitCompletion[]; },
+  saveSoftHabitCompletions(value: SoftHabitCompletion[]) { return write(SOFT_HABIT_COMPLETIONS, value.slice(-180)); },
 
   exportData(): HumanHealthExport {
     return {
@@ -394,6 +410,8 @@ export const store = {
       skillAssessments: store.loadSkillAssessments(),
       preferences: store.loadPreferences(),
       scheduleEvents: store.loadScheduleEvents(),
+      fuelChecks: store.loadFuelChecks(),
+      softHabitCompletions: store.loadSoftHabitCompletions(),
     };
   },
 
@@ -416,6 +434,8 @@ export const store = {
       skillAssessments: mergeUnique(current.skillAssessments, incoming.skillAssessments, item => `${item.treeId}|${item.stepId}|${item.recordedAt}`),
       preferences: current.preferences,
       scheduleEvents: mergeUnique(current.scheduleEvents, incoming.scheduleEvents, item => `${item.recordedAt}|${item.type}|${item.from}|${item.to}`),
+      fuelChecks: mergeUnique(current.fuelChecks || [], incoming.fuelChecks || [], item => `${item.recordedAt}|${item.type}`),
+      softHabitCompletions: mergeUnique(current.softHabitCompletions || [], incoming.softHabitCompletions || [], item => `${item.habitId}|${item.completedAt}`),
       exportedAt: now.toISOString(),
     };
 
@@ -433,7 +453,7 @@ export const store = {
   },
 
   clearAll() {
-    const keys = [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS, CONNECTED_SLEEP_CONTEXT_KEY, FINALIZATION_JOURNAL];
+    const keys = [ACTIVE, HISTORY, ACTIVITY, READINESS, SKILLS, ASSESSMENTS, PROGRESSIONS, SKILL_ASSESSMENTS, REST_TIMER, LEGACY_REST_UNTIL, PREFERENCES, SCHEDULE_EVENTS, CONNECTED_SLEEP_CONTEXT_KEY, FINALIZATION_JOURNAL, FUEL_CHECKS, SOFT_HABIT_COMPLETIONS];
     return runMutations(keys.map(key => () => remove(key)), 'Local Human Health data could not be fully deleted.');
   },
 };

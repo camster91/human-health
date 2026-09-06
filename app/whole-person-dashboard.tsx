@@ -24,6 +24,7 @@ import {
   readinessTrend,
 } from '@/lib/whole-person';
 import { cardioCoverage } from '@/lib/capability-trends';
+import { FuelHabitsPanel } from './fuel-habits-panel';
 
 const modalities: CardioModality[] = ['walk', 'run', 'cycle', 'row', 'incline-treadmill', 'other'];
 
@@ -41,6 +42,10 @@ export function WholePersonDashboard({
   nextSession,
   onActivityChange,
   onReadinessChange,
+  fuelChecks,
+  softHabitCompletions,
+  onFuelChecksChange,
+  onSoftHabitCompletionsChange,
 }: {
   history: HistoryEntry[];
   activity: ActivityDose[];
@@ -51,6 +56,10 @@ export function WholePersonDashboard({
   nextSession: SessionId;
   onActivityChange: (next: ActivityDose[]) => void;
   onReadinessChange: (next: ReadinessRecord[]) => void;
+  fuelChecks?: any[];
+  softHabitCompletions?: any[];
+  onFuelChecksChange?: (next: any[]) => void;
+  onSoftHabitCompletionsChange?: (next: any[]) => void;
 }) {
   const latestInput = readinessRecords.at(-1)?.input;
   const [check, setCheck] = useState<ReadinessInput>(latestInput || { sleep: 'okay', fatigue: 'moderate', soreness: 'low', stress: 'moderate', subjective: 3 });
@@ -230,6 +239,17 @@ export function WholePersonDashboard({
       <p className="muted">Balance and jump difficulty changes only after repeated comparable benchmarks. Readiness and the high-impact preference can hold progression.</p>
       {athleticProgressions.map(item => <div className="history" key={item.metricId}><b>{item.metricId === 'jump' ? 'Jump / power' : 'Single-leg balance'} · {title(item.level)}</b><span>{item.decision.evidenceCount} tests</span><small>{item.decision.message} Current work: {athleticLevelSession(item.metricId, item.level).join(' · ')}</small>{item.decision.action !== 'hold' && <button className="link" onClick={() => applyAthleticProgression(item.metricId, item.decision.nextLevel)}>Apply {item.decision.action}: {title(item.decision.nextLevel)}</button>}</div>)}
     </section>}
+
+    {(preferences.enableFuelTracking || preferences.enabledSoftHabits.length > 0) && fuelChecks && softHabitCompletions && onFuelChecksChange && onSoftHabitCompletionsChange && (
+      <FuelHabitsPanel 
+        fuelChecks={fuelChecks} 
+        softHabitCompletions={softHabitCompletions} 
+        enabledHabits={preferences.enabledSoftHabits}
+        enableFuelTracking={preferences.enableFuelTracking}
+        onFuelChecksChange={onFuelChecksChange}
+        onSoftHabitCompletionsChange={onSoftHabitCompletionsChange}
+      />
+    )}
 
   </>;
 }
