@@ -438,9 +438,9 @@ export function HumanHealthApp() {
     {tab === 'today' && <>
       {history.length === 0 ? <>
         <section className="hero">
-          <span className="pill"><Icon name="dumbbell" /> UP NEXT</span>
+          <span className="pill"><Icon name="dumbbell" /> WELCOME</span>
           <h2>Upper · 40m</h2>
-          <p>Push, DB, 7 moves — load up 5% on press from last clean set.</p>
+          <p>Push, DB, 7 moves</p>
           <div className="hero-actions">
             <button className="primary" onClick={() => startWorkout()}>Start <span style={{marginLeft: '4px'}}>→</span></button>
           </div>
@@ -449,11 +449,11 @@ export function HumanHealthApp() {
         <div className="metrics" style={{gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '14px'}}>
           <span>
             <small><Icon name="energy" style={{marginRight: '4px'}}/>ENERGY</small>
-            <b>7<span style={{fontSize: '1.2rem', fontWeight: '700', color: 'var(--muted)'}}>/10</span></b>
+            <b>—</b>
           </span>
           <span>
             <small><Icon name="sleep" style={{marginRight: '4px'}}/>SLEEP</small>
-            <b>7h20</b>
+            <b>—</b>
           </span>
         </div>
 
@@ -471,28 +471,27 @@ export function HumanHealthApp() {
         </section>
       </> : <>
         <section className="hero">
-          <span className="pill"><Icon name="dumbbell" /> {rolling.manual ? 'CUSTOM' : rolling.repeating ? 'REPEAT' : 'NEXT'}</span>
+          <span className="pill"><Icon name="dumbbell" /> {rolling.manual ? 'CUSTOM' : rolling.repeating ? 'REPEAT' : 'UP NEXT'}</span>
           <h2>{title(rolling.session)} · 40m</h2>
           <p>{rolling.reason}</p>
           {latestReadiness.level !== 'normal' && <div className="coach-note" style={{display: 'flex', alignItems: 'flex-start', gap: '8px'}}>
             <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0, marginTop: '2px'}}/>
-            <span><b>{latestReadiness.level === 'recovery' ? 'Recovery mode' : 'Reduced readiness'}</b> {latestReadiness.reasons.join(' ')}</span>
+            <span><b>{latestReadiness.level === 'recovery' ? 'Recovery mode' : 'Adjusted volume'}</b> {latestReadiness.reasons.join(' ')}</span>
           </div>}
           <div className="hero-actions">
             <button className="primary" onClick={() => startWorkout()}>Start <span style={{marginLeft: '4px'}}>→</span></button>
-            {latestReadiness.level === 'reduced' && currentAdjustment.source === 'readiness' && <button className="ghost" onClick={() => startWorkout({ overrideRecoveryVolume: true })}>Full volume</button>}
-            <button className="ghost" onClick={skipRecommendedSessionOnce}>Skip once</button>
+            <button className="ghost" onClick={skipRecommendedSessionOnce}>Skip today</button>
           </div>
         </section>
 
         <div className="metrics" style={{gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '14px'}}>
           <span>
             <small><Icon name="energy" style={{marginRight: '4px'}}/>ENERGY</small>
-            <b>7<span style={{fontSize: '1.2rem', fontWeight: '700', color: 'var(--muted)'}}>/10</span></b>
+            <b>—</b>
           </span>
           <span>
             <small><Icon name="sleep" style={{marginRight: '4px'}}/>SLEEP</small>
-            <b>7h20</b>
+            <b>—</b>
           </span>
         </div>
 
