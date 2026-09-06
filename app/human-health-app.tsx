@@ -49,7 +49,7 @@ export function HumanHealthApp() {
   const [active, setActive] = useState<Workout | null>(null);
   const [restTimer, setRestTimer] = useState<RestTimerState | null>(null);
   const [now, setNow] = useState(0);
-  const [tab, setTab] = useState<'today' | 'progress' | 'health' | 'settings'>('today');
+  const [tab, setTab] = useState<'today' | 'log' | 'progress' | 'settings'>('today');
   const [notes, setNotes] = useState<string[]>([]);
   const [swapIndex, setSwapIndex] = useState<number | null>(null);
   const [saveSwap, setSaveSwap] = useState(false);
@@ -432,7 +432,6 @@ export function HumanHealthApp() {
 
   return <main className="app-shell">
     <OfflineIndicator />
-    {storageWarning && <div className="connection-state storage-error" role="alert">{storageWarning}</div>}
     <header><div><span className="eyebrow">HUMAN HEALTH</span><h1>{title(tab)}</h1></div>{tab !== 'settings' && <select value={gym.id} onChange={event => savePreferences({ ...preferences, selectedGymId: event.target.value })} aria-label="Gym profile">{gyms.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</header>
 
     {tab === 'today' && <>
@@ -456,19 +455,6 @@ export function HumanHealthApp() {
             <b>—</b>
           </span>
         </div>
-
-        <section className="card" style={{padding: '16px'}}>
-          <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px'}}>
-            <Icon name="timer" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
-            <h3 style={{margin: 0, fontSize: '.85rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--muted)'}}>CHECK-IN · 10s</h3>
-          </div>
-          <div className="quick-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', margin: '0'}}>
-            <button style={{minHeight: '48px'}}>Ready</button>
-            <button>Flat</button>
-            <button>Sore</button>
-            <button>Peak</button>
-          </div>
-        </section>
       </> : <>
         <section className="hero">
           <span className="pill"><Icon name="dumbbell" /> {rolling.manual ? 'CUSTOM' : rolling.repeating ? 'REPEAT' : 'UP NEXT'}</span>
@@ -518,10 +504,10 @@ export function HumanHealthApp() {
       </>}
     </>}
 
-    {tab === 'progress' && <>
+    {tab === 'log' && <>
       <section className="card">
         <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px'}}>
-          <Icon name="trend-up" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
+          <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
           <h2 style={{margin: 0}}>This week</h2>
         </div>
         <div style={{fontSize: '3rem', fontWeight: '900', letterSpacing: '-0.04em', marginBottom: '8px'}}>{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length}</div>
@@ -532,7 +518,9 @@ export function HumanHealthApp() {
       <CapabilityAssessmentPanel assessments={assessments} onChange={setAssessments}/>
     </>}
 
-    {tab === 'health' && <section className="card"><h2>Health tracking</h2><p>Connect Apple Health, track readiness, and see how sleep and activity influence training.</p><div className="button-row"><a href="/health" className="primary" style={{display: 'inline-block', textDecoration: 'none', textAlign: 'center'}}>Open health tracking</a></div></section>}
+    {tab === 'progress' && <>
+      <section className="card"><h2>Progress & Health</h2><p>Connect Apple Health, track readiness, and see how sleep and activity influence training.</p><div className="button-row"><a href="/health" className="primary" style={{display: 'inline-block', textDecoration: 'none', textAlign: 'center'}}>Open health tracking</a></div></section>
+    </>}
 
     {tab === 'settings' && <SettingsPanel preferences={preferences} gyms={gyms} onChange={savePreferences} onDataCleared={resetLocalState}/>} 
 
@@ -541,17 +529,17 @@ export function HumanHealthApp() {
         <Icon name="dumbbell" />
         <span>Today</span>
       </button>
-      <button className={tab === 'progress' ? 'active' : ''} onClick={() => { setActivity(store.loadActivity()); setAssessments(store.loadAssessments()); setReadinessRecords(store.loadReadiness()); setTab('progress'); }}>
-        <Icon name="trend-up" />
-        <span>Lift</span>
-      </button>
-      <button className={tab === 'health' ? 'active' : ''} onClick={() => setTab('health')}>
+      <button className={tab === 'log' ? 'active' : ''} onClick={() => { setActivity(store.loadActivity()); setAssessments(store.loadAssessments()); setReadinessRecords(store.loadReadiness()); setTab('log'); }}>
         <Icon name="activity" />
         <span>Log</span>
       </button>
+      <button className={tab === 'progress' ? 'active' : ''} onClick={() => setTab('progress')}>
+        <Icon name="trend-up" />
+        <span>Lift</span>
+      </button>
       <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style={{display: 'inline-block'}}>
-          <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5"/>
+          <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5" fill="none"/>
           <circle cx="10" cy="10" r="3" fill="currentColor"/>
         </svg>
         <span>You</span>
