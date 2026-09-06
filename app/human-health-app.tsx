@@ -418,7 +418,6 @@ export function HumanHealthApp() {
             <span>{suggestion.message}</span>
           </div>}
           {previous && <div className="previous">LAST: {workingLogs(previous).map(set => formatSet(previous, set, preferences.unitSystem)).join(' · ') || 'No prior sets'}</div>}
-          <div className="set-grid">{Array.from({ length: exercise.sets }).map((_, index) => <div className={index < working.length ? 'set done' : 'set'} key={index}><b>Set {index + 1}</b><span>{working[index] ? `${formatSet(exercise, working[index], preferences.unitSystem)}${working[index].pain ? ' · pain' : ''}${working[index].formQuality === 'poor' ? ' · form broke' : ''}` : exercise.deferred ? 'Deferred' : '—'}</span></div>)}</div>
           {active.status === 'active' && !exerciseComplete && !exercise.deferred && <SetEntry key={`${exercise.id}-${exercise.logs.length}`} defaultWeightKg={defaultWeightKg} defaultReps={exercise.repRange[0]} units={preferences.unitSystem} loadType={exercise.metadata?.loadType} onLog={log => logSet(exerciseIndex, log)}/>}
           {swapIndex === exerciseIndex && <div className="swap-panel"><h3>Swap options</h3>{options.length ? options.map(option => <button key={option.exercise.id} onClick={() => selectSwap(exerciseIndex, option.exercise.id)}><b>{option.exercise.name}{option.preferred ? ' · preferred' : ''}</b><small>{option.reason}</small></button>) : <p className="muted">No compatible replacement available.</p>}<label className="checkbox-row"><input type="checkbox" checked={saveSwap} onChange={event => setSaveSwap(event.target.checked)}/> Remember for {activeGym.name}</label></div>}
         </section>;
@@ -625,68 +624,15 @@ export function HumanHealthApp() {
 
     {tab === 'log' && <>
       <section className="card log-hero">
-        <div className="log-numeral-row">
-          <div className="log-main-stat">
-            <div className="athletic-numeral">{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length}</div>
-            <p className="stat-caption">sessions{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 ? ` · ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) / 60)}h ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) % 60)}m` : ''}</p>
-          </div>
-          {history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 && <div className="mini-bars">
-            <div className="bar" style={{height: '45%', background: 'var(--accent)'}}></div>
-            <div className="bar" style={{height: '65%', background: 'var(--accent)'}}></div>
-            <div className="bar" style={{height: '80%', background: 'var(--accent)'}}></div>
-            <div className="bar" style={{height: '40%', background: 'var(--line)'}}></div>
-          </div>}
+        <div className="log-main-stat">
+          <div className="athletic-numeral">{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length}</div>
+          <p className="stat-caption">sessions{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 ? ` · ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) / 60)}h ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) % 60)}m` : ''}</p>
         </div>
         
-        {history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 && <div className="week-section">
-          <div className="week-header">
-            <span className="week-label">WEEK</span>
-          </div>
-          <div className="week-dots-compact">
-            <div className="day-dot-small empty"><span>M</span></div>
-            <div className="day-dot-small empty"><span>T</span></div>
-            <div className="day-dot-small empty"><span>W</span></div>
-            <div className="day-dot-small empty"><span>T</span></div>
-            <div className="day-dot-small empty"><span>F</span></div>
-            <div className="day-dot-small empty"><span>S</span></div>
-            <div className="day-dot-small empty"><span>S</span></div>
-          </div>
-        </div>}
       </section>
-      
-      <div className="stats-rows">
-        <div className="stat-row">
-          <div className="stat-icon">
-            <Icon name="dumbbell" />
-          </div>
-          <div className="stat-content">
-            <div className="stat-label">Volume</div>
-            <div className="stat-value">{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + e.exercises.reduce((s, ex) => s + workingLogs(ex).length, 0), 0)} sets</div>
-          </div>
-        </div>
-        <div className="stat-row">
-          <div className="stat-icon">
-            <Icon name="timer" />
-          </div>
-          <div className="stat-content">
-            <div className="stat-label">Avg duration</div>
-            <div className="stat-value">{Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) / Math.max(1, history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length))} min</div>
-          </div>
-        </div>
-        <div className="stat-row">
-          <div className="stat-icon">
-            <Icon name="trend-up" />
-          </div>
-          <div className="stat-content">
-            <div className="stat-label">Progress</div>
-            <div className="stat-value">+12% load</div>
-          </div>
-        </div>
-      </div>
 
+      
       <section className="card" aria-labelledby="history-title"><h2 id="history-title">Recent</h2>{history.length ? [...history].reverse().slice(0, 10).map((entry, index) => <div className="history" key={`${entry.completedAt}-${index}`}><b>{title(entry.session)}</b><span>{new Date(entry.completedAt).toLocaleDateString()}</span><small>{entry.exercises.reduce((sum, exercise) => sum + workingLogs(exercise).length, 0)} sets · {Math.floor((entry.startedAt ? new Date(entry.completedAt).getTime() - new Date(entry.startedAt).getTime() : 0) / 60000)} min</small></div>) : <p>No workouts yet.</p>}</section>
-      <CapabilityTrendPanel history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences}/>
-      <CapabilityAssessmentPanel assessments={assessments} onChange={setAssessments}/>
     </>}
 
     {tab === 'progress' && <>
