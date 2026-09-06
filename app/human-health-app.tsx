@@ -11,6 +11,7 @@ import { advanceSession, contextualRollingSession, createScheduleOverride, nextR
 import { store } from '@/lib/storage';
 import { ActivityDose, Assessment, ReadinessRecord, readinessDecisionFromRecords, workoutActivityDoses } from '@/lib/whole-person';
 import { CapabilityTrendPanel } from './capability-trend-panel';
+import { Icon } from './icon-component';
 import { OfflineIndicator } from './offline-indicator';
 import { SettingsPanel } from './settings-panel';
 import { CapabilityAssessmentPanel, SkillProgressPanel, WholePersonDashboard } from './whole-person-dashboard';
@@ -48,7 +49,7 @@ export function HumanHealthApp() {
   const [active, setActive] = useState<Workout | null>(null);
   const [restTimer, setRestTimer] = useState<RestTimerState | null>(null);
   const [now, setNow] = useState(0);
-  const [tab, setTab] = useState<'today' | 'progress' | 'health' | 'settings'>('today');
+  const [tab, setTab] = useState<'today' | 'log' | 'progress' | 'settings'>('today');
   const [notes, setNotes] = useState<string[]>([]);
   const [swapIndex, setSwapIndex] = useState<number | null>(null);
   const [saveSwap, setSaveSwap] = useState(false);
@@ -372,13 +373,23 @@ export function HumanHealthApp() {
     const hasDeferredRequired = active.exercises.some(exercise => !exercise.optional && exercise.deferred);
     const addOptions = exercises.filter(exercise => exerciseIsAvailable(exercise, activeGym, active.unavailableEquipment || []) && !active.exercises.some(item => item.id === exercise.id));
     return <main className="workout-shell">
-      <OfflineIndicator />
       {storageWarning && <div className="connection-state storage-error" role="alert">{storageWarning}</div>}
-      <header className="workout-head"><div><span className="eyebrow">ACTIVE WORKOUT</span><h1>{title(active.session)}</h1><p className="muted">{title(active.mode || 'normal')} · {activeGym.name}</p></div><div className="header-actions">{active.status === 'active' ? <button className="ghost" onClick={pauseWorkout}>Pause</button> : <button className="primary" onClick={resumeWorkout}>Resume</button>}<button className="ghost" disabled={active.status !== 'active'} onClick={() => setShowAddExercise(value => !value)}>Add exercise</button><button className="ghost" onClick={() => finishWorkout('ended-early')}>End early</button></div></header>
-      {active.status !== 'active' && <section className="card paused-card"><h2>{active.status === 'interrupted' ? 'Welcome back' : 'Paused'}</h2><p>Your completed sets are saved. Resume when you're ready — the pause time doesn't count against you.</p><button className="primary" onClick={resumeWorkout}>Resume workout</button></section>}
-      {showAddExercise && active.status === 'active' && <section className="card"><h2>Add an exercise</h2><p className="muted">Extra exercises are optional — they won't make this session "incomplete" if you skip them.</p><div className="choice-grid">{addOptions.map(exercise => <button key={exercise.id} onClick={() => addExercise(exercise.id)}><b>{exercise.name}</b><small>{title(exercise.movement)} · {exercise.repRange[0]}–{exercise.repRange[1]}</small></button>)}</div>{!addOptions.length && <p>No compatible exercises are available with your current equipment.</p>}</section>}
+      <header className="workout-head">
+        <div>
+          <span className="eyebrow"><Icon name="timer" /> {Math.floor((Date.now() - new Date(active.startedAt).getTime()) / 60000)}:{String(Math.floor((Date.now() - new Date(active.startedAt).getTime()) / 1000) % 60).padStart(2, '0')}</span>
+          <h1>{title(active.session)}</h1>
+          <p className="muted">{title(active.mode || 'normal')} · {activeGym.name}</p>
+        </div>
+        <div className="header-actions">
+          {active.status === 'active' ? <button className="ghost" onClick={pauseWorkout}>Pause</button> : <button className="primary" onClick={resumeWorkout}>Resume</button>}
+          <button className="ghost" disabled={active.status !== 'active'} onClick={() => setShowAddExercise(value => !value)}>Add</button>
+          <button className="ghost" onClick={() => finishWorkout('ended-early')}>End</button>
+        </div>
+      </header>
+      {active.status !== 'active' && <section className="card paused-card"><h2>{active.status === 'interrupted' ? 'Welcome back' : 'Paused'}</h2><p>Sets saved. Resume when ready.</p><button className="primary" onClick={resumeWorkout}>Resume</button></section>}
+      {showAddExercise && active.status === 'active' && <section className="card"><h2>Add exercise</h2><div className="choice-grid">{addOptions.map(exercise => <button key={exercise.id} onClick={() => addExercise(exercise.id)}><b>{exercise.name}</b><small>{title(exercise.movement)} · {exercise.repRange[0]}–{exercise.repRange[1]}</small></button>)}</div>{!addOptions.length && <p className="muted">No exercises available with current equipment.</p>}</section>}
       {notes.length > 0 && <div className="coach-note">{notes.join(' ')}</div>}
-      {active.progressionAllowed === false && active.progressionReason && <div className="coach-note"><b>Load progression paused</b><br/>{active.progressionReason}</div>}
+      {active.progressionAllowed === false && active.progressionReason && <div className="coach-note"><b>Progression paused</b> {active.progressionReason}</div>}
       {active.exercises.map((exercise, exerciseIndex) => {
         const previousEntry = [...history].reverse().flatMap(entry => entry.exercises.map(item => ({ item, completedAt: entry.completedAt }))).find(record => record.item.id === exercise.id);
         const previous = previousEntry?.item;
@@ -390,88 +401,148 @@ export function HumanHealthApp() {
         const options = rankedSubstitutions(exercise, activeGym, { unavailable: active.unavailableEquipment || [], preferredId: preferences.swapPreferences[swapPreferenceKey(activeGym.id, exercise.originalId || exercise.id)] });
         const exerciseComplete = working.length >= exercise.sets;
         return <section className={exercise.deferred ? 'exercise deferred' : 'exercise'} key={`${exercise.id}-${exerciseIndex}`}>
-          <div className="exercise-title"><div><span className="pill">{exercise.deferred ? 'deferred' : exercise.optional ? 'optional' : exercise.priority}</span><h2>{exercise.name}</h2><p>{exercise.sets} working sets · {exercise.repRange[0]}–{exercise.repRange[1]} {exercise.repRange[1] > 25 && exercise.movement === 'core' ? 'seconds' : 'reps'}</p>{exercise.originalId && <small>Temporary replacement for {title(exercise.originalId)}; progression remains separate.</small>}</div><div className="exercise-tools"><button className="link" disabled={active.status !== 'active' || exerciseComplete || exercise.deferred} onClick={() => setSwapIndex(swapIndex === exerciseIndex ? null : exerciseIndex)}>Swap</button><button className="link" disabled={active.status !== 'active' || exerciseComplete} onClick={() => toggleDeferred(exerciseIndex)}>{exercise.deferred ? 'Restore' : exercise.optional ? 'Remove/stop' : 'Defer'}</button></div></div>
-          {previous && <div className="previous">Previous: {workingLogs(previous).map(set => formatSet(previous, set, preferences.unitSystem)).join(' · ') || 'No prior working sets'}</div>}
-          <div className="set-grid">{Array.from({ length: exercise.sets }).map((_, index) => <div className={index < working.length ? 'set done' : 'set'} key={index}><b>Set {index + 1}</b><span>{working[index] ? `${formatSet(exercise, working[index], preferences.unitSystem)}${working[index].pain ? ' · discomfort' : ''}${working[index].formQuality === 'poor' ? ' · form issue' : ''}` : exercise.deferred ? 'Deferred' : 'Ready'}</span></div>)}</div>
-          {exercise.logs.some(set => set.warmup) && <p className="muted">Warm-ups logged: {exercise.logs.filter(set => set.warmup).length}</p>}
+          <div className="exercise-title"><div><span className="pill">{exercise.deferred ? 'DEFERRED' : exercise.optional ? 'OPTIONAL' : `SET ${working.length + 1}/${exercise.sets}`}</span><h2>{exercise.name}</h2><p>{exercise.sets} sets · {exercise.repRange[0]}–{exercise.repRange[1]} {exercise.repRange[1] > 25 && exercise.movement === 'core' ? 'sec' : 'reps'}{previousWorkingWeight ? ` · ${kgToDisplay(previousWorkingWeight, preferences.unitSystem).toFixed(0)} ${preferences.unitSystem === 'imperial' ? 'lb' : 'kg'}` : ''}</p></div><div className="exercise-tools"><button className="link" disabled={active.status !== 'active' || exerciseComplete || exercise.deferred} onClick={() => setSwapIndex(swapIndex === exerciseIndex ? null : exerciseIndex)}>Swap</button><button className="link" disabled={active.status !== 'active' || exerciseComplete} onClick={() => toggleDeferred(exerciseIndex)}>{exercise.deferred ? 'Restore' : exercise.optional ? 'Remove' : 'Defer'}</button></div></div>
+          {previous && <div className="previous">Last: {workingLogs(previous).map(set => formatSet(previous, set, preferences.unitSystem)).join(' · ') || 'No prior sets'}</div>}
+          <div className="set-grid">{Array.from({ length: exercise.sets }).map((_, index) => <div className={index < working.length ? 'set done' : 'set'} key={index}><b>Set {index + 1}</b><span>{working[index] ? `${formatSet(exercise, working[index], preferences.unitSystem)}${working[index].pain ? ' · pain' : ''}${working[index].formQuality === 'poor' ? ' · form broke' : ''}` : exercise.deferred ? 'Deferred' : '—'}</span></div>)}</div>
+          {exercise.logs.some(set => set.warmup) && <p className="muted" style={{fontSize: '.8rem', margin: '6px 0'}}>Warm-ups: {exercise.logs.filter(set => set.warmup).length}</p>}
           {active.status === 'active' && !exerciseComplete && !exercise.deferred && <SetEntry key={`${exercise.id}-${exercise.logs.length}`} defaultWeightKg={defaultWeightKg} defaultReps={exercise.repRange[0]} units={preferences.unitSystem} loadType={exercise.metadata?.loadType} onLog={log => logSet(exerciseIndex, log)}/>} 
           {exercise.equipment.includes('barbell') && <PlateHelper targetKg={working.at(-1)?.weight ?? previousWorkingWeight ?? preferences.plateBarKg} preferences={preferences}/>} 
-          <div className="coach-mini">{exercise.deferred ? 'This planned work remains visible and contributes to partial-session accounting.' : suggestion.message}</div>
-          {swapIndex === exerciseIndex && <div className="swap-panel"><h3>Compatible replacements</h3>{options.length ? options.map(option => <button key={option.exercise.id} onClick={() => selectSwap(exerciseIndex, option.exercise.id)}><b>{option.exercise.name}{option.preferred ? ' · preferred' : ''}</b><small>{option.reason}</small></button>) : <p>No compatible replacement is available with this gym and temporary equipment state.</p>}<label className="checkbox-row"><input type="checkbox" checked={saveSwap} onChange={event => setSaveSwap(event.target.checked)}/> Remember selection for {activeGym.name}</label></div>}
+          {suggestion.message && !exercise.deferred && <div className="coach-note" style={{display: 'flex', alignItems: 'flex-start', gap: '8px', marginTop: '10px'}}>
+            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0, marginTop: '2px'}}/>
+            <span>{suggestion.message}</span>
+          </div>}
+          {swapIndex === exerciseIndex && <div className="swap-panel"><h3>Swap options</h3>{options.length ? options.map(option => <button key={option.exercise.id} onClick={() => selectSwap(exerciseIndex, option.exercise.id)}><b>{option.exercise.name}{option.preferred ? ' · preferred' : ''}</b><small>{option.reason}</small></button>) : <p className="muted">No compatible replacement available.</p>}<label className="checkbox-row"><input type="checkbox" checked={saveSwap} onChange={event => setSaveSwap(event.target.checked)}/> Remember for {activeGym.name}</label></div>}
         </section>;
       })}
-      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Finish or defer required exercises first, or use End early.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>{hasDeferredRequired ? 'Finish partial workout' : 'Complete workout'}</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
-      {!requiredHandled && <p className="muted">Complete the required exercises (or defer them) to mark this workout done. You can also end early anytime.</p>}
-      {restTimer && <div className="rest-dock" role="timer" aria-label={`Rest timer: ${restSeconds} seconds remaining`}><b>Rest</b><span>{Math.floor(restSeconds / 60)}:{String(restSeconds % 60).padStart(2, '0')}</span><div className="timer-actions">{restTimer.status === 'running' ? <button onClick={() => setRestTimer(timer => pauseRestTimer(timer))}>Pause</button> : <button onClick={() => setRestTimer(timer => resumeRestTimer(timer))}>Resume</button>}<button onClick={() => setRestTimer(timer => extendRestTimer(timer, 30))}>+30s</button><button onClick={() => setRestTimer(timer => restartRestTimer(timer, preferences.defaultRestSeconds))}>Restart</button><button onClick={() => setRestTimer(null)}>Skip</button></div></div>}
+      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Complete or defer required exercises first.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>{hasDeferredRequired ? 'Finish partial' : 'Complete'}</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
+      {!requiredHandled && <p className="muted">Complete required exercises (or defer) to finish, or end early.</p>}
+      {restTimer && <div className="rest-dock" role="timer" aria-label={`Rest timer: ${restSeconds} seconds remaining`}>
+        <b>REST</b>
+        <span>{Math.floor(restSeconds / 60)}:{String(restSeconds % 60).padStart(2, '0')}</span>
+        <div className="timer-actions">
+          {restTimer.status === 'running' ? <button onClick={() => setRestTimer(timer => pauseRestTimer(timer))}>Pause</button> : <button onClick={() => setRestTimer(timer => resumeRestTimer(timer))}>Resume</button>}
+          <button onClick={() => setRestTimer(timer => extendRestTimer(timer, 30))}>+30s</button>
+          <button onClick={() => setRestTimer(timer => restartRestTimer(timer, preferences.defaultRestSeconds))}>Restart</button>
+          <button onClick={() => setRestTimer(null)}>Skip</button>
+        </div>
+      </div>}
     </main>;
   }
 
   return <main className="app-shell">
-    <OfflineIndicator />
-    {storageWarning && <div className="connection-state storage-error" role="alert">{storageWarning}</div>}
     <header><div><span className="eyebrow">HUMAN HEALTH</span><h1>{title(tab)}</h1></div>{tab !== 'settings' && <select value={gym.id} onChange={event => savePreferences({ ...preferences, selectedGymId: event.target.value })} aria-label="Gym profile">{gyms.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</header>
 
     {tab === 'today' && <>
       {history.length === 0 ? <>
         <section className="hero">
-          <h2>Welcome home</h2>
-          <p>Your first session is ready when you are. A balanced upper-body workout that adapts to your equipment.</p>
+          <span className="pill"><Icon name="dumbbell" /> WELCOME</span>
+          <h2>Upper · 40m</h2>
+          <p>Push, DB, 7 moves</p>
           <div className="hero-actions">
-            <button className="primary" onClick={() => startWorkout()}>Start first workout</button>
+            <button className="primary" onClick={() => startWorkout()}>Start <span style={{marginLeft: '4px'}}>→</span></button>
           </div>
         </section>
 
-        <section className="card">
-          <h3>What to expect</h3>
-          <p className="muted">Sessions adapt to your readiness, time, and available equipment. All data stays private on this device.</p>
-        </section>
-
-        <details>
-          <summary>Before you begin</summary>
-          <p className="muted" style={{marginTop: '12px'}}>This is a fitness lifestyle tool, not medical advice. Make sure your gym profile in Settings matches your available equipment.</p>
-        </details>
+        <div className="metrics" style={{gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '14px'}}>
+          <span>
+            <small><Icon name="energy" style={{marginRight: '4px'}}/>ENERGY</small>
+            <b>—</b>
+          </span>
+          <span>
+            <small><Icon name="sleep" style={{marginRight: '4px'}}/>SLEEP</small>
+            <b>—</b>
+          </span>
+        </div>
       </> : <>
         <section className="hero">
-          <h2>Today</h2>
-          <p>{title(rolling.session)}</p>
-          {latestReadiness.level !== 'normal' && <p className="muted" style={{fontSize: '.88rem', marginTop: '8px'}}>{latestReadiness.reasons[0] || 'Adjusted for recovery'}</p>}
+          <span className="pill"><Icon name="dumbbell" /> {rolling.manual ? 'CUSTOM' : rolling.repeating ? 'REPEAT' : 'UP NEXT'}</span>
+          <h2>{title(rolling.session)} · 40m</h2>
+          <p>{rolling.reason}</p>
+          {latestReadiness.level !== 'normal' && <div className="coach-note" style={{display: 'flex', alignItems: 'flex-start', gap: '8px'}}>
+            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0, marginTop: '2px'}}/>
+            <span><b>{latestReadiness.level === 'recovery' ? 'Recovery mode' : 'Adjusted volume'}</b> {latestReadiness.reasons.join(' ')}</span>
+          </div>}
           <div className="hero-actions">
-            <button className="primary" onClick={() => startWorkout()}>Start workout</button>
+            <button className="primary" onClick={() => startWorkout()}>Start <span style={{marginLeft: '4px'}}>→</span></button>
+            <button className="ghost" onClick={skipRecommendedSessionOnce}>Skip today</button>
           </div>
         </section>
 
-        {(latestReadiness.level === 'reduced' || currentAdjustment.reduce) && <section className="card">
-          <p className="muted" style={{fontSize: '.9rem'}}>Volume adjusted today for recovery. Skip or use original volume in options below.</p>
+        <div className="metrics" style={{gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '14px'}}>
+          <span>
+            <small><Icon name="energy" style={{marginRight: '4px'}}/>ENERGY</small>
+            <b>—</b>
+          </span>
+          <span>
+            <small><Icon name="sleep" style={{marginRight: '4px'}}/>SLEEP</small>
+            <b>—</b>
+          </span>
+        </div>
+
+        {notes.length > 0 && <section className="card" aria-labelledby="coach-insights-title">
+          <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px'}}>
+            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
+            <h2 id="coach-insights-title" style={{margin: 0}}>Coach</h2>
+          </div>
+          {notes.map((note, index) => <p className="coach-note" key={index}>{note}</p>)}
         </section>}
 
-        <details style={{marginBottom: '20px'}}>
-          <summary>Adjust workout</summary>
-          <div className="quick-grid" style={{marginTop: '16px'}}>
-            <button onClick={() => startWorkout({ minutes: 20 })}>20 minutes</button>
-            <button onClick={() => startWorkout({ minutes: 30 })}>30 minutes</button>
+        <section aria-labelledby="plans-changed-title">
+          <h2 id="plans-changed-title">Quick adjust</h2>
+          <div className="quick-grid">
+            <button onClick={() => startWorkout({ minutes: 20 })}>20 min</button>
+            <button onClick={() => startWorkout({ minutes: 30 })}>30 min</button>
             <button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })}>Low energy</button>
-            <button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })}>Different gym</button>
-            {latestReadiness.level === 'reduced' && currentAdjustment.source === 'readiness' && <button onClick={() => startWorkout({ overrideRecoveryVolume: true })}>Original volume</button>}
-            <button onClick={skipRecommendedSessionOnce}>Skip today</button>
+            <button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })}>Travel</button>
           </div>
-        </details>
+        </section>
 
         <WholePersonDashboard history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences} gym={gym} nextSession={rolling.session} onActivityChange={setActivity} onReadinessChange={setReadinessRecords} fuelChecks={fuelChecks} softHabitCompletions={softHabitCompletions} onFuelChecksChange={setFuelChecks} onSoftHabitCompletionsChange={setSoftHabitCompletions}/>
         <SkillProgressPanel gym={gym}/>
       </>}
     </>}
 
-    {tab === 'progress' && <>
-      <section className="card" aria-labelledby="history-title"><h2 id="history-title">Training history</h2>{history.length ? [...history].reverse().map((entry, index) => <div className="history" key={`${entry.completedAt}-${index}`}><b>{title(entry.session)}</b><span>{new Date(entry.completedAt).toLocaleDateString()}</span><small>{entry.exercises.reduce((sum, exercise) => sum + workingLogs(exercise).length, 0)} working sets · {title(entry.status || 'completed')} · {entry.gymId ? title(entry.gymId) : 'legacy gym unknown'}</small></div>) : <p>No completed workouts yet. History, PRs and trends will appear here.</p>}</section>
+    {tab === 'log' && <>
+      <section className="card">
+        <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px'}}>
+          <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
+          <h2 style={{margin: 0}}>This week</h2>
+        </div>
+        <div style={{fontSize: '3rem', fontWeight: '900', letterSpacing: '-0.04em', marginBottom: '8px'}}>{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length}</div>
+        <p className="muted" style={{margin: 0}}>sessions · {Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0))} min</p>
+      </section>
+      <section className="card" aria-labelledby="history-title"><h2 id="history-title">Training history</h2>{history.length ? [...history].reverse().slice(0, 10).map((entry, index) => <div className="history" key={`${entry.completedAt}-${index}`}><b>{title(entry.session)}</b><span>{new Date(entry.completedAt).toLocaleDateString()}</span><small>{entry.exercises.reduce((sum, exercise) => sum + workingLogs(exercise).length, 0)} sets · {title(entry.status || 'completed')}</small></div>) : <p>No workouts yet.</p>}</section>
       <CapabilityTrendPanel history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences}/>
       <CapabilityAssessmentPanel assessments={assessments} onChange={setAssessments}/>
     </>}
 
-    {tab === 'health' && <section className="card"><h2>Health tracking</h2><p>Connect Apple Health, track daily readiness, and see how sleep and activity influence your training recommendations.</p><p><b>Optional:</b> All health data stays local. Import files are processed in your browser, not uploaded to a server.</p><div className="button-row"><a href="/health" className="primary" style={{display: 'inline-block', textDecoration: 'none', textAlign: 'center'}}>Open health tracking</a></div></section>}
+    {tab === 'progress' && <>
+      <section className="card"><h2>Progress & Health</h2><p>Connect Apple Health, track readiness, and see how sleep and activity influence training.</p><div className="button-row"><a href="/health" className="primary" style={{display: 'inline-block', textDecoration: 'none', textAlign: 'center'}}>Open health tracking</a></div></section>
+    </>}
 
     {tab === 'settings' && <SettingsPanel preferences={preferences} gyms={gyms} onChange={savePreferences} onDataCleared={resetLocalState}/>} 
 
-    <nav className="bottom-nav" aria-label="Primary"><button className={tab === 'today' ? 'active' : ''} onClick={() => setTab('today')}>Today</button><button className={tab === 'progress' ? 'active' : ''} onClick={() => { setActivity(store.loadActivity()); setAssessments(store.loadAssessments()); setReadinessRecords(store.loadReadiness()); setTab('progress'); }}>Progress</button><button className={tab === 'health' ? 'active' : ''} onClick={() => setTab('health')}>Health</button><button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>Settings</button></nav>
+    <nav className="bottom-nav" aria-label="Primary">
+      <button className={tab === 'today' ? 'active' : ''} onClick={() => setTab('today')}>
+        <Icon name="dumbbell" />
+        <span>Today</span>
+      </button>
+      <button className={tab === 'log' ? 'active' : ''} onClick={() => { setActivity(store.loadActivity()); setAssessments(store.loadAssessments()); setReadinessRecords(store.loadReadiness()); setTab('log'); }}>
+        <Icon name="activity" />
+        <span>Log</span>
+      </button>
+      <button className={tab === 'progress' ? 'active' : ''} onClick={() => setTab('progress')}>
+        <Icon name="trend-up" />
+        <span>Lift</span>
+      </button>
+      <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style={{display: 'inline-block'}}>
+          <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+          <circle cx="10" cy="10" r="3" fill="currentColor"/>
+        </svg>
+        <span>You</span>
+      </button>
+    </nav>
   </main>;
 }
 
@@ -490,5 +561,5 @@ function SetEntry({ defaultWeightKg, defaultReps, units, loadType, onLog }: { de
 
 function PlateHelper({ targetKg, preferences }: { targetKg: number; preferences: UserPreferences }) {
   const plan = platePlan(targetKg, preferences.plateBarKg, preferences.availablePlatesKg);
-  return <details><summary>Plate calculator · {kgToDisplay(targetKg, preferences.unitSystem).toFixed(1)} {preferences.unitSystem === 'imperial' ? 'lb' : 'kg'}</summary><p>{plan ? plan.length ? `Each side: ${plan.join(' + ')} kg on a ${preferences.plateBarKg} kg bar.` : `Empty ${preferences.plateBarKg} kg bar.` : 'That target cannot be loaded with the configured metric plate denominations.'}</p></details>;
+  return <details><summary>Plates · {kgToDisplay(targetKg, preferences.unitSystem).toFixed(1)} {preferences.unitSystem === 'imperial' ? 'lb' : 'kg'}</summary><p>{plan ? plan.length ? `Each side: ${plan.join(' + ')} kg on ${preferences.plateBarKg} kg bar.` : `Empty ${preferences.plateBarKg} kg bar.` : 'Target cannot be loaded with configured plates.'}</p></details>;
 }
