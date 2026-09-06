@@ -17,10 +17,11 @@ export function OfflineIndicator() {
       window.removeEventListener('storage', sync);
     };
   }, []);
-  const message = !storageReady
-    ? 'Local saving is unavailable · do not rely on this session until browser storage is enabled'
-    : online
-      ? 'Online · local-first workout saving is available'
-      : 'Offline · workout logging remains available on this device';
-  return <div className={!storageReady ? 'connection-state storage-error' : online ? 'connection-state online' : 'connection-state offline'} role={!storageReady ? 'alert' : 'status'} aria-live="polite">{message}</div>;
+  if (!storageReady) {
+    return <div className="connection-state storage-error" role="alert" aria-live="polite">Local saving unavailable — enable browser storage</div>;
+  }
+  if (!online) {
+    return <div className="connection-state offline" role="status" aria-live="polite">Offline — workout logging remains available</div>;
+  }
+  return null;
 }
