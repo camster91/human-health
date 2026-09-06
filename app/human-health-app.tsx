@@ -410,32 +410,47 @@ export function HumanHealthApp() {
     {tab === 'today' && <>
       {history.length === 0 ? <>
         <section className="hero">
-          <h2>Ready to train?</h2>
-          <p>Your first workout is ready: a balanced upper body session that adapts to your equipment and builds a foundation for long-term strength.</p>
+          <h2>Welcome home</h2>
+          <p>Your first session is ready when you are. A balanced upper-body workout that adapts to your equipment.</p>
           <div className="hero-actions">
-            <button className="primary" onClick={() => startWorkout()}>Start your first workout</button>
-            <button className="ghost" onClick={() => setTab('settings')}>Check settings first</button>
+            <button className="primary" onClick={() => startWorkout()}>Start first workout</button>
           </div>
         </section>
 
         <section className="card">
-          <h2>What to expect</h2>
-          <p><b>Evidence-based sessions</b> — Each workout adapts to your readiness, time, and available equipment. No guesswork, just clear reps and sets.</p>
-          <p><b>Private and local</b> — All your data stays on this device. Nothing leaves your browser without your explicit action.</p>
-          <p><b>Life-adaptive training</b> — Traveling? Low energy? Short on time? The coach adjusts volume and exercise selection to keep you moving forward.</p>
+          <h3>What to expect</h3>
+          <p className="muted">Sessions adapt to your readiness, time, and available equipment. All data stays private on this device.</p>
         </section>
 
-        <section className="card">
-          <h2>Before you begin</h2>
-          <p>This is a fitness lifestyle tool, not medical advice. It won't diagnose injuries, dose medication, or replace conversations with your healthcare team.</p>
-          <p className="muted">Make sure your current gym profile in Settings matches your available equipment — the app will recommend exercises you can actually perform today.</p>
-        </section>
+        <details>
+          <summary>Before you begin</summary>
+          <p className="muted" style={{marginTop: '12px'}}>This is a fitness lifestyle tool, not medical advice. Make sure your gym profile in Settings matches your available equipment.</p>
+        </details>
       </> : <>
-        <section className="hero"><span className="pill">{rolling.manual ? 'YOUR SESSION CHOICE' : rolling.repeating ? 'RECOMMENDED REPEAT' : 'NEXT SESSION'}</span><h2>{title(rolling.session)}</h2><p>{rolling.reason}</p>{latestReadiness.level !== 'normal' && <div className="coach-note"><b>{latestReadiness.level === 'recovery' ? 'Recovery-first context' : 'Reduced-readiness context'}</b><br/>{latestReadiness.reasons.join(' ')}</div>}<div className="hero-actions"><button className="primary" onClick={() => startWorkout()}>Start recommended workout</button>{latestReadiness.level === 'reduced' && currentAdjustment.source === 'readiness' && <button className="ghost" onClick={() => startWorkout({ overrideRecoveryVolume: true })}>Use original set volume</button>}<button className="ghost" onClick={skipRecommendedSessionOnce}>Skip once</button><button className="ghost" onClick={() => setTab('settings')}>Adjust plan</button></div>{latestReadiness.level === 'reduced' && <p className="muted">Choosing original set volume does not re-enable automatic load progression. Pain/illness recovery-first constraints cannot be overridden here.</p>}</section>
+        <section className="hero">
+          <h2>Today</h2>
+          <p>{title(rolling.session)}</p>
+          {latestReadiness.level !== 'normal' && <p className="muted" style={{fontSize: '.88rem', marginTop: '8px'}}>{latestReadiness.reasons[0] || 'Adjusted for recovery'}</p>}
+          <div className="hero-actions">
+            <button className="primary" onClick={() => startWorkout()}>Start workout</button>
+          </div>
+        </section>
 
-        {notes.length > 0 && <section className="card" aria-labelledby="coach-insights-title"><h2 id="coach-insights-title">Coach insights</h2>{notes.map((note, index) => <p className="coach-note" key={index}>{note}</p>)}<div className="coach-note"><b>Current training context</b><br/>{recentLoad.message}</div></section>}
+        {(latestReadiness.level === 'reduced' || currentAdjustment.reduce) && <section className="card">
+          <p className="muted" style={{fontSize: '.9rem'}}>Volume adjusted today for recovery. Skip or use original volume in options below.</p>
+        </section>}
 
-        <section aria-labelledby="plans-changed-title"><h2 id="plans-changed-title">Plans changed?</h2><div className="quick-grid"><button onClick={() => startWorkout({ minutes: 20 })}>20 minutes</button><button onClick={() => startWorkout({ minutes: 30 })}>30 minutes</button><button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })}>Low energy</button><button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })}>Different gym</button></div></section>
+        <details style={{marginBottom: '20px'}}>
+          <summary>Adjust workout</summary>
+          <div className="quick-grid" style={{marginTop: '16px'}}>
+            <button onClick={() => startWorkout({ minutes: 20 })}>20 minutes</button>
+            <button onClick={() => startWorkout({ minutes: 30 })}>30 minutes</button>
+            <button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })}>Low energy</button>
+            <button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })}>Different gym</button>
+            {latestReadiness.level === 'reduced' && currentAdjustment.source === 'readiness' && <button onClick={() => startWorkout({ overrideRecoveryVolume: true })}>Original volume</button>}
+            <button onClick={skipRecommendedSessionOnce}>Skip today</button>
+          </div>
+        </details>
 
         <WholePersonDashboard history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences} gym={gym} nextSession={rolling.session} onActivityChange={setActivity} onReadinessChange={setReadinessRecords}/>
         <SkillProgressPanel gym={gym}/>

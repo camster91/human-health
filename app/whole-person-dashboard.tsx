@@ -154,39 +154,48 @@ export function WholePersonDashboard({
 
   return <>
     {persistenceNotice && <div className="connection-state" role="status" aria-live="polite">{persistenceNotice}</div>}
-    <section className="card" aria-labelledby="readiness-title">
-      <h2 id="readiness-title">Daily readiness check</h2>
-      <p className="muted">Optional check that adjusts training recommendations based on your recovery state.</p>
-      <div className="settings-grid">
-        <label><b>Sleep quality</b><select value={check.sleep || 'okay'} onChange={event => setCheck({ ...check, sleep: event.target.value as ReadinessInput['sleep'] })}><option value="poor">Poor</option><option value="okay">Okay</option><option value="good">Good</option></select></label>
+    
+    <section className="card">
+      <h3>How are you feeling?</h3>
+      <p className="muted" style={{fontSize: '.88rem', marginBottom: '14px'}}>Optional 10-second check-in</p>
+      <div className="chip-grid" style={{gridTemplateColumns: 'repeat(3, minmax(0, 1fr))'}}>
+        <button className={check.subjective === 5 ? 'active' : ''} onClick={() => setCheck({ ...check, subjective: 5 })}>Great</button>
+        <button className={check.subjective === 3 ? 'active' : ''} onClick={() => setCheck({ ...check, subjective: 3 })}>Okay</button>
+        <button className={check.subjective === 1 ? 'active' : ''} onClick={() => setCheck({ ...check, subjective: 1 })}>Low</button>
+      </div>
+      <div style={{display: 'flex', gap: '8px', marginTop: '12px'}}>
+        <button className="primary" style={{flex: 1}} onClick={saveCheck}>Save</button>
+        <button className="ghost" onClick={() => setCheck(latestInput || { sleep: 'okay', fatigue: 'moderate', soreness: 'low', stress: 'moderate', subjective: 3 })}>Skip</button>
+      </div>
+      {decision.level !== 'normal' && <p className="muted" style={{fontSize: '.86rem', marginTop: '12px'}}>{decision.reasons[0] || 'Adjusted for recovery'}</p>}
+    </section>
+
+    {readinessRecords.length > 0 && <details style={{marginBottom: '20px'}}>
+      <summary>Detailed check-in</summary>
+      <div className="settings-grid" style={{marginTop: '16px'}}>
+        <label><b>Sleep</b><select value={check.sleep || 'okay'} onChange={event => setCheck({ ...check, sleep: event.target.value as ReadinessInput['sleep'] })}><option value="poor">Poor</option><option value="okay">Okay</option><option value="good">Good</option></select></label>
         <label><b>Sleep hours</b><input type="number" min="0" max="16" step="0.25" value={check.sleepHours ?? ''} onChange={event => setCheck({ ...check, sleepHours: event.target.value ? Number(event.target.value) : undefined })}/></label>
         <label><b>Fatigue</b><select value={check.fatigue || 'moderate'} onChange={event => setCheck({ ...check, fatigue: event.target.value as ReadinessInput['fatigue'] })}><option value="low">Low</option><option value="moderate">Moderate</option><option value="high">High</option></select></label>
         <label><b>Soreness</b><select value={check.soreness || 'low'} onChange={event => setCheck({ ...check, soreness: event.target.value as ReadinessInput['soreness'] })}><option value="low">Low</option><option value="moderate">Moderate</option><option value="high">High</option></select></label>
-        <label><b>Stress</b><select value={check.stress || 'moderate'} onChange={event => setCheck({ ...check, stress: event.target.value as ReadinessInput['stress'] })}><option value="low">Low</option><option value="moderate">Moderate</option><option value="high">High</option></select></label>
-        <label><b>How ready do you feel?</b><select value={check.subjective || 3} onChange={event => setCheck({ ...check, subjective: Number(event.target.value) as ReadinessInput['subjective'] })}><option value="1">1 — very low</option><option value="2">2 — low</option><option value="3">3 — okay</option><option value="4">4 — good</option><option value="5">5 — excellent</option></select></label>
       </div>
-      <div className="toggle-grid"><button className={check.pain ? 'active warning' : ''} aria-pressed={Boolean(check.pain)} onClick={() => setCheck({ ...check, pain: !check.pain })}>Unusual pain {check.pain ? 'flagged' : 'not flagged'}</button><button className={check.illness ? 'active warning' : ''} aria-pressed={Boolean(check.illness)} onClick={() => setCheck({ ...check, illness: !check.illness })}>Illness {check.illness ? 'flagged' : 'not flagged'}</button><button className="primary" onClick={saveCheck}>Save check-in</button></div>
-      <div className="coach-note"><b>{decision.level === 'normal' ? 'Normal training available' : decision.level === 'reduced' ? 'Conservative training recommended' : 'Exercise suggestions paused'}</b><br/>{safetyHold ? 'Pain or illness was flagged. This app cannot determine whether exercise is safe. Please use your established care plan or consult appropriate healthcare professionals before resuming training. ' : ''}{decision.reasons.join(' ') || 'No major recovery constraints are recorded in the latest check-in.'}</div>
-      <p className="muted"><b>Seven-day pattern:</b> {trend.message}</p>
-    </section>
+      <div className="toggle-grid" style={{marginTop: '12px'}}><button className={check.pain ? 'active warning' : ''} onClick={() => setCheck({ ...check, pain: !check.pain })}>Pain {check.pain ? '✓' : ''}</button><button className={check.illness ? 'active warning' : ''} onClick={() => setCheck({ ...check, illness: !check.illness })}>Illness {check.illness ? '✓' : ''}</button></div>
+    </details>}
 
-    <section className="card" aria-labelledby="cardio-title">
-      <h2 id="cardio-title">Cardio activity</h2>
-      <div className="metrics"><span><b>Weekly coverage</b>{Math.round(coverage.equivalentMinutes)}/{preferences.cardioTargetMinutes} min</span><span><b>Remaining</b>{Math.round(coverage.remaining)} min</span><span><b>Recent lower work</b>{load.lowerSets} sets</span><span><b>Hard cardio</b>{load.hardCardioMinutes} min / 36h</span></div>
-      <div className="coach-note"><b>{safetyHold ? 'Cardio suggestions paused' : 'Recommended next session'}</b><br/>{prescription.message}{!safetyHold && load.lowerBodyRecent && load.lowerSets >= 6 ? ' Hard intervals are deferred to protect recent lower-body work.' : ''}</div>
-      {!safetyHold && <div className="choice-grid">{cardioChoices.map(choice => <button key={choice.type} onClick={() => { setCardioMinutes(choice.minutes); setCardioEffort(choice.effort); }}><b>{choice.name}</b><small>{choice.minutes} min · {choice.effort}</small><span>{choice.description}</span></button>)}</div>}
-      <div className="settings-grid">
-        <label><b>Minutes</b><input type="number" min="1" max="240" value={cardioMinutes} onChange={event => setCardioMinutes(Math.max(1, Number(event.target.value)))}/></label>
-        <label><b>Effort</b><select value={cardioEffort} onChange={event => setCardioEffort(event.target.value as typeof cardioEffort)}><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
-        <label><b>Modality</b><select value={cardioModality} onChange={event => setCardioModality(event.target.value as CardioModality)}>{modalities.map(item => <option key={item} value={item}>{title(item)}</option>)}</select></label>
-        <label><b>Type</b><select value={cardioKind} onChange={event => setCardioKind(event.target.value as typeof cardioKind)}><option value="planned">Planned exercise</option><option value="incidental">Daily movement</option></select></label>
+    {!safetyHold && <details style={{marginBottom: '20px'}}>
+      <summary>Cardio & movement</summary>
+      <div style={{marginTop: '16px'}}>
+        <div className="metrics" style={{marginBottom: '16px'}}>
+          <span><b>{Math.round(coverage.equivalentMinutes)}</b>min this week</span>
+          <span style={{opacity: .6}}><b>{preferences.cardioTargetMinutes}</b>target</span>
+        </div>
+        <div className="settings-grid">
+          <label><b>Minutes</b><input type="number" min="1" max="240" value={cardioMinutes} onChange={event => setCardioMinutes(Math.max(1, Number(event.target.value)))}/></label>
+          <label><b>Type</b><select value={cardioModality} onChange={event => setCardioModality(event.target.value as CardioModality)}>{modalities.map(item => <option key={item} value={item}>{title(item)}</option>)}</select></label>
+        </div>
+        <button className="primary" style={{marginTop: '12px'}} onClick={logCardio}>Log activity</button>
       </div>
-      <button className="primary" onClick={logCardio}>Log activity I chose</button>
-      <p className="muted">Logging records activity you chose to do; it is not exercise clearance or a recommendation. Only planned cardio contributes to the aerobic target.</p>
-    </section>
+    </details>}
 
-    <details>
-      <summary><h2 style={{cursor: 'pointer', display: 'inline-block'}}>Additional activities</h2></summary>
 
     <section className="card" aria-labelledby="minimum-day-title">
       <h2 id="minimum-day-title">Quick workout option</h2>
@@ -222,7 +231,6 @@ export function WholePersonDashboard({
       {athleticProgressions.map(item => <div className="history" key={item.metricId}><b>{item.metricId === 'jump' ? 'Jump / power' : 'Single-leg balance'} · {title(item.level)}</b><span>{item.decision.evidenceCount} tests</span><small>{item.decision.message} Current work: {athleticLevelSession(item.metricId, item.level).join(' · ')}</small>{item.decision.action !== 'hold' && <button className="link" onClick={() => applyAthleticProgression(item.metricId, item.decision.nextLevel)}>Apply {item.decision.action}: {title(item.decision.nextLevel)}</button>}</div>)}
     </section>}
 
-    </details>
   </>;
 }
 
