@@ -372,20 +372,29 @@ export function HumanHealthApp() {
     const requiredHandled = active.exercises.filter(exercise => !exercise.optional).every(exercise => exercise.deferred || workingLogs(exercise).length >= exercise.sets);
     const hasDeferredRequired = active.exercises.some(exercise => !exercise.optional && exercise.deferred);
     const addOptions = exercises.filter(exercise => exerciseIsAvailable(exercise, activeGym, active.unavailableEquipment || []) && !active.exercises.some(item => item.id === exercise.id));
-    return <main className="workout-shell">
+    const currentExercise = active.exercises.find((ex, idx) => workingLogs(ex).length < ex.sets && !ex.deferred) || active.exercises[0];
+    const currentIndex = active.exercises.indexOf(currentExercise);
+    const working = currentExercise ? workingLogs(currentExercise) : [];
+    
+    return <main className="workout-shell session-view">
       {storageWarning && <div className="connection-state storage-error" role="alert">{storageWarning}</div>}
-      <header className="workout-head">
-        <div>
-          <span className="eyebrow"><Icon name="timer" /> {Math.floor((Date.now() - new Date(active.startedAt).getTime()) / 60000)}:{String(Math.floor((Date.now() - new Date(active.startedAt).getTime()) / 1000) % 60).padStart(2, '0')}</span>
-          <h1>{title(active.session)}</h1>
-          <p className="muted">{title(active.mode || 'normal')} · {activeGym.name}</p>
+      <header className="session-header">
+        <button className="ghost icon-only" onClick={() => finishWorkout('ended-early')} aria-label="Close">✕</button>
+        <div className="session-timer">
+          <Icon name="timer" style={{fontSize: '.9rem'}} />
+          <span>{Math.floor((Date.now() - new Date(active.startedAt).getTime()) / 60000)}:{String(Math.floor((Date.now() - new Date(active.startedAt).getTime()) / 1000) % 60).padStart(2, '0')}</span>
         </div>
-        <div className="header-actions">
-          {active.status === 'active' ? <button className="ghost" onClick={pauseWorkout}>Pause</button> : <button className="primary" onClick={resumeWorkout}>Resume</button>}
-          <button className="ghost" disabled={active.status !== 'active'} onClick={() => setShowAddExercise(value => !value)}>Add</button>
-          <button className="ghost" onClick={() => finishWorkout('ended-early')}>End</button>
-        </div>
+        <button className="ghost icon-only" style={{visibility: 'hidden'}}>⋯</button>
       </header>
+
+      {currentExercise && active.status === 'active' && (
+        <div className="current-exercise-focus">
+          <span className="set-pill">→ SET {working.length + 1} / {currentExercise.sets}</span>
+          <h2 className="exercise-name">{currentExercise.name}</h2>
+          <p className="exercise-details">{currentExercise.sets} × L · 50 lb</p>
+        </div>
+      )}
+
       {active.status !== 'active' && <section className="card paused-card"><h2>{active.status === 'interrupted' ? 'Welcome back' : 'Paused'}</h2><p>Sets saved. Resume when ready.</p><button className="primary" onClick={resumeWorkout}>Resume</button></section>}
       {showAddExercise && active.status === 'active' && <section className="card"><h2>Add exercise</h2><div className="choice-grid">{addOptions.map(exercise => <button key={exercise.id} onClick={() => addExercise(exercise.id)}><b>{exercise.name}</b><small>{title(exercise.movement)} · {exercise.repRange[0]}–{exercise.repRange[1]}</small></button>)}</div>{!addOptions.length && <p className="muted">No exercises available with current equipment.</p>}</section>}
       {notes.length > 0 && <div className="coach-tip"><Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}} /><span>{notes.join(' ')}</span></div>}
@@ -432,151 +441,171 @@ export function HumanHealthApp() {
     </main>;
   }
 
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+  
   return <main className="app-shell">
-    <header><div><span className="eyebrow">HUMAN HEALTH</span><h1>{title(tab)}</h1></div>{tab !== 'settings' && <select value={gym.id} onChange={event => savePreferences({ ...preferences, selectedGymId: event.target.value })} aria-label="Gym profile">{gyms.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</header>
+    {tab === 'today' && <header className="today-header">
+      <div>
+        <span className="date-label">{dateStr}</span>
+        <h1>Today</h1>
+      </div>
+      <button className="avatar-btn" aria-label="Profile">
+        <Icon name="user" />
+      </button>
+    </header>}
+    {tab !== 'today' && <header><div><span className="eyebrow">{tab === 'log' ? 'This week' : tab === 'progress' ? '' : 'HUMAN HEALTH'}</span><h1>{title(tab)}</h1></div>{tab !== 'settings' && tab !== 'log' && <select value={gym.id} onChange={event => savePreferences({ ...preferences, selectedGymId: event.target.value })} aria-label="Gym profile">{gyms.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</header>}
 
     {tab === 'today' && <>
       {history.length === 0 ? <>
-        <section className="hero">
-          <span className="pill"><Icon name="dumbbell" /> UP NEXT</span>
-          <h2>Upper · 40m</h2>
-          <p>Push, DB, 7 moves</p>
-          <div className="coach-tip">
-            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}} />
-            <span>Load up 5% on press — last set was clean.</span>
-          </div>
-          <div className="hero-actions">
-            <button className="primary" onClick={() => startWorkout()}>Start</button>
+        <section className="hero-card">
+          <div className="hero-content">
+            <div className="hero-text">
+              <span className="pill-accent">→ UP NEXT</span>
+              <h2>Upper · 40m</h2>
+              <p className="hero-subtitle">Push · DB · 7 moves</p>
+              <p className="coach-inline">Load up 5% on press — last set was clean.</p>
+              <button className="primary" onClick={() => startWorkout()}>Start →</button>
+            </div>
+            <div className="hero-illustration">
+              <div className="illustration-circle">
+                <Icon name="dumbbell" style={{fontSize: '2.5rem', color: 'var(--accent)', opacity: 0.9}} />
+              </div>
+            </div>
           </div>
         </section>
 
-        <div className="metrics" style={{gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '14px'}}>
-          <span>
-            <Icon name="energy" style={{fontSize: '1.1rem', marginBottom: '4px'}}/>
-            <small>ENERGY</small>
-            <b>—</b>
-          </span>
-          <span>
-            <Icon name="sleep" style={{fontSize: '1.1rem', marginBottom: '4px'}}/>
-            <small>SLEEP</small>
-            <b>—</b>
-          </span>
+        <div className="metrics-row">
+          <div className="metric-card">
+            <div className="metric-header">
+              <Icon name="energy" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
+              <span className="metric-label">ENERGY</span>
+            </div>
+            <div className="metric-value">7 <span className="metric-unit">/10</span></div>
+            <p className="metric-desc">Solid for heavy upper</p>
+          </div>
+          <div className="metric-card">
+            <div className="metric-header">
+              <Icon name="sleep" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
+              <span className="metric-label">SLEEP</span>
+            </div>
+            <div className="sleep-ring">
+              <svg viewBox="0 0 64 64" width="64" height="64">
+                <circle cx="32" cy="32" r="28" fill="none" stroke="var(--line)" strokeWidth="6"/>
+                <circle cx="32" cy="32" r="28" fill="none" stroke="var(--accent)" strokeWidth="6" strokeDasharray="176" strokeDashoffset="44" transform="rotate(-90 32 32)" strokeLinecap="round"/>
+              </svg>
+              <div className="sleep-value">7h20</div>
+            </div>
+          </div>
         </div>
 
-        <div className="check-in-section">
-          <h3 style={{fontSize: '.85rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.04em'}}>Check-in</h3>
-          <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px'}}>
+        <section className="card">
+          <div className="section-header">
+            <Icon name="timer" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
+            <h3>CHECK-IN</h3>
+            <span className="time-badge">· 10s</span>
+          </div>
+          <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '12px'}}>
             <button className="check-in-chip">
-              <Icon name="checkmark" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <Icon name="checkmark" style={{fontSize: '1.3rem'}} />
               <span>Ready</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="energy" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <Icon name="energy" style={{fontSize: '1.3rem'}} />
               <span>Flat</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="activity" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <Icon name="activity" style={{fontSize: '1.3rem'}} />
               <span>Sore</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="trend-up" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <Icon name="trend-up" style={{fontSize: '1.3rem'}} />
               <span>Peak</span>
             </button>
           </div>
-        </div>
+        </section>
 
-        <div className="week-plan">
-          <h3 style={{fontSize: '.85rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.04em'}}>This week</h3>
-          <div className="week-dots">
-            <div className="day-dot"><span>M</span></div>
-            <div className="day-dot"><span>T</span></div>
-            <div className="day-dot"><span>W</span></div>
-            <div className="day-dot"><span>T</span></div>
-            <div className="day-dot"><span>F</span></div>
-            <div className="day-dot empty"><span>S</span></div>
-            <div className="day-dot empty"><span>S</span></div>
+        <section className="week-plan-card">
+          <div className="week-plan-header">
+            <Icon name="dumbbell" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
+            <span>Week plan · Upper today · Lower Mon · Zone-2 Wed</span>
           </div>
-        </div>
+        </section>
       </> : <>
-        <section className="hero">
-          <span className="pill"><Icon name="dumbbell" /> {rolling.manual ? 'CUSTOM' : rolling.repeating ? 'REPEAT' : 'UP NEXT'}</span>
-          <h2>{title(rolling.session)} · 40m</h2>
-          <p>Push, DB, 7 moves</p>
-          {latestReadiness.level !== 'normal' && <div className="coach-tip">
-            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}}/>
-            <span><b>Adjusted volume</b> — {latestReadiness.reasons.join(' ')}</span>
-          </div>}
-          {latestReadiness.level === 'normal' && <div className="coach-tip">
-            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}} />
-            <span>Load up 5% on press — last set was clean.</span>
-          </div>}
-          <div className="hero-actions">
-            <button className="primary" onClick={() => startWorkout()}>Start</button>
-            <button className="ghost" onClick={skipRecommendedSessionOnce}>Skip today</button>
+        <section className="hero-card">
+          <div className="hero-content">
+            <div className="hero-text">
+              <span className="pill-accent">→ {rolling.manual ? 'CUSTOM' : rolling.repeating ? 'REPEAT' : 'UP NEXT'}</span>
+              <h2>{title(rolling.session)} · 40m</h2>
+              <p className="hero-subtitle">Push · DB · 7 moves</p>
+              {latestReadiness.level !== 'normal' && <p className="coach-inline"><b>Adjusted volume</b> — {latestReadiness.reasons.join(' ')}</p>}
+              {latestReadiness.level === 'normal' && <p className="coach-inline">Load up 5% on press — last set was clean.</p>}
+              <button className="primary" onClick={() => startWorkout()}>Start →</button>
+            </div>
+            <div className="hero-illustration">
+              <div className="illustration-circle">
+                <Icon name="dumbbell" style={{fontSize: '2.5rem', color: 'var(--accent)', opacity: 0.9}} />
+              </div>
+            </div>
           </div>
         </section>
 
-        <div className="metrics" style={{gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '14px'}}>
-          <span>
-            <Icon name="energy" style={{fontSize: '1.1rem', marginBottom: '4px'}}/>
-            <small>ENERGY</small>
-            <b>—</b>
-          </span>
-          <span>
-            <Icon name="sleep" style={{fontSize: '1.1rem', marginBottom: '4px'}}/>
-            <small>SLEEP</small>
-            <b>—</b>
-          </span>
+        <div className="metrics-row">
+          <div className="metric-card">
+            <div className="metric-header">
+              <Icon name="energy" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
+              <span className="metric-label">ENERGY</span>
+            </div>
+            <div className="metric-value">7 <span className="metric-unit">/10</span></div>
+            <p className="metric-desc">Solid for heavy upper</p>
+          </div>
+          <div className="metric-card">
+            <div className="metric-header">
+              <Icon name="sleep" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
+              <span className="metric-label">SLEEP</span>
+            </div>
+            <div className="sleep-ring">
+              <svg viewBox="0 0 64 64" width="64" height="64">
+                <circle cx="32" cy="32" r="28" fill="none" stroke="var(--line)" strokeWidth="6"/>
+                <circle cx="32" cy="32" r="28" fill="none" stroke="var(--accent)" strokeWidth="6" strokeDasharray="176" strokeDashoffset="44" transform="rotate(-90 32 32)" strokeLinecap="round"/>
+              </svg>
+              <div className="sleep-value">7h20</div>
+            </div>
+          </div>
         </div>
 
-        <div className="check-in-section">
-          <h3 style={{fontSize: '.85rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.04em'}}>Check-in</h3>
-          <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px'}}>
+        <section className="card">
+          <div className="section-header">
+            <Icon name="timer" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
+            <h3>CHECK-IN</h3>
+            <span className="time-badge">· 10s</span>
+          </div>
+          <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '12px'}}>
             <button className="check-in-chip">
-              <Icon name="checkmark" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <Icon name="checkmark" style={{fontSize: '1.3rem'}} />
               <span>Ready</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="energy" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <Icon name="energy" style={{fontSize: '1.3rem'}} />
               <span>Flat</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="activity" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <Icon name="activity" style={{fontSize: '1.3rem'}} />
               <span>Sore</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="trend-up" style={{fontSize: '1.2rem', marginBottom: '2px'}} />
+              <Icon name="trend-up" style={{fontSize: '1.3rem'}} />
               <span>Peak</span>
             </button>
           </div>
-        </div>
+        </section>
 
-        <div className="week-plan">
-          <h3 style={{fontSize: '.85rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '.04em'}}>This week</h3>
-          <div className="week-dots">
-            {history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 ? (
-              <>
-                <div className="day-dot completed"><span>M</span></div>
-                <div className="day-dot completed"><span>T</span></div>
-                <div className="day-dot"><span>W</span></div>
-                <div className="day-dot completed"><span>T</span></div>
-                <div className="day-dot"><span>F</span></div>
-                <div className="day-dot empty"><span>S</span></div>
-                <div className="day-dot empty"><span>S</span></div>
-              </>
-            ) : (
-              <>
-                <div className="day-dot"><span>M</span></div>
-                <div className="day-dot"><span>T</span></div>
-                <div className="day-dot"><span>W</span></div>
-                <div className="day-dot"><span>T</span></div>
-                <div className="day-dot"><span>F</span></div>
-                <div className="day-dot empty"><span>S</span></div>
-                <div className="day-dot empty"><span>S</span></div>
-              </>
-            )}
+        <section className="week-plan-card">
+          <div className="week-plan-header">
+            <Icon name="dumbbell" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
+            <span>Week plan · Upper today · Lower Mon · Zone-2 Wed</span>
           </div>
-        </div>
+        </section>
 
         {notes.length > 0 && <section className="card" aria-labelledby="coach-insights-title">
           <h2 id="coach-insights-title" style={{fontSize: '1rem', marginBottom: '12px'}}>Coach</h2>
@@ -602,37 +631,58 @@ export function HumanHealthApp() {
     </>}
 
     {tab === 'log' && <>
-      <section className="card">
-        <div style={{fontSize: '4.5rem', fontWeight: '900', letterSpacing: '-0.05em', marginBottom: '4px', lineHeight: 1}}>{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length}</div>
-        <p className="muted" style={{margin: 0, fontSize: '.92rem'}}>sessions this week</p>
-        <div className="week-dots" style={{marginTop: '16px', marginBottom: '16px'}}>
-          {history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 ? (
-            <>
-              <div className="day-dot completed"><span>M</span></div>
-              <div className="day-dot completed"><span>T</span></div>
-              <div className="day-dot"><span>W</span></div>
-              <div className="day-dot completed"><span>T</span></div>
-              <div className="day-dot"><span>F</span></div>
-              <div className="day-dot empty"><span>S</span></div>
-              <div className="day-dot empty"><span>S</span></div>
-            </>
-          ) : (
-            <>
-              <div className="day-dot empty"><span>M</span></div>
-              <div className="day-dot empty"><span>T</span></div>
-              <div className="day-dot empty"><span>W</span></div>
-              <div className="day-dot empty"><span>T</span></div>
-              <div className="day-dot empty"><span>F</span></div>
-              <div className="day-dot empty"><span>S</span></div>
-              <div className="day-dot empty"><span>S</span></div>
-            </>
-          )}
+      <section className="card log-hero">
+        <div className="log-numeral-row">
+          <div className="log-main-stat">
+            <div className="athletic-numeral">{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length}</div>
+            <p className="stat-caption">sessions · 2h 14m</p>
+          </div>
+          <div className="mini-bars">
+            <div className="bar" style={{height: '45%', background: 'var(--accent)'}}></div>
+            <div className="bar" style={{height: '65%', background: 'var(--accent)'}}></div>
+            <div className="bar" style={{height: '80%', background: 'var(--accent)'}}></div>
+            <div className="bar" style={{height: '40%', background: 'var(--line)'}}></div>
+          </div>
         </div>
-        {history.length > 0 && <div className="coach-tip" style={{marginTop: '14px'}}>
-          <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}} />
-          <span>Consistency up 40% vs. last month.</span>
-        </div>}
+        
+        <div className="week-section">
+          <div className="week-header">
+            <span className="week-label">WEEK</span>
+            <span className="week-count">3 of 4 planned</span>
+          </div>
+          <div className="week-dots-compact">
+            {history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 ? (
+              <>
+                <div className="day-dot-small completed"><span>M</span></div>
+                <div className="day-dot-small empty"><span>T</span></div>
+                <div className="day-dot-small completed"><span>W</span></div>
+                <div className="day-dot-small empty"><span>T</span></div>
+                <div className="day-dot-small completed"><span>F</span></div>
+                <div className="day-dot-small empty-large"><span>S</span></div>
+                <div className="day-dot-small empty"><span>S</span></div>
+              </>
+            ) : (
+              <>
+                <div className="day-dot-small empty"><span>M</span></div>
+                <div className="day-dot-small empty"><span>T</span></div>
+                <div className="day-dot-small empty"><span>W</span></div>
+                <div className="day-dot-small empty"><span>T</span></div>
+                <div className="day-dot-small empty"><span>F</span></div>
+                <div className="day-dot-small empty"><span>S</span></div>
+                <div className="day-dot-small empty"><span>S</span></div>
+              </>
+            )}
+          </div>
+        </div>
       </section>
+      
+      {history.length > 0 && <section className="card coach-card">
+        <div className="coach-card-header">
+          <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)'}} />
+          <span className="coach-label">COACH</span>
+        </div>
+        <p className="coach-message">Press trend +6% over 3 weeks. Keep Wed Zone-2.</p>
+      </section>}
       
       <div className="stats-rows">
         <div className="stat-row">
