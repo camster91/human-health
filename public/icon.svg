@@ -1,8 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">Human Health</title>
-  <desc id="desc">A rounded orange app icon with an abstract human and heartbeat.</desc>
-  <rect width="512" height="512" rx="112" fill="#c84712"/>
-  <circle cx="256" cy="151" r="57" fill="#fff"/>
-  <path d="M149 360c17-88 61-132 107-132s90 44 107 132" fill="none" stroke="#fff" stroke-width="46" stroke-linecap="round"/>
-  <path d="M105 303h76l24-48 43 99 34-65 25 43h100" fill="none" stroke="#171a1f" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="app-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#d95821;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#c84712;stop-opacity:1" />
+    </linearGradient>
+    <filter id="icon-shadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Rounded square background -->
+  <rect width="192" height="192" rx="42" fill="url(#app-gradient)"/>
+  
+  <!-- Dumbbell icon centered and scaled -->
+  <g transform="translate(46, 66)" filter="url(#icon-shadow)">
+    <!-- Left weight -->
+    <rect x="0" y="15" width="15" height="30" rx="2" fill="white" opacity="0.95"/>
+    <!-- Right weight -->
+    <rect x="85" y="15" width="15" height="30" rx="2" fill="white" opacity="0.95"/>
+    <!-- Bar -->
+    <rect x="15" y="22.5" width="70" height="15" rx="4" fill="white" opacity="0.98"/>
+    <!-- Left endcap -->
+    <path d="M-3 22.5H0V37.5H-3C-4.65685 37.5 -6 36.1569 -6 34.5V25.5C-6 23.8431 -4.65685 22.5 -3 22.5Z" fill="white" opacity="0.95"/>
+    <!-- Right endcap -->
+    <path d="M100 22.5H103C104.657 22.5 106 23.8431 106 25.5V34.5C106 36.1569 104.657 37.5 103 37.5H100V22.5Z" fill="white" opacity="0.95"/>
+  </g>
 </svg>

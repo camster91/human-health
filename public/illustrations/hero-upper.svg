@@ -1,0 +1,36 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Soft gradient background circle -->
+  <defs>
+    <linearGradient id="peach-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fff3ed;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#ffe5d8;stop-opacity:0.95" />
+      <stop offset="100%" style="stop-color:#ffd4c0;stop-opacity:0.9" />
+    </linearGradient>
+    <filter id="soft-shadow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
+      <feOffset dx="0" dy="4" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.3"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Outer glow circle -->
+  <circle cx="80" cy="80" r="75" fill="url(#peach-gradient)" opacity="0.6"/>
+  
+  <!-- Main circle -->
+  <circle cx="80" cy="80" r="60" fill="url(#peach-gradient)" filter="url(#soft-shadow)"/>
+  
+  <!-- Dumbbell icon -->
+  <g transform="translate(50, 50)">
+    <path d="M10 25H15V35H10V25Z" fill="#c84712" opacity="0.9"/>
+    <path d="M45 25H50 V35H45V25Z" fill="#c84712" opacity="0.9"/>
+    <rect x="15" y="27.5" width="30" height="5" rx="2" fill="#c84712" opacity="0.95"/>
+    <path d="M8 27.5H10V32.5H8C7.17157 32.5 6.5 31.8284 6.5 31V29C6.5 28.1716 7.17157 27.5 8 27.5Z" fill="#c84712" opacity="0.9"/>
+    <path d="M50 27.5H52C52.8284 27.5 53.5 28.1716 53.5 29V31C53.5 31.8284 52.8284 32.5 52 32.5H50V27.5Z" fill="#c84712" opacity="0.9"/>
+  </g>
+</svg>
