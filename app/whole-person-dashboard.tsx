@@ -44,7 +44,6 @@ export function WholePersonDashboard({
   onReadinessChange,
   fuelChecks,
   softHabitCompletions,
-  enabledHabits,
   onFuelChecksChange,
   onSoftHabitCompletionsChange,
 }: {
@@ -59,7 +58,6 @@ export function WholePersonDashboard({
   onReadinessChange: (next: ReadinessRecord[]) => void;
   fuelChecks?: any[];
   softHabitCompletions?: any[];
-  enabledHabits?: any[];
   onFuelChecksChange?: (next: any[]) => void;
   onSoftHabitCompletionsChange?: (next: any[]) => void;
 }) {
@@ -242,11 +240,12 @@ export function WholePersonDashboard({
       {athleticProgressions.map(item => <div className="history" key={item.metricId}><b>{item.metricId === 'jump' ? 'Jump / power' : 'Single-leg balance'} · {title(item.level)}</b><span>{item.decision.evidenceCount} tests</span><small>{item.decision.message} Current work: {athleticLevelSession(item.metricId, item.level).join(' · ')}</small>{item.decision.action !== 'hold' && <button className="link" onClick={() => applyAthleticProgression(item.metricId, item.decision.nextLevel)}>Apply {item.decision.action}: {title(item.decision.nextLevel)}</button>}</div>)}
     </section>}
 
-    {fuelChecks && softHabitCompletions && enabledHabits && onFuelChecksChange && onSoftHabitCompletionsChange && (
+    {(preferences.enableFuelTracking || preferences.enabledSoftHabits.length > 0) && fuelChecks && softHabitCompletions && onFuelChecksChange && onSoftHabitCompletionsChange && (
       <FuelHabitsPanel 
         fuelChecks={fuelChecks} 
         softHabitCompletions={softHabitCompletions} 
-        enabledHabits={enabledHabits}
+        enabledHabits={preferences.enabledSoftHabits}
+        enableFuelTracking={preferences.enableFuelTracking}
         onFuelChecksChange={onFuelChecksChange}
         onSoftHabitCompletionsChange={onSoftHabitCompletionsChange}
       />

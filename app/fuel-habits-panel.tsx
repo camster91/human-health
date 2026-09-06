@@ -22,12 +22,14 @@ export function FuelHabitsPanel({
   fuelChecks,
   softHabitCompletions,
   enabledHabits,
+  enableFuelTracking,
   onFuelChecksChange,
   onSoftHabitCompletionsChange,
 }: {
   fuelChecks: FuelCheck[];
   softHabitCompletions: SoftHabitCompletion[];
   enabledHabits: SoftHabitId[];
+  enableFuelTracking: boolean;
   onFuelChecksChange: (next: FuelCheck[]) => void;
   onSoftHabitCompletionsChange: (next: SoftHabitCompletion[]) => void;
 }) {
@@ -75,17 +77,13 @@ export function FuelHabitsPanel({
   return <>
     {persistenceNotice && <div className="connection-state" role="status" aria-live="polite">{persistenceNotice}</div>}
 
-    <details style={{ marginBottom: '20px' }}>
+    {enableFuelTracking && <details style={{ marginBottom: '20px' }}>
       <summary>Fuel check</summary>
       <div style={{ marginTop: '16px' }}>
-        <p className="muted" style={{ fontSize: '.88rem', marginBottom: '14px' }}>
-          Optional quick check-in. Light awareness without tracking every meal.
-        </p>
         
         {hasFuelToday ? (
           <div className="coach-note" style={{ marginBottom: '16px' }}>
-            <b>Already checked in today</b><br />
-            You can log another check if the day changed, but one is enough. Skip is always allowed.
+            <b>Already logged today</b>
           </div>
         ) : null}
 
@@ -100,7 +98,7 @@ export function FuelHabitsPanel({
           <input 
             value={fuelNote} 
             onChange={event => setFuelNote(event.target.value)} 
-            placeholder="Light note about today's fuel"
+            placeholder="Optional note"
             maxLength={500}
           />
         </label>
@@ -117,13 +115,13 @@ export function FuelHabitsPanel({
 
         <p className="muted" style={{ fontSize: '.86rem' }}>{fuelSummary}</p>
       </div>
-    </details>
+    </details>}
 
     {enabledHabits.length > 0 && (
       <details style={{ marginBottom: '20px' }}>
         <summary>Rituals</summary>
         <div style={{ marginTop: '16px' }}>
-          <p className="muted" style={{ fontSize: '.88rem', marginBottom: '14px' }}>
+          <p className="muted" style={{ fontSize: '.86rem', marginBottom: '12px' }}>
             {habitMessage}
           </p>
 
@@ -151,18 +149,14 @@ export function FuelHabitsPanel({
           })}
 
           <label className="wide-field" style={{ marginTop: '12px' }}>
-            Optional note
+            Note (optional)
             <input 
               value={habitNote} 
               onChange={event => setHabitNote(event.target.value)} 
-              placeholder="How did it feel?"
+              placeholder="Optional note"
               maxLength={300}
             />
           </label>
-
-          <p className="muted" style={{ fontSize: '.86rem', marginTop: '12px' }}>
-            Missing days are fine—this is about building, not perfection.
-          </p>
         </div>
       </details>
     )}

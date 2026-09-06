@@ -56,7 +56,6 @@ export function HumanHealthApp() {
   const [storageWarning, setStorageWarning] = useState('');
   const [fuelChecks, setFuelChecks] = useState<any[]>([]);
   const [softHabitCompletions, setSoftHabitCompletions] = useState<any[]>([]);
-  const [enabledHabits, setEnabledHabits] = useState<any[]>([]);
 
   useEffect(() => {
     const loadedPreferences = store.loadPreferences();
@@ -74,7 +73,6 @@ export function HumanHealthApp() {
     setReadinessRecords(store.loadReadiness());
     setFuelChecks(store.loadFuelChecks());
     setSoftHabitCompletions(store.loadSoftHabitCompletions());
-    setEnabledHabits([]);
     setActive(restoredActive);
     setRestTimer(pauseRestTimer(savedTimer));
     setNow(Date.now());
@@ -458,7 +456,7 @@ export function HumanHealthApp() {
           </div>
         </details>
 
-        <WholePersonDashboard history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences} gym={gym} nextSession={rolling.session} onActivityChange={setActivity} onReadinessChange={setReadinessRecords} fuelChecks={fuelChecks} softHabitCompletions={softHabitCompletions} enabledHabits={enabledHabits} onFuelChecksChange={setFuelChecks} onSoftHabitCompletionsChange={setSoftHabitCompletions}/>
+        <WholePersonDashboard history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences} gym={gym} nextSession={rolling.session} onActivityChange={setActivity} onReadinessChange={setReadinessRecords} fuelChecks={fuelChecks} softHabitCompletions={softHabitCompletions} onFuelChecksChange={setFuelChecks} onSoftHabitCompletionsChange={setSoftHabitCompletions}/>
         <SkillProgressPanel gym={gym}/>
       </>}
     </>}

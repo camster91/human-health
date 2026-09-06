@@ -98,8 +98,7 @@ describe('fuel tracking', () => {
 
   test('generates summary with no checks', () => {
     const summary = fuelCheckSummary([], 7);
-    expect(summary).toContain('No fuel checks');
-    expect(summary).toContain('Skip is always allowed');
+    expect(summary).toBe('No checks logged in the last 7 days.');
   });
 
   test('generates summary with some checks', () => {
@@ -110,8 +109,7 @@ describe('fuel tracking', () => {
     ];
 
     const summary = fuelCheckSummary(checks, 7, now);
-    expect(summary).toContain('2/7 days');
-    expect(summary).toContain('gentle noticing');
+    expect(summary).toBe('2/7 days logged.');
   });
 
   test('respects day boundaries for device-local time', () => {

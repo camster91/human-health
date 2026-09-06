@@ -123,11 +123,11 @@ export function habitPattern(
 
   let message = '';
   if (filtered.length === 0) {
-    message = 'No recent practice. Start anytime—there\'s no "behind" here.';
+    message = `No completions in the last ${totalDays} days.`;
   } else if (dayKeys.size === totalDays) {
-    message = `Amazing—${totalDays} days in a row. Remember: rest is also practice.`;
+    message = `${totalDays}/${totalDays} days completed.`;
   } else {
-    message = `${dayKeys.size} days with practice in the last ${totalDays}. You're building something real.`;
+    message = `${dayKeys.size}/${totalDays} days completed.`;
   }
 
   return {
@@ -181,7 +181,7 @@ export function enabledHabitsSummary(
 }
 
 /**
- * Grace-based message for habit overview. NO red "you missed today" language.
+ * Factual message for habit overview. NO red "you missed today" language.
  */
 export function habitOverviewMessage(
   completions: SoftHabitCompletion[],
@@ -189,7 +189,7 @@ export function habitOverviewMessage(
   now = new Date()
 ): string {
   if (enabledHabits.length === 0) {
-    return 'Enable rituals in settings to track gentle daily practices.';
+    return 'No rituals enabled.';
   }
 
   const todayCompletions = enabledHabits.filter(habitId =>
@@ -197,12 +197,12 @@ export function habitOverviewMessage(
   );
 
   if (todayCompletions.length === 0) {
-    return `${enabledHabits.length} rituals available. Check in when it feels right.`;
+    return `${enabledHabits.length} rituals enabled. 0 completed today.`;
   }
 
   if (todayCompletions.length === enabledHabits.length) {
-    return `All ${enabledHabits.length} rituals complete today. Well done.`;
+    return `${enabledHabits.length}/${enabledHabits.length} rituals completed today.`;
   }
 
-  return `${todayCompletions.length} of ${enabledHabits.length} rituals complete today. Nice work.`;
+  return `${todayCompletions.length}/${enabledHabits.length} rituals completed today.`;
 }

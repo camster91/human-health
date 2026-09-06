@@ -91,8 +91,8 @@ export function fuelCheckSummary(checks: FuelCheck[], days = 7, now?: Date): str
   const { daysWithChecks } = recentFuelChecks(checks, { days, now });
   
   if (daysWithChecks === 0) {
-    return `No fuel checks in the last ${days} days. Skip is always allowed.`;
+    return `No checks logged in the last ${days} days.`;
   }
 
-  return `${daysWithChecks}/${days} days with fuel awareness. Gaps are fine—this is about gentle noticing, not perfection.`;
+  return `${daysWithChecks}/${days} days logged.`;
 }

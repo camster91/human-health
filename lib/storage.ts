@@ -212,6 +212,8 @@ export function validateTrainingExport(value: unknown, now = new Date()): HumanH
     skillAssessments: validateSkillAssessments(candidate.skillAssessments, now),
     preferences: validatePreferences(candidate.preferences),
     scheduleEvents: validateScheduleEvents(candidate.scheduleEvents, now),
+    fuelChecks: Array.isArray(candidate.fuelChecks) ? candidate.fuelChecks : undefined,
+    softHabitCompletions: Array.isArray(candidate.softHabitCompletions) ? candidate.softHabitCompletions : undefined,
   };
 }
 

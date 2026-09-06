@@ -43,16 +43,15 @@ describe('soft habits', () => {
     expect(pattern.daysWithCompletions).toBe(3);
     expect(pattern.totalDays).toBe(7);
     expect(pattern.completions).toHaveLength(3);
-    expect(pattern.message).toContain('3 days with practice');
+    expect(pattern.message).toBe('3/7 days completed.');
   });
 
-  test('shows grace-based message when no completions', () => {
+  test('shows factual message when no completions', () => {
     const pattern = habitPattern([], 'morning-movement', { days: 7 });
-    expect(pattern.message).toContain('No recent practice');
-    expect(pattern.message).toContain('no "behind" here');
+    expect(pattern.message).toBe('No completions in the last 7 days.');
   });
 
-  test('shows encouragement when all days complete', () => {
+  test('shows factual message when all days complete', () => {
     const now = new Date('2026-09-06T12:00:00Z');
     const completions: SoftHabitCompletion[] = Array.from({ length: 7 }, (_, i) =>
       completeSoftHabit('breath-pause', undefined, new Date(Date.UTC(2026, 8, 6 - i, 12)))
@@ -60,8 +59,7 @@ describe('soft habits', () => {
 
     const pattern = habitPattern(completions, 'breath-pause', { now, days: 7 });
     expect(pattern.daysWithCompletions).toBe(7);
-    expect(pattern.message).toContain('7 days in a row');
-    expect(pattern.message).toContain('rest is also practice');
+    expect(pattern.message).toBe('7/7 days completed.');
   });
 
   test('detects completion for today', () => {
@@ -102,7 +100,7 @@ describe('soft habits', () => {
 
   test('generates overview message when no habits enabled', () => {
     const message = habitOverviewMessage([], []);
-    expect(message).toContain('Enable rituals');
+    expect(message).toBe('No rituals enabled.');
   });
 
   test('generates overview message when nothing completed today', () => {
@@ -112,8 +110,7 @@ describe('soft habits', () => {
     ];
 
     const message = habitOverviewMessage(completions, ['morning-movement', 'breath-pause'], now);
-    expect(message).toContain('2 rituals available');
-    expect(message).toContain('when it feels right');
+    expect(message).toBe('2 rituals enabled. 0 completed today.');
   });
 
   test('generates overview message when some completed today', () => {
@@ -123,8 +120,7 @@ describe('soft habits', () => {
     ];
 
     const message = habitOverviewMessage(completions, ['morning-movement', 'breath-pause'], now);
-    expect(message).toContain('1 of 2 rituals complete');
-    expect(message).toContain('Nice work');
+    expect(message).toBe('1/2 rituals completed today.');
   });
 
   test('generates overview message when all completed today', () => {
@@ -135,8 +131,7 @@ describe('soft habits', () => {
     ];
 
     const message = habitOverviewMessage(completions, ['morning-movement', 'breath-pause'], now);
-    expect(message).toContain('All 2 rituals complete');
-    expect(message).toContain('Well done');
+    expect(message).toBe('2/2 rituals completed today.');
   });
 
   test('counts unique days correctly with multiple completions same day', () => {
