@@ -10,7 +10,7 @@ import { extendRestTimer, pauseRestTimer, remainingRestSeconds, restartRestTimer
 import { advanceSession, contextualRollingSession, createScheduleOverride, nextRollingSession } from '@/lib/schedule';
 import { store } from '@/lib/storage';
 import { ActivityDose, Assessment, ReadinessRecord, readinessDecisionFromRecords, workoutActivityDoses } from '@/lib/whole-person';
-import { Icon } from './icon-component';
+import { Icon, HeroIllustration, EmptyStateIllustration } from './icon-component';
 import { OfflineIndicator } from './offline-indicator';
 import { SettingsPanel } from './settings-panel';
 import { SkillProgressPanel, WholePersonDashboard } from './whole-person-dashboard';
@@ -474,9 +474,7 @@ export function HumanHealthApp() {
               <button className="primary" onClick={() => startWorkout()}>Start →</button>
             </div>
             <div className="hero-illustration">
-              <div className="illustration-circle">
-                <Icon name="dumbbell" style={{fontSize: '2.5rem', color: 'var(--accent)', opacity: 0.9}} />
-              </div>
+              <HeroIllustration type="upper" />
             </div>
           </div>
         </section>
@@ -506,19 +504,19 @@ export function HumanHealthApp() {
           </div>
           <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '12px'}}>
             <button className="check-in-chip">
-              <Icon name="checkmark" style={{fontSize: '1.3rem'}} />
+              <Icon name="ready" style={{fontSize: '1.8rem'}} />
               <span>Ready</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="energy" style={{fontSize: '1.3rem'}} />
+              <Icon name="flat" style={{fontSize: '1.8rem'}} />
               <span>Flat</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="activity" style={{fontSize: '1.3rem'}} />
+              <Icon name="sore" style={{fontSize: '1.8rem'}} />
               <span>Sore</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="trend-up" style={{fontSize: '1.3rem'}} />
+              <Icon name="peak" style={{fontSize: '1.8rem'}} />
               <span>Peak</span>
             </button>
           </div>
@@ -541,9 +539,7 @@ export function HumanHealthApp() {
               <button className="primary" onClick={() => startWorkout()}>Start →</button>
             </div>
             <div className="hero-illustration">
-              <div className="illustration-circle">
-                <Icon name="dumbbell" style={{fontSize: '2.5rem', color: 'var(--accent)', opacity: 0.9}} />
-              </div>
+              <HeroIllustration type="upper" />
             </div>
           </div>
         </section>
@@ -573,19 +569,19 @@ export function HumanHealthApp() {
           </div>
           <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '12px'}}>
             <button className="check-in-chip">
-              <Icon name="checkmark" style={{fontSize: '1.3rem'}} />
+              <Icon name="ready" style={{fontSize: '1.8rem'}} />
               <span>Ready</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="energy" style={{fontSize: '1.3rem'}} />
+              <Icon name="flat" style={{fontSize: '1.8rem'}} />
               <span>Flat</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="activity" style={{fontSize: '1.3rem'}} />
+              <Icon name="sore" style={{fontSize: '1.8rem'}} />
               <span>Sore</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="trend-up" style={{fontSize: '1.3rem'}} />
+              <Icon name="peak" style={{fontSize: '1.8rem'}} />
               <span>Peak</span>
             </button>
           </div>
@@ -631,7 +627,7 @@ export function HumanHealthApp() {
       </section>
 
       
-      <section className="card" aria-labelledby="history-title"><h2 id="history-title">Recent</h2>{history.length ? [...history].reverse().slice(0, 10).map((entry, index) => <div className="history" key={`${entry.completedAt}-${index}`}><b>{title(entry.session)}</b><span>{new Date(entry.completedAt).toLocaleDateString()}</span><small>{entry.exercises.reduce((sum, exercise) => sum + workingLogs(exercise).length, 0)} sets · {Math.floor((entry.startedAt ? new Date(entry.completedAt).getTime() - new Date(entry.startedAt).getTime() : 0) / 60000)} min</small></div>) : <p>No workouts yet.</p>}</section>
+      <section className="card" aria-labelledby="history-title"><h2 id="history-title">Recent</h2>{history.length ? [...history].reverse().slice(0, 10).map((entry, index) => <div className="history" key={`${entry.completedAt}-${index}`}><b>{title(entry.session)}</b><span>{new Date(entry.completedAt).toLocaleDateString()}</span><small>{entry.exercises.reduce((sum, exercise) => sum + workingLogs(exercise).length, 0)} sets · {Math.floor((entry.startedAt ? new Date(entry.completedAt).getTime() - new Date(entry.startedAt).getTime() : 0) / 60000)} min</small></div>) : <div style={{padding: '20px 0', textAlign: 'center'}}><EmptyStateIllustration type="log" style={{marginBottom: '16px'}}/><p style={{color: 'var(--muted)', fontSize: '.94rem', margin: '0'}}>No workouts yet. Start your first session from Today.</p></div>}</section>
     </>}
 
     {tab === 'progress' && <>
@@ -642,19 +638,19 @@ export function HumanHealthApp() {
 
     <nav className="bottom-nav" aria-label="Primary">
       <button className={tab === 'today' ? 'active' : ''} onClick={() => setTab('today')}>
-        <Icon name="dumbbell" />
+        <Icon name={tab === 'today' ? 'today-filled' : 'today-outline'} style={{fontSize: '1.5rem'}} />
         <span>Today</span>
       </button>
       <button className={tab === 'progress' ? 'active' : ''} onClick={() => setTab('progress')}>
-        <Icon name="trend-up" />
+        <Icon name={tab === 'progress' ? 'lift-filled' : 'lift-outline'} style={{fontSize: '1.5rem'}} />
         <span>Lift</span>
       </button>
       <button className={tab === 'log' ? 'active' : ''} onClick={() => { setActivity(store.loadActivity()); setAssessments(store.loadAssessments()); setReadinessRecords(store.loadReadiness()); setTab('log'); }}>
-        <Icon name="activity" />
+        <Icon name={tab === 'log' ? 'log-filled' : 'log-outline'} style={{fontSize: '1.5rem'}} />
         <span>Log</span>
       </button>
       <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>
-        <Icon name="user" />
+        <Icon name={tab === 'settings' ? 'you-filled' : 'you-outline'} style={{fontSize: '1.5rem'}} />
         <span>You</span>
       </button>
     </nav>

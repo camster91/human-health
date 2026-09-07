@@ -1,0 +1,20 @@
+<svg width="160" height="120" viewBox="0 0 160 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="metric-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f8f8f9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e5e5ea;stop-opacity:0.6" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Empty metric bars -->
+  <rect x="20" y="80" width="25" height="30" rx="4" fill="#e5e5ea" opacity="0.4"/>
+  <rect x="50" y="60" width="25" height="50" rx="4" fill="#e5e5ea" opacity="0.5"/>
+  <rect x="80" y="45" width="25" height="65" rx="4" fill="#e5e5ea" opacity="0.6"/>
+  <rect x="110" y="70" width="25" height="40" rx="4" fill="#e5e5ea" opacity="0.5"/>
+  
+  <!-- Subtle dash line -->
+  <line x1="20" y1="30" x2="140" y2="30" stroke="#e5e5ea" stroke-width="2" stroke-dasharray="4 4" opacity="0.5"/>
+  
+  <!-- Icon placeholder -->
+  <circle cx="80" cy="15" r="10" fill="#e5e5ea" opacity="0.3"/>
+</svg>
