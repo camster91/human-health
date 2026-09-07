@@ -5,7 +5,7 @@ import { consistencyPattern, normalizedStrengthTrend, recoveryPattern, strengthT
 import { HistoryEntry } from '@/lib/domain';
 import { recentTrainingLoad } from '@/lib/load-management';
 import { readinessDecisionFromRecords, ActivityDose, ReadinessRecord } from '@/lib/whole-person';
-import { Icon } from './icon-component';
+import { Icon, EmptyStateIllustration } from './icon-component';
 
 function title(value: string) {
   return value.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
@@ -38,7 +38,7 @@ export function LiftProgressPanel({
   if (history.length === 0) {
     return <section className="card">
       <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-        <Icon name="lift-outline" style={{ fontSize: '3rem', opacity: 0.3, marginBottom: '16px' }} />
+        <EmptyStateIllustration type="metric" style={{ marginBottom: '16px' }} />
         <h2 style={{ fontSize: '1.1rem', marginBottom: '8px' }}>No training data yet</h2>
         <p className="muted">Complete your first workout to see strength progress, volume trends, and readiness patterns here.</p>
       </div>
@@ -175,10 +175,7 @@ export function LiftProgressPanel({
     </section>
 
     <section className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Recent Sessions</h2>
-        <a href="/health" style={{ fontSize: '.88rem', color: 'var(--accent)', textDecoration: 'none' }}>View all →</a>
-      </div>
+      <h2 style={{ fontSize: '1.1rem', marginBottom: '12px' }}>Recent Sessions</h2>
       {recentSessions.map((entry, index) => {
         const date = new Date(entry.completedAt);
         const totalSets = entry.exercises.reduce((sum, ex) => sum + ex.logs.filter(log => !log.warmup).length, 0);

@@ -160,8 +160,7 @@ describe('recentReflections', () => {
 describe('reflectionSummary', () => {
   test('returns no-data message for empty array', () => {
     const summary = reflectionSummary([]);
-    expect(summary).toContain('No reflections yet');
-    expect(summary).toContain('optional');
+    expect(summary).toBe('No reflections yet.');
   });
   
   test('returns building-practice message for all completed', () => {
@@ -172,7 +171,7 @@ describe('reflectionSummary', () => {
     ];
     const summary = reflectionSummary(reflections, 4);
     expect(summary).toContain('3 reflections');
-    expect(summary).toContain('Building a practice');
+    expect(summary).toContain('in 4 weeks');
   });
   
   test('returns no-pressure message for all skipped', () => {
@@ -181,8 +180,8 @@ describe('reflectionSummary', () => {
       createWeeklyReflection(undefined),
     ];
     const summary = reflectionSummary(reflections, 4);
+    expect(summary).toContain('2 prompts viewed');
     expect(summary).toContain('none completed');
-    expect(summary).toContain('No pressure');
   });
   
   test('returns mixed message for some completed', () => {
@@ -195,7 +194,6 @@ describe('reflectionSummary', () => {
     const summary = reflectionSummary(reflections, 4);
     expect(summary).toContain('2 reflections');
     expect(summary).toContain('2 skipped');
-    expect(summary).toContain('Both are fine');
   });
 });
 

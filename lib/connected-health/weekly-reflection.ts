@@ -113,21 +113,21 @@ export function reflectionSummary(reflections: WeeklyReflection[], weeks = 4): s
   const recent = recentReflections(reflections, { weeks });
   
   if (recent.length === 0) {
-    return `No reflections yet. Weekly check-ins are optional—skip weeks when it doesn't feel useful.`;
+    return `No reflections yet.`;
   }
   
   const withResponse = recent.filter(r => r.response && r.response.length > 0).length;
   const skipped = recent.length - withResponse;
   
   if (withResponse === 0) {
-    return `${recent.length} prompt${recent.length === 1 ? '' : 's'} viewed, none completed. No pressure—reflecting only helps if it serves you.`;
+    return `${recent.length} prompt${recent.length === 1 ? '' : 's'} viewed, none completed.`;
   }
   
   if (withResponse === recent.length) {
-    return `${withResponse} reflection${withResponse === 1 ? '' : 's'} in ${weeks} weeks. Building a practice.`;
+    return `${withResponse} reflection${withResponse === 1 ? '' : 's'} in ${weeks} weeks.`;
   }
   
-  return `${withResponse} reflection${withResponse === 1 ? '' : 's'}, ${skipped} skipped. Both are fine—this is about awareness, not perfection.`;
+  return `${withResponse} reflection${withResponse === 1 ? '' : 's'}, ${skipped} skipped.`;
 }
 
 /**

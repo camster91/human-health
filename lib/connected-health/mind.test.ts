@@ -118,8 +118,7 @@ describe('hasMindCheckToday', () => {
 describe('mindCheckSummary', () => {
   test('returns no-data message for empty array', () => {
     const summary = mindCheckSummary([]);
-    expect(summary).toContain('No check-ins yet');
-    expect(summary).toContain('optional');
+    expect(summary).toBe('No check-ins yet.');
   });
   
   test('returns calm-focused message for mostly calm days', () => {
@@ -130,8 +129,8 @@ describe('mindCheckSummary', () => {
       createMindCheck('calm', undefined, new Date('2026-09-04T10:00:00Z')),
     ];
     const summary = mindCheckSummary(checks, 7);
-    expect(summary).toContain('Mostly calm');
-    expect(summary).toContain("You're building something real");
+    expect(summary).toContain('4 check-ins');
+    expect(summary).toContain('mostly calm');
   });
   
   test('returns overwhelmed-support message for difficult week', () => {
@@ -142,9 +141,9 @@ describe('mindCheckSummary', () => {
       createMindCheck('overwhelmed', undefined, new Date('2026-09-04T10:00:00Z')),
     ];
     const summary = mindCheckSummary(checks, 7);
-    expect(summary).toContain('Overwhelmed days are more than half');
-    expect(summary).toContain('Rest is also practice');
-    expect(summary).toContain('No judgment');
+    expect(summary).toContain('4 check-ins');
+    expect(summary).toContain('more overwhelmed days than calm');
+    expect(summary).toContain('rest counts');
   });
   
   test('returns neutral message for mixed week', () => {
@@ -154,8 +153,7 @@ describe('mindCheckSummary', () => {
       createMindCheck('calm', undefined, new Date('2026-09-05T10:00:00Z')),
     ];
     const summary = mindCheckSummary(checks, 7);
-    expect(summary).toContain('Building awareness without pressure');
-    expect(summary).toContain('Gaps are fine');
+    expect(summary).toBe('3 check-ins this week.');
   });
 });
 

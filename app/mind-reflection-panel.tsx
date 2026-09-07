@@ -77,13 +77,13 @@ export function MindReflectionPanel({
       <summary>Mind check-in</summary>
       <div style={{ marginTop: '16px' }}>
         <p className="muted" style={{ fontSize: '.88rem', marginBottom: '14px' }}>
-          Optional. Short mental state awareness—not therapy, not diagnosis. Skip days when it doesn't serve you.
+          Optional.
         </p>
         
         {hasMindToday ? (
           <div style={{ padding: '16px', background: 'var(--card-bg)', borderRadius: '8px', marginBottom: '12px' }}>
             <Icon name="checkmark" style={{ fontSize: '1.2rem', color: 'var(--accent)', marginBottom: '8px' }} />
-            <p style={{ fontSize: '.9rem', margin: 0 }}>Already checked in today. Rest is also practice.</p>
+            <p style={{ fontSize: '.9rem', margin: 0 }}>Logged today.</p>
           </div>
         ) : (
           <>
@@ -120,12 +120,12 @@ export function MindReflectionPanel({
             
             <label style={{ display: 'block', marginBottom: '12px' }}>
               <span style={{ fontSize: '.88rem', display: 'block', marginBottom: '6px' }}>
-                <b>Note (optional)</b> · 300 char max
+                <b>Optional note</b> · 300 char max
               </span>
               <textarea
                 value={mindNote}
                 onChange={e => setMindNote(e.target.value)}
-                placeholder="What's on your mind?"
+                placeholder=""
                 maxLength={300}
                 rows={3}
                 style={{ 
@@ -139,14 +139,9 @@ export function MindReflectionPanel({
               />
             </label>
             
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="primary" style={{ flex: 1 }} onClick={saveMindCheck}>
-                Save check-in
-              </button>
-              <button className="ghost" onClick={() => { setMindNote(''); }}>
-                Skip today
-              </button>
-            </div>
+            <button className="primary" style={{ width: '100%' }} onClick={saveMindCheck}>
+              Log check-in
+            </button>
           </>
         )}
         
@@ -160,13 +155,13 @@ export function MindReflectionPanel({
       <summary>Weekly reflection</summary>
       <div style={{ marginTop: '16px' }}>
         <p className="muted" style={{ fontSize: '.88rem', marginBottom: '14px' }}>
-          One prompt per week. Skip weeks when reflecting doesn't feel useful—no pressure, no judgment.
+          One prompt per week.
         </p>
         
         {hasReflectionWeek ? (
           <div style={{ padding: '16px', background: 'var(--card-bg)', borderRadius: '8px', marginBottom: '12px' }}>
             <Icon name="checkmark" style={{ fontSize: '1.2rem', color: 'var(--accent)', marginBottom: '8px' }} />
-            <p style={{ fontSize: '.9rem', margin: 0 }}>This week's reflection is complete. See you next week.</p>
+            <p style={{ fontSize: '.9rem', margin: 0 }}>This week complete.</p>
           </div>
         ) : (
           <>
@@ -184,12 +179,12 @@ export function MindReflectionPanel({
             
             <label style={{ display: 'block', marginBottom: '12px' }}>
               <span style={{ fontSize: '.88rem', display: 'block', marginBottom: '6px' }}>
-                <b>Your thoughts (optional)</b> · 500 char max
+                <b>Optional</b> · 500 char max
               </span>
               <textarea
                 value={reflectionResponse}
                 onChange={e => setReflectionResponse(e.target.value)}
-                placeholder="Take a moment to reflect..."
+                placeholder=""
                 maxLength={500}
                 rows={4}
                 style={{ 
@@ -205,10 +200,10 @@ export function MindReflectionPanel({
             
             <div style={{ display: 'flex', gap: '8px' }}>
               <button className="primary" style={{ flex: 1 }} onClick={saveReflection}>
-                Save reflection
+                Save
               </button>
               <button className="ghost" onClick={skipReflection}>
-                Skip this week
+                Skip
               </button>
             </div>
           </>

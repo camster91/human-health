@@ -72,7 +72,7 @@ export function mindCheckSummary(checks: MindCheck[], days = 7): string {
   const recent = recentMindChecks(checks, { days });
   
   if (recent.length === 0) {
-    return `No check-ins yet. Mental state awareness is optional—check in when it feels right.`;
+    return `No check-ins yet.`;
   }
   
   const counts: Record<MindCheckLevel, number> = {
@@ -89,14 +89,14 @@ export function mindCheckSummary(checks: MindCheck[], days = 7): string {
   const totalDays = recent.length;
   
   if (overwhelmedDays > totalDays / 2) {
-    return `${totalDays} check-ins. Overwhelmed days are more than half. Rest is also practice. No judgment here—skip days when checking in doesn't serve you.`;
+    return `${totalDays} check-ins · more overwhelmed days than calm — rest counts.`;
   }
   
   if (calmDays > totalDays / 2) {
-    return `${totalDays} check-ins. Mostly calm days this week. You're building something real.`;
+    return `${totalDays} check-ins · mostly calm this week.`;
   }
   
-  return `${totalDays} check-ins this week. Building awareness without pressure. Gaps are fine—this is about gentle noticing.`;
+  return `${totalDays} check-ins this week.`;
 }
 
 /**
