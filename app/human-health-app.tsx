@@ -11,6 +11,8 @@ import { advanceSession, contextualRollingSession, createScheduleOverride, nextR
 import { store } from '@/lib/storage';
 import { ActivityDose, Assessment, ReadinessRecord, readinessDecisionFromRecords, workoutActivityDoses } from '@/lib/whole-person';
 import { Icon, HeroIllustration, EmptyStateIllustration } from './icon-component';
+import { LiftProgressPanel } from './lift-progress-panel';
+import { MindReflectionPanel } from './mind-reflection-panel';
 import { OfflineIndicator } from './offline-indicator';
 import { SettingsPanel } from './settings-panel';
 import { SkillProgressPanel, WholePersonDashboard } from './whole-person-dashboard';
@@ -56,6 +58,8 @@ export function HumanHealthApp() {
   const [storageWarning, setStorageWarning] = useState('');
   const [fuelChecks, setFuelChecks] = useState<any[]>([]);
   const [softHabitCompletions, setSoftHabitCompletions] = useState<any[]>([]);
+  const [mindChecks, setMindChecks] = useState<any[]>([]);
+  const [weeklyReflections, setWeeklyReflections] = useState<any[]>([]);
 
   useEffect(() => {
     const loadedPreferences = store.loadPreferences();
@@ -73,6 +77,8 @@ export function HumanHealthApp() {
     setReadinessRecords(store.loadReadiness());
     setFuelChecks(store.loadFuelChecks());
     setSoftHabitCompletions(store.loadSoftHabitCompletions());
+    setMindChecks(store.loadMindChecks());
+    setWeeklyReflections(store.loadWeeklyReflections());
     setActive(restoredActive);
     setRestTimer(pauseRestTimer(savedTimer));
     setNow(Date.now());
@@ -613,6 +619,7 @@ export function HumanHealthApp() {
         </section>
 
         <WholePersonDashboard history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences} gym={gym} nextSession={rolling.session} onActivityChange={setActivity} onReadinessChange={setReadinessRecords} fuelChecks={fuelChecks} softHabitCompletions={softHabitCompletions} onFuelChecksChange={setFuelChecks} onSoftHabitCompletionsChange={setSoftHabitCompletions}/>
+        <MindReflectionPanel mindChecks={mindChecks} weeklyReflections={weeklyReflections} onMindChecksChange={next => store.saveMindChecks(next) && setMindChecks(next)} onWeeklyReflectionsChange={next => store.saveWeeklyReflections(next) && setWeeklyReflections(next)} />
         <SkillProgressPanel gym={gym}/>
       </>}
     </>}
@@ -630,9 +637,7 @@ export function HumanHealthApp() {
       <section className="card" aria-labelledby="history-title"><h2 id="history-title">Recent</h2>{history.length ? [...history].reverse().slice(0, 10).map((entry, index) => <div className="history" key={`${entry.completedAt}-${index}`}><b>{title(entry.session)}</b><span>{new Date(entry.completedAt).toLocaleDateString()}</span><small>{entry.exercises.reduce((sum, exercise) => sum + workingLogs(exercise).length, 0)} sets · {Math.floor((entry.startedAt ? new Date(entry.completedAt).getTime() - new Date(entry.startedAt).getTime() : 0) / 60000)} min</small></div>) : <div style={{padding: '20px 0', textAlign: 'center'}}><EmptyStateIllustration type="log" style={{marginBottom: '16px'}}/><p style={{color: 'var(--muted)', fontSize: '.94rem', margin: '0'}}>No workouts yet. Start your first session from Today.</p></div>}</section>
     </>}
 
-    {tab === 'progress' && <>
-      <section className="card"><h2>Progress & Health</h2><p>Connect Apple Health, track readiness, and see how sleep and activity influence training.</p><div className="button-row"><a href="/health" className="primary" style={{display: 'inline-block', textDecoration: 'none', textAlign: 'center'}}>Open health tracking</a></div></section>
-    </>}
+    {tab === 'progress' && <LiftProgressPanel history={history} activity={activity} readinessRecords={readinessRecords} />}
 
     {tab === 'settings' && <SettingsPanel preferences={preferences} gyms={gyms} onChange={savePreferences} onDataCleared={resetLocalState}/>} 
 
