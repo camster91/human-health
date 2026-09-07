@@ -1,6 +1,8 @@
 import { CONNECTED_SLEEP_CONTEXT_KEY, loadConnectedSleepContext } from './connected-health/connected-readiness';
 import { FuelCheck } from './connected-health/fuel';
+import { MindCheck } from './connected-health/mind';
 import { SoftHabitCompletion } from './connected-health/soft-habits';
+import { WeeklyReflection } from './connected-health/weekly-reflection';
 import { HistoryEntry, Workout } from './domain';
 import { SkillAssessment } from './performance';
 import { defaultPreferences, normalizePreferences, UserPreferences } from './preferences';
@@ -39,6 +41,8 @@ const FINALIZATION_JOURNAL = `${PREFIX}finalization-journal`;
 const STORAGE_PROBE = `${PREFIX}storage-probe`;
 const FUEL_CHECKS = `${PREFIX}fuel-checks`;
 const SOFT_HABIT_COMPLETIONS = `${PREFIX}soft-habit-completions`;
+const MIND_CHECKS = `${PREFIX}mind-checks`;
+const WEEKLY_REFLECTIONS = `${PREFIX}weekly-reflections`;
 
 let mutationFailure: string | null = null;
 
@@ -192,6 +196,8 @@ export type HumanHealthExport = {
   scheduleEvents: ScheduleEvent[];
   fuelChecks?: FuelCheck[];
   softHabitCompletions?: SoftHabitCompletion[];
+  mindChecks?: MindCheck[];
+  weeklyReflections?: WeeklyReflection[];
 };
 
 export function validateTrainingExport(value: unknown, now = new Date()): HumanHealthExport {
@@ -395,6 +401,12 @@ export const store = {
   loadSoftHabitCompletions(): SoftHabitCompletion[] { const value = read<unknown>(SOFT_HABIT_COMPLETIONS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved habit completions were invalid and were ignored.'; return []; } return value as SoftHabitCompletion[]; },
   saveSoftHabitCompletions(value: SoftHabitCompletion[]) { return write(SOFT_HABIT_COMPLETIONS, value.slice(-180)); },
 
+  loadMindChecks(): MindCheck[] { const value = read<unknown>(MIND_CHECKS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved mind checks were invalid and were ignored.'; return []; } return value as MindCheck[]; },
+  saveMindChecks(value: MindCheck[]) { return write(MIND_CHECKS, value.slice(-180)); },
+
+  loadWeeklyReflections(): WeeklyReflection[] { const value = read<unknown>(WEEKLY_REFLECTIONS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved weekly reflections were invalid and were ignored.'; return []; } return value as WeeklyReflection[]; },
+  saveWeeklyReflections(value: WeeklyReflection[]) { return write(WEEKLY_REFLECTIONS, value.slice(-52)); },
+
   exportData(): HumanHealthExport {
     return {
       schemaVersion: 2,
@@ -412,6 +424,8 @@ export const store = {
       scheduleEvents: store.loadScheduleEvents(),
       fuelChecks: store.loadFuelChecks(),
       softHabitCompletions: store.loadSoftHabitCompletions(),
+      mindChecks: store.loadMindChecks(),
+      weeklyReflections: store.loadWeeklyReflections(),
     };
   },
 
@@ -436,6 +450,8 @@ export const store = {
       scheduleEvents: mergeUnique(current.scheduleEvents, incoming.scheduleEvents, item => `${item.recordedAt}|${item.type}|${item.from}|${item.to}`),
       fuelChecks: mergeUnique(current.fuelChecks || [], incoming.fuelChecks || [], item => `${item.recordedAt}|${item.type}`),
       softHabitCompletions: mergeUnique(current.softHabitCompletions || [], incoming.softHabitCompletions || [], item => `${item.habitId}|${item.completedAt}`),
+      mindChecks: mergeUnique(current.mindChecks || [], incoming.mindChecks || [], item => `${item.recordedAt}|${item.level}`),
+      weeklyReflections: mergeUnique(current.weeklyReflections || [], incoming.weeklyReflections || [], item => `${item.recordedAt}|${item.prompt}`),
       exportedAt: now.toISOString(),
     };
 
