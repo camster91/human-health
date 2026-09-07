@@ -115,13 +115,15 @@ export function normalizeStoredObservationRows(values: unknown[], sourceId?: str
 
   for (const raw of values) {
     const rawSourceId = rawString(raw, 'sourceId');
-    if (sourceId && rawSourceId && rawSourceId !== sourceId && !storedRowBelongsToSource(raw, sourceId)) continue;
+    // When scoping to a source, an explicit sourceId is authoritative: a row that names a
+    // different source belongs to that source and is neither returned nor counted here, even
+    // if its stored id happens to carry another source's canonical prefix. Rows without a
+    // trustworthy source owner stay in scope so globally unsafe corruption is still surfaced.
+    if (sourceId && rawSourceId && rawSourceId !== sourceId) continue;
     const normalized = normalizeObservation(raw as HealthObservation);
     if (!normalized) {
-      if (!sourceId || !rawSourceId || rawSourceId === sourceId || storedRowBelongsToSource(raw, sourceId)) {
-        invalidCount++;
-        if (rawSourceId) invalidSourceIds.add(rawSourceId);
-      }
+      invalidCount++;
+      if (rawSourceId) invalidSourceIds.add(rawSourceId);
       continue;
     }
     if (!sourceId || normalized.sourceId === sourceId) observations.push(normalized);
