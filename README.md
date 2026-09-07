@@ -36,6 +36,16 @@ The repository also exposes `npm run verify` for the consolidated source/build/P
 
 GitHub Actions currently targets a self-hosted Ashbi runner. Human Health does not yet have a confirmed repository-eligible runner, so queued workflow runs are not evidence of a source failure or a successful verification. Issue #51 tracks that infrastructure dependency.
 
+## Phone Installation
+
+Human Health runs as a native Android app or PWA on phones and tablets. See [docs/phone-install.md](docs/phone-install.md) for:
+
+- **Android**: Download and install the debug APK from GitHub Actions artifacts
+- **iOS**: Add to Home Screen as a PWA from https://health.ashbi.ca
+- **Web/PWA**: Install from any modern browser
+
+The Android APK workflow runs automatically on pushes and can be triggered manually via workflow_dispatch.
+
 ## Key docs
 
 - `docs/implementation-roadmap.md` — phased product roadmap
