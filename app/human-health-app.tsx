@@ -477,7 +477,7 @@ export function HumanHealthApp() {
               <span className="pill-accent">→ UP NEXT</span>
               <h2>Upper · 40m</h2>
               <p className="hero-subtitle">Push · DB · 7 moves</p>
-              <button className="primary" onClick={() => startWorkout()}>Start →</button>
+              <button className="primary" onClick={() => startWorkout()}>Start workout</button>
             </div>
             <div className="hero-illustration">
               <HeroIllustration type="upper" />
@@ -485,53 +485,37 @@ export function HumanHealthApp() {
           </div>
         </section>
 
-        <div className="metrics-row">
-          <div className="metric-card">
-            <div className="metric-header">
-              <Icon name="energy" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
-              <span className="metric-label">ENERGY</span>
-            </div>
-            <div className="metric-value">—</div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-header">
-              <Icon name="sleep" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
-              <span className="metric-label">SLEEP</span>
-            </div>
-            <div className="metric-value">—</div>
-          </div>
-        </div>
-
         <section className="card">
-          <div className="section-header">
-            <Icon name="timer" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
-            <h3>CHECK-IN</h3>
-            <span className="time-badge">· 10s</span>
-          </div>
-          <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '12px'}}>
-            <button className="check-in-chip">
-              <Icon name="ready" style={{fontSize: '1.8rem'}} />
-              <span>Ready</span>
-            </button>
-            <button className="check-in-chip">
-              <Icon name="flat" style={{fontSize: '1.8rem'}} />
-              <span>Flat</span>
-            </button>
-            <button className="check-in-chip">
-              <Icon name="sore" style={{fontSize: '1.8rem'}} />
-              <span>Sore</span>
-            </button>
-            <button className="check-in-chip">
-              <Icon name="peak" style={{fontSize: '1.8rem'}} />
-              <span>Peak</span>
-            </button>
-          </div>
-        </section>
-
-        <section className="week-plan-card">
-          <div className="week-plan-header">
-            <Icon name="dumbbell" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
-            <span>Week plan · Upper today · Lower Mon · Zone-2 Wed</span>
+          <h2 style={{fontSize: '1.05rem', marginBottom: '10px', fontWeight: 600}}>Adaptive strength training</h2>
+          <p className="muted" style={{marginBottom: '16px', lineHeight: '1.5'}}>Auto-progressing loads, real-time swaps, offline-first. Your phone stays awake during sets.</p>
+          <div style={{display: 'grid', gap: '10px'}}>
+            <div style={{display: 'flex', gap: '12px', alignItems: 'flex-start'}}>
+              <div style={{width: '32px', height: '32px', borderRadius: '8px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+                <Icon name="dumbbell" style={{fontSize: '.95rem', color: 'var(--accent)'}} />
+              </div>
+              <div style={{flex: 1}}>
+                <b style={{fontSize: '.94rem', display: 'block', marginBottom: '2px'}}>Upper/Lower split</b>
+                <span className="muted" style={{fontSize: '.88rem', lineHeight: '1.4'}}>4-day rolling routine adapts to your schedule</span>
+              </div>
+            </div>
+            <div style={{display: 'flex', gap: '12px', alignItems: 'flex-start'}}>
+              <div style={{width: '32px', height: '32px', borderRadius: '8px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+                <Icon name="checkmark" style={{fontSize: '.95rem', color: 'var(--accent)'}} />
+              </div>
+              <div style={{flex: 1}}>
+                <b style={{fontSize: '.94rem', display: 'block', marginBottom: '2px'}}>Load tracking</b>
+                <span className="muted" style={{fontSize: '.88rem', lineHeight: '1.4'}}>Every set logged, progression auto-calculated</span>
+              </div>
+            </div>
+            <div style={{display: 'flex', gap: '12px', alignItems: 'flex-start'}}>
+              <div style={{width: '32px', height: '32px', borderRadius: '8px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+                <Icon name="timer" style={{fontSize: '.95rem', color: 'var(--accent)'}} />
+              </div>
+              <div style={{flex: 1}}>
+                <b style={{fontSize: '.94rem', display: 'block', marginBottom: '2px'}}>Rest timer</b>
+                <span className="muted" style={{fontSize: '.88rem', lineHeight: '1.4'}}>Countdown with vibration and wake lock</span>
+              </div>
+            </div>
           </div>
         </section>
       </> : <>
@@ -541,8 +525,8 @@ export function HumanHealthApp() {
               <span className="pill-accent">→ {rolling.manual ? 'CUSTOM' : rolling.repeating ? 'REPEAT' : 'UP NEXT'}</span>
               <h2>{title(rolling.session)} · 40m</h2>
               <p className="hero-subtitle">Push · DB · 7 moves</p>
-              {latestReadiness.level !== 'normal' && <p className="coach-inline"><b>Adjusted volume</b> — {latestReadiness.reasons.join(' ')}</p>}
-              <button className="primary" onClick={() => startWorkout()}>Start →</button>
+              {latestReadiness.level !== 'normal' && <p className="coach-inline"><b>Volume adjusted</b> — {latestReadiness.reasons.join(' ')}</p>}
+              <button className="primary" onClick={() => startWorkout()}>Start workout</button>
             </div>
             <div className="hero-illustration">
               <HeroIllustration type="upper" />
@@ -550,22 +534,30 @@ export function HumanHealthApp() {
           </div>
         </section>
 
-        <div className="metrics-row">
-          <div className="metric-card">
-            <div className="metric-header">
-              <Icon name="energy" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
-              <span className="metric-label">ENERGY</span>
-            </div>
-            <div className="metric-value">—</div>
+        {(readinessRecords.length > 0 || activity.some(d => d.domain === 'cardio')) && (
+          <div className="metrics-row">
+            {readinessRecords.length > 0 && (
+              <div className="metric-card">
+                <div className="metric-header">
+                  <Icon name="ready" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
+                  <span className="metric-label">READINESS</span>
+                </div>
+                <div className="metric-value" style={{fontSize: '1.8rem', textTransform: 'capitalize'}}>{latestReadiness.level}</div>
+                <p className="muted" style={{fontSize: '.82rem', marginTop: '4px'}}>{(latestReadiness.volumeMultiplier * 100).toFixed(0)}% volume</p>
+              </div>
+            )}
+            {activity.filter(d => d.domain === 'cardio').length > 0 && (
+              <div className="metric-card">
+                <div className="metric-header">
+                  <Icon name="activity" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
+                  <span className="metric-label">CARDIO · 7D</span>
+                </div>
+                <div className="metric-value">{activity.filter(d => d.domain === 'cardio' && new Date(d.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, d) => sum + (d.minutes || 0), 0)}</div>
+                <p className="muted" style={{fontSize: '.82rem', marginTop: '4px'}}>minutes</p>
+              </div>
+            )}
           </div>
-          <div className="metric-card">
-            <div className="metric-header">
-              <Icon name="sleep" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
-              <span className="metric-label">SLEEP</span>
-            </div>
-            <div className="metric-value">—</div>
-          </div>
-        </div>
+        )}
 
         <section className="card">
           <div className="section-header">
@@ -593,23 +585,8 @@ export function HumanHealthApp() {
           </div>
         </section>
 
-        <section className="week-plan-card">
-          <div className="week-plan-header">
-            <Icon name="dumbbell" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
-            <span>Week plan · Upper today · Lower Mon · Zone-2 Wed</span>
-          </div>
-        </section>
-
-        {notes.length > 0 && <section className="card" aria-labelledby="coach-insights-title">
-          <h2 id="coach-insights-title" style={{fontSize: '1rem', marginBottom: '12px'}}>Coach</h2>
-          {notes.map((note, index) => <div className="coach-tip" key={index} style={{margin: '8px 0'}}>
-            <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)', flexShrink: 0}}/>
-            <span>{note}</span>
-          </div>)}
-        </section>}
-
-        <section aria-labelledby="plans-changed-title">
-          <h2 id="plans-changed-title">Quick adjust</h2>
+        <section className="card" aria-labelledby="plans-changed-title">
+          <h2 id="plans-changed-title" style={{fontSize: '1.05rem', fontWeight: 600}}>Quick adjust</h2>
           <div className="quick-grid">
             <button onClick={() => startWorkout({ minutes: 20 })}>20 min</button>
             <button onClick={() => startWorkout({ minutes: 30 })}>30 min</button>
@@ -619,22 +596,43 @@ export function HumanHealthApp() {
         </section>
 
         <WholePersonDashboard history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences} gym={gym} nextSession={rolling.session} onActivityChange={setActivity} onReadinessChange={setReadinessRecords} fuelChecks={fuelChecks} softHabitCompletions={softHabitCompletions} onFuelChecksChange={setFuelChecks} onSoftHabitCompletionsChange={setSoftHabitCompletions}/>
+
         <MindReflectionPanel mindChecks={mindChecks} weeklyReflections={weeklyReflections} onMindChecksChange={next => store.saveMindChecks(next) && setMindChecks(next)} onWeeklyReflectionsChange={next => store.saveWeeklyReflections(next) && setWeeklyReflections(next)} />
         <SkillProgressPanel gym={gym}/>
       </>}
     </>}
 
     {tab === 'log' && <>
-      <section className="card log-hero">
-        <div className="log-main-stat">
-          <div className="athletic-numeral">{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length}</div>
-          <p className="stat-caption">sessions{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 ? ` · ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) / 60)}h ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) % 60)}m` : ''}</p>
-        </div>
-        
-      </section>
+      {history.length === 0 ? (
+        <section className="card">
+          <div style={{padding: '40px 20px', textAlign: 'center'}}>
+            <EmptyStateIllustration type="log" style={{marginBottom: '20px'}}/>
+            <h2 style={{fontSize: '1.2rem', marginBottom: '8px', fontWeight: 600}}>No training data yet</h2>
+            <p className="muted" style={{marginBottom: '20px', lineHeight: '1.5'}}>Complete your first workout to see session history, volume trends, and weekly stats.</p>
+            <button className="primary" onClick={() => setTab('today')} style={{minHeight: '50px'}}>Go to Today</button>
+          </div>
+        </section>
+      ) : (
+        <>
+          <section className="card log-hero">
+            <div className="log-main-stat">
+              <div className="athletic-numeral">{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length}</div>
+              <p className="stat-caption">sessions{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 ? ` · ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) / 60)}h ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) % 60)}m` : ''}</p>
+            </div>
+          </section>
 
-      
-      <section className="card" aria-labelledby="history-title"><h2 id="history-title">Recent</h2>{history.length ? [...history].reverse().slice(0, 10).map((entry, index) => <div className="history" key={`${entry.completedAt}-${index}`}><b>{title(entry.session)}</b><span>{new Date(entry.completedAt).toLocaleDateString()}</span><small>{entry.exercises.reduce((sum, exercise) => sum + workingLogs(exercise).length, 0)} sets · {Math.floor((entry.startedAt ? new Date(entry.completedAt).getTime() - new Date(entry.startedAt).getTime() : 0) / 60000)} min</small></div>) : <div style={{padding: '20px 0', textAlign: 'center'}}><EmptyStateIllustration type="log" style={{marginBottom: '16px'}}/><p style={{color: 'var(--muted)', fontSize: '.94rem', margin: '0'}}>No workouts yet. Start your first session from Today.</p></div>}</section>
+          <section className="card" aria-labelledby="history-title">
+            <h2 id="history-title" style={{fontSize: '1.05rem', fontWeight: 600, marginBottom: '16px'}}>Recent sessions</h2>
+            {[...history].reverse().slice(0, 20).map((entry, index) => (
+              <div className="history" key={`${entry.completedAt}-${index}`}>
+                <b>{title(entry.session)}</b>
+                <span>{new Date(entry.completedAt).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}</span>
+                <small>{entry.exercises.reduce((sum, exercise) => sum + workingLogs(exercise).length, 0)} sets · {Math.floor((entry.startedAt ? new Date(entry.completedAt).getTime() - new Date(entry.startedAt).getTime() : 0) / 60000)}min{entry.status === 'ended-early' ? ' · partial' : ''}</small>
+              </div>
+            ))}
+          </section>
+        </>
+      )}
     </>}
 
     {tab === 'progress' && <LiftProgressPanel history={history} activity={activity} readinessRecords={readinessRecords} />}
