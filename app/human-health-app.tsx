@@ -439,9 +439,9 @@ export function HumanHealthApp() {
         <div className="progress-bar">
           <div className="progress-fill" style={{width: `${(active.exercises.filter(ex => workingLogs(ex).length >= ex.sets).length / active.exercises.length) * 100}%`}}></div>
         </div>
-        <p className="progress-label">{active.exercises.filter(ex => workingLogs(ex).length >= ex.sets).length} / {active.exercises.length} · {title(active.session)}</p>
+        <p className="progress-label">{active.exercises.filter(ex => workingLogs(ex).length >= ex.sets).length} / {active.exercises.length} exercises · {title(active.session)}</p>
       </div>
-      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Complete or defer required exercises first.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>{hasDeferredRequired ? 'Finish (partial)' : 'Complete workout'}</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
+      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Complete or defer required exercises first.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>Log session</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
       {!requiredHandled && <p className="muted" style={{textAlign: 'center', fontSize: '.88rem', marginTop: '8px'}}>Finish all required sets or defer them to complete</p>}
       {restTimer && <div className="rest-dock" role="timer" aria-label={`Rest timer: ${restSeconds} seconds remaining`}>
         <div className="timer-display">

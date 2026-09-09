@@ -42,5 +42,17 @@
       "type": "image/svg+xml",
       "purpose": "any"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Today",
+      "url": "/",
+      "description": "View today's workout"
+    },
+    {
+      "name": "Log",
+      "url": "/?tab=log",
+      "description": "View workout history"
+    }
   ]
 }
