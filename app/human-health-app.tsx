@@ -324,7 +324,7 @@ export function HumanHealthApp() {
 
   function finishWorkout(status: 'completed' | 'ended-early' | 'abandoned') {
     if (!active) return;
-    if (status === 'abandoned' && !window.confirm('Abandon this workout? Completed sets will remain in history, but the session will not count toward progress targets.')) return;
+    if (status === 'abandoned' && !window.confirm('Abandon this workout? Completed sets remain saved, but the session won\'t count toward targets.')) return;
     const entry: HistoryEntry = { session: active.session, startedAt: active.startedAt, completedAt: new Date().toISOString(), status, gymId: active.gymId, mode: active.mode, programId: active.programId, programVersion: active.programVersion, exercises: active.exercises };
     const nextHistory = [...history, entry];
     const nextActivity = [...activity, ...workoutActivityDoses(entry)];
@@ -342,7 +342,12 @@ export function HumanHealthApp() {
     setRestTimer(null);
     setSwapIndex(null);
     setShowAddExercise(false);
-    setNotes(summarizeWorkout(entry.exercises, history).messages);
+    const summary = summarizeWorkout(entry.exercises, history);
+    if (status === 'ended-early') {
+      setNotes([`Partial workout saved. ${summary.messages.join(' ')}`]);
+    } else {
+      setNotes(summary.messages);
+    }
     setTab('today');
   }
 
@@ -436,8 +441,8 @@ export function HumanHealthApp() {
         </div>
         <p className="progress-label">{active.exercises.filter(ex => workingLogs(ex).length >= ex.sets).length} / {active.exercises.length} · {title(active.session)}</p>
       </div>
-      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Complete or defer required exercises first.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>Log · next</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
-      {!requiredHandled && <p className="muted">Complete required exercises (or defer) to finish, or end early.</p>}
+      <div className="workout-actions"><button className="primary" disabled={active.status !== 'active' || !requiredHandled} title={!requiredHandled ? 'Complete or defer required exercises first.' : undefined} onClick={() => finishWorkout(hasDeferredRequired ? 'ended-early' : 'completed')}>{hasDeferredRequired ? 'Finish (partial)' : 'Complete workout'}</button><button className="danger" onClick={() => finishWorkout('abandoned')}>Abandon</button></div>
+      {!requiredHandled && <p className="muted" style={{textAlign: 'center', fontSize: '.88rem', marginTop: '8px'}}>Finish all required sets or defer them to complete</p>}
       {restTimer && <div className="rest-dock" role="timer" aria-label={`Rest timer: ${restSeconds} seconds remaining`}>
         <div className="timer-display">
           <div className="timer-circle">
@@ -463,7 +468,7 @@ export function HumanHealthApp() {
         <span className="date-label">{dateStr}</span>
         <h1>Today</h1>
       </div>
-      <button className="avatar-btn" aria-label="Profile">
+      <button className="avatar-btn" onClick={() => setTab('settings')} aria-label="Settings">
         <Icon name="user" />
       </button>
     </header>}
@@ -526,6 +531,7 @@ export function HumanHealthApp() {
               <h2>{title(rolling.session)} · 40m</h2>
               <p className="hero-subtitle">Push · DB · 7 moves</p>
               {latestReadiness.level !== 'normal' && <p className="coach-inline"><b>Volume {(latestReadiness.volumeMultiplier * 100).toFixed(0)}%</b> — {latestReadiness.reasons.join(' ')}</p>}
+              {latestReadiness.level === 'normal' && currentAdjustment.reduce && <p className="coach-inline"><b>Volume {(currentAdjustment.volumeMultiplier * 100).toFixed(0)}%</b> — {currentAdjustment.reason}</p>}
               <button className="primary" onClick={() => startWorkout()}>Start</button>
             </div>
             <div className="hero-illustration">
@@ -563,19 +569,39 @@ export function HumanHealthApp() {
             <h3>CHECK-IN</h3>
           </div>
           <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '10px'}}>
-            <button className="check-in-chip">
+            <button className="check-in-chip" onClick={() => {
+              const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 5 as const }, source: 'manual' as const }];
+              const saved = store.saveReadiness(next);
+              if (saved) setReadinessRecords(next);
+              else setStorageWarning('Readiness check-in could not be saved.');
+            }} aria-label="Check in: Ready">
               <Icon name="ready" style={{fontSize: '1.6rem'}} />
               <span>Ready</span>
             </button>
-            <button className="check-in-chip">
+            <button className="check-in-chip" onClick={() => {
+              const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 3 as const, fatigue: 'moderate' as const }, source: 'manual' as const }];
+              const saved = store.saveReadiness(next);
+              if (saved) setReadinessRecords(next);
+              else setStorageWarning('Readiness check-in could not be saved.');
+            }} aria-label="Check in: Flat">
               <Icon name="flat" style={{fontSize: '1.6rem'}} />
               <span>Flat</span>
             </button>
-            <button className="check-in-chip">
+            <button className="check-in-chip" onClick={() => {
+              const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 2 as const, soreness: 'high' as const }, source: 'manual' as const }];
+              const saved = store.saveReadiness(next);
+              if (saved) setReadinessRecords(next);
+              else setStorageWarning('Readiness check-in could not be saved.');
+            }} aria-label="Check in: Sore">
               <Icon name="sore" style={{fontSize: '1.6rem'}} />
               <span>Sore</span>
             </button>
-            <button className="check-in-chip">
+            <button className="check-in-chip" onClick={() => {
+              const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 5 as const, sleep: 'good' as const }, source: 'manual' as const }];
+              const saved = store.saveReadiness(next);
+              if (saved) setReadinessRecords(next);
+              else setStorageWarning('Readiness check-in could not be saved.');
+            }} aria-label="Check in: Peak">
               <Icon name="peak" style={{fontSize: '1.6rem'}} />
               <span>Peak</span>
             </button>
@@ -585,19 +611,19 @@ export function HumanHealthApp() {
         <section className="card" aria-labelledby="plans-changed-title">
           <h2 id="plans-changed-title" style={{fontSize: '.98rem', fontWeight: 650, marginBottom: '10px'}}>Adjust</h2>
           <div className="quick-grid">
-            <button onClick={() => startWorkout({ minutes: 20 })}>
+            <button onClick={() => startWorkout({ minutes: 20 })} aria-label="Start 20 minute workout with primary lifts only">
               <b>20 min</b>
-              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>~4 exercises</small>
+              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Primary lifts only</small>
             </button>
-            <button onClick={() => startWorkout({ minutes: 30 })}>
+            <button onClick={() => startWorkout({ minutes: 30 })} aria-label="Start 30 minute workout with primary and some accessories">
               <b>30 min</b>
-              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>~5 exercises</small>
+              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Primary + some accessories</small>
             </button>
-            <button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })}>
+            <button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })} aria-label="Start low energy workout at 80% volume">
               <b>Low energy</b>
               <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>80% volume</small>
             </button>
-            <button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })}>
+            <button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })} aria-label="Start travel mode workout for hotel gym">
               <b>Travel</b>
               <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Hotel gym</small>
             </button>
