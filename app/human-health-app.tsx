@@ -477,7 +477,7 @@ export function HumanHealthApp() {
               <span className="pill-accent">→ UP NEXT</span>
               <h2>Upper · 40m</h2>
               <p className="hero-subtitle">Push · DB · 7 moves</p>
-              <button className="primary" onClick={() => startWorkout()}>Start workout</button>
+              <button className="primary" onClick={() => startWorkout()}>Start</button>
             </div>
             <div className="hero-illustration">
               <HeroIllustration type="upper" />
@@ -486,34 +486,34 @@ export function HumanHealthApp() {
         </section>
 
         <section className="card">
-          <h2 style={{fontSize: '1.05rem', marginBottom: '10px', fontWeight: 600}}>Adaptive strength training</h2>
-          <p className="muted" style={{marginBottom: '16px', lineHeight: '1.5'}}>Auto-progressing loads, real-time swaps, offline-first. Your phone stays awake during sets.</p>
-          <div style={{display: 'grid', gap: '10px'}}>
-            <div style={{display: 'flex', gap: '12px', alignItems: 'flex-start'}}>
-              <div style={{width: '32px', height: '32px', borderRadius: '8px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-                <Icon name="dumbbell" style={{fontSize: '.95rem', color: 'var(--accent)'}} />
+          <h2 style={{fontSize: '.98rem', marginBottom: '8px', fontWeight: 650}}>Upper/Lower 4-day split</h2>
+          <p className="muted" style={{marginBottom: '12px', lineHeight: '1.45', fontSize: '.88rem'}}>Auto-progression, equipment swaps, offline-first</p>
+          <div style={{display: 'grid', gap: '8px'}}>
+            <div style={{display: 'flex', gap: '10px', alignItems: 'flex-start'}}>
+              <div style={{width: '28px', height: '28px', borderRadius: '6px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+                <Icon name="dumbbell" style={{fontSize: '.88rem', color: 'var(--accent)'}} />
               </div>
               <div style={{flex: 1}}>
-                <b style={{fontSize: '.94rem', display: 'block', marginBottom: '2px'}}>Upper/Lower split</b>
-                <span className="muted" style={{fontSize: '.88rem', lineHeight: '1.4'}}>4-day rolling routine adapts to your schedule</span>
+                <b style={{fontSize: '.88rem', display: 'block', marginBottom: '1px'}}>Rolling schedule</b>
+                <span className="muted" style={{fontSize: '.82rem', lineHeight: '1.35'}}>Adapts to missed days, no fixed week</span>
               </div>
             </div>
-            <div style={{display: 'flex', gap: '12px', alignItems: 'flex-start'}}>
-              <div style={{width: '32px', height: '32px', borderRadius: '8px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-                <Icon name="checkmark" style={{fontSize: '.95rem', color: 'var(--accent)'}} />
+            <div style={{display: 'flex', gap: '10px', alignItems: 'flex-start'}}>
+              <div style={{width: '28px', height: '28px', borderRadius: '6px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+                <Icon name="checkmark" style={{fontSize: '.88rem', color: 'var(--accent)'}} />
               </div>
               <div style={{flex: 1}}>
-                <b style={{fontSize: '.94rem', display: 'block', marginBottom: '2px'}}>Load tracking</b>
-                <span className="muted" style={{fontSize: '.88rem', lineHeight: '1.4'}}>Every set logged, progression auto-calculated</span>
+                <b style={{fontSize: '.88rem', display: 'block', marginBottom: '1px'}}>Progressive overload</b>
+                <span className="muted" style={{fontSize: '.82rem', lineHeight: '1.35'}}>Auto-calculated from previous sets</span>
               </div>
             </div>
-            <div style={{display: 'flex', gap: '12px', alignItems: 'flex-start'}}>
-              <div style={{width: '32px', height: '32px', borderRadius: '8px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-                <Icon name="timer" style={{fontSize: '.95rem', color: 'var(--accent)'}} />
+            <div style={{display: 'flex', gap: '10px', alignItems: 'flex-start'}}>
+              <div style={{width: '28px', height: '28px', borderRadius: '6px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+                <Icon name="timer" style={{fontSize: '.88rem', color: 'var(--accent)'}} />
               </div>
               <div style={{flex: 1}}>
-                <b style={{fontSize: '.94rem', display: 'block', marginBottom: '2px'}}>Rest timer</b>
-                <span className="muted" style={{fontSize: '.88rem', lineHeight: '1.4'}}>Countdown with vibration and wake lock</span>
+                <b style={{fontSize: '.88rem', display: 'block', marginBottom: '1px'}}>Screen wake-lock</b>
+                <span className="muted" style={{fontSize: '.82rem', lineHeight: '1.35'}}>Rest timer, vibrate on complete</span>
               </div>
             </div>
           </div>
@@ -525,8 +525,8 @@ export function HumanHealthApp() {
               <span className="pill-accent">→ {rolling.manual ? 'CUSTOM' : rolling.repeating ? 'REPEAT' : 'UP NEXT'}</span>
               <h2>{title(rolling.session)} · 40m</h2>
               <p className="hero-subtitle">Push · DB · 7 moves</p>
-              {latestReadiness.level !== 'normal' && <p className="coach-inline"><b>Volume adjusted</b> — {latestReadiness.reasons.join(' ')}</p>}
-              <button className="primary" onClick={() => startWorkout()}>Start workout</button>
+              {latestReadiness.level !== 'normal' && <p className="coach-inline"><b>Volume {(latestReadiness.volumeMultiplier * 100).toFixed(0)}%</b> — {latestReadiness.reasons.join(' ')}</p>}
+              <button className="primary" onClick={() => startWorkout()}>Start</button>
             </div>
             <div className="hero-illustration">
               <HeroIllustration type="upper" />
@@ -534,26 +534,24 @@ export function HumanHealthApp() {
           </div>
         </section>
 
-        {(readinessRecords.length > 0 || activity.some(d => d.domain === 'cardio')) && (
+        {readinessRecords.length > 0 && (
           <div className="metrics-row">
-            {readinessRecords.length > 0 && (
-              <div className="metric-card">
-                <div className="metric-header">
-                  <Icon name="ready" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
-                  <span className="metric-label">READINESS</span>
-                </div>
-                <div className="metric-value" style={{fontSize: '1.8rem', textTransform: 'capitalize'}}>{latestReadiness.level}</div>
-                <p className="muted" style={{fontSize: '.82rem', marginTop: '4px'}}>{(latestReadiness.volumeMultiplier * 100).toFixed(0)}% volume</p>
+            <div className="metric-card">
+              <div className="metric-header">
+                <Icon name="ready" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
+                <span className="metric-label">READINESS</span>
               </div>
-            )}
-            {activity.filter(d => d.domain === 'cardio').length > 0 && (
+              <div className="metric-value" style={{fontSize: '1.6rem', textTransform: 'capitalize'}}>{latestReadiness.level}</div>
+              <p className="muted" style={{fontSize: '.78rem', marginTop: '2px'}}>{(latestReadiness.volumeMultiplier * 100).toFixed(0)}% volume</p>
+            </div>
+            {activity.filter(d => d.domain === 'cardio' && new Date(d.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 && (
               <div className="metric-card">
                 <div className="metric-header">
-                  <Icon name="activity" style={{fontSize: '1.1rem', color: 'var(--accent)'}}/>
+                  <Icon name="activity" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
                   <span className="metric-label">CARDIO · 7D</span>
                 </div>
                 <div className="metric-value">{activity.filter(d => d.domain === 'cardio' && new Date(d.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, d) => sum + (d.minutes || 0), 0)}</div>
-                <p className="muted" style={{fontSize: '.82rem', marginTop: '4px'}}>minutes</p>
+                <p className="muted" style={{fontSize: '.78rem', marginTop: '2px'}}>min</p>
               </div>
             )}
           </div>
@@ -561,37 +559,48 @@ export function HumanHealthApp() {
 
         <section className="card">
           <div className="section-header">
-            <Icon name="timer" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
+            <Icon name="timer" style={{fontSize: '.92rem', color: 'var(--accent)'}}/>
             <h3>CHECK-IN</h3>
-            <span className="time-badge">· 10s</span>
           </div>
-          <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '12px'}}>
+          <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '10px'}}>
             <button className="check-in-chip">
-              <Icon name="ready" style={{fontSize: '1.8rem'}} />
+              <Icon name="ready" style={{fontSize: '1.6rem'}} />
               <span>Ready</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="flat" style={{fontSize: '1.8rem'}} />
+              <Icon name="flat" style={{fontSize: '1.6rem'}} />
               <span>Flat</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="sore" style={{fontSize: '1.8rem'}} />
+              <Icon name="sore" style={{fontSize: '1.6rem'}} />
               <span>Sore</span>
             </button>
             <button className="check-in-chip">
-              <Icon name="peak" style={{fontSize: '1.8rem'}} />
+              <Icon name="peak" style={{fontSize: '1.6rem'}} />
               <span>Peak</span>
             </button>
           </div>
         </section>
 
         <section className="card" aria-labelledby="plans-changed-title">
-          <h2 id="plans-changed-title" style={{fontSize: '1.05rem', fontWeight: 600}}>Quick adjust</h2>
+          <h2 id="plans-changed-title" style={{fontSize: '.98rem', fontWeight: 650, marginBottom: '10px'}}>Adjust</h2>
           <div className="quick-grid">
-            <button onClick={() => startWorkout({ minutes: 20 })}>20 min</button>
-            <button onClick={() => startWorkout({ minutes: 30 })}>30 min</button>
-            <button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })}>Low energy</button>
-            <button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })}>Travel</button>
+            <button onClick={() => startWorkout({ minutes: 20 })}>
+              <b>20 min</b>
+              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>~4 exercises</small>
+            </button>
+            <button onClick={() => startWorkout({ minutes: 30 })}>
+              <b>30 min</b>
+              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>~5 exercises</small>
+            </button>
+            <button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })}>
+              <b>Low energy</b>
+              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>80% volume</small>
+            </button>
+            <button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })}>
+              <b>Travel</b>
+              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Hotel gym</small>
+            </button>
           </div>
         </section>
 
@@ -605,11 +614,11 @@ export function HumanHealthApp() {
     {tab === 'log' && <>
       {history.length === 0 ? (
         <section className="card">
-          <div style={{padding: '40px 20px', textAlign: 'center'}}>
-            <EmptyStateIllustration type="log" style={{marginBottom: '20px'}}/>
-            <h2 style={{fontSize: '1.2rem', marginBottom: '8px', fontWeight: 600}}>No training data yet</h2>
-            <p className="muted" style={{marginBottom: '20px', lineHeight: '1.5'}}>Complete your first workout to see session history, volume trends, and weekly stats.</p>
-            <button className="primary" onClick={() => setTab('today')} style={{minHeight: '50px'}}>Go to Today</button>
+          <div style={{padding: '32px 18px', textAlign: 'center'}}>
+            <EmptyStateIllustration type="log" style={{marginBottom: '16px'}}/>
+            <h2 style={{fontSize: '1.1rem', marginBottom: '6px', fontWeight: 650}}>No sessions yet</h2>
+            <p className="muted" style={{marginBottom: '18px', lineHeight: '1.4', fontSize: '.88rem'}}>Complete first workout to see history and trends</p>
+            <button className="primary" onClick={() => setTab('today')} style={{minHeight: '46px'}}>Go to Today</button>
           </div>
         </section>
       ) : (
@@ -622,12 +631,12 @@ export function HumanHealthApp() {
           </section>
 
           <section className="card" aria-labelledby="history-title">
-            <h2 id="history-title" style={{fontSize: '1.05rem', fontWeight: 600, marginBottom: '16px'}}>Recent sessions</h2>
+            <h2 id="history-title" style={{fontSize: '.98rem', fontWeight: 650, marginBottom: '14px'}}>Recent</h2>
             {[...history].reverse().slice(0, 20).map((entry, index) => (
               <div className="history" key={`${entry.completedAt}-${index}`}>
                 <b>{title(entry.session)}</b>
                 <span>{new Date(entry.completedAt).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}</span>
-                <small>{entry.exercises.reduce((sum, exercise) => sum + workingLogs(exercise).length, 0)} sets · {Math.floor((entry.startedAt ? new Date(entry.completedAt).getTime() - new Date(entry.startedAt).getTime() : 0) / 60000)}min{entry.status === 'ended-early' ? ' · partial' : ''}</small>
+                <small>{entry.exercises.reduce((sum, exercise) => sum + workingLogs(exercise).length, 0)} sets · {Math.floor((entry.startedAt ? new Date(entry.completedAt).getTime() - new Date(entry.startedAt).getTime() : 0) / 60000)}m{entry.status === 'ended-early' ? ' · partial' : ''}</small>
               </div>
             ))}
           </section>
