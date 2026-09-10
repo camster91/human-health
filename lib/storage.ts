@@ -56,6 +56,19 @@ function read<T>(key: string, fallback: T): T {
   }
 }
 
+function validateStoredValue<T>(
+  raw: unknown,
+  validator: (value: unknown) => T | null,
+  label: string,
+  errorMessage: string
+): T {
+  const validated = validator(raw);
+  if (validated === null) {
+    throw new Error(`${errorMessage} Export your data if possible, then delete corrupt local training state before continuing.`);
+  }
+  return validated;
+}
+
 function write(key: string, value: unknown) {
   if (typeof window === 'undefined') return false;
   try {
@@ -118,6 +131,80 @@ function activeWorkout(value: unknown): Workout | null {
   return candidate as Workout;
 }
 
+function validateStoredHistory(raw: unknown): HistoryEntry[] | null {
+  if (!Array.isArray(raw)) return null;
+  try {
+    const validated: HistoryEntry[] = [];
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') return null;
+      const entry = item as Partial<HistoryEntry>;
+      if (!entry.session || !entry.completedAt || !Array.isArray(entry.exercises)) return null;
+      validated.push(entry as HistoryEntry);
+    }
+    return deduplicateHistory(validated);
+  } catch {
+    return null;
+  }
+}
+
+function validateStoredActivity(raw: unknown): ActivityDose[] | null {
+  if (!Array.isArray(raw)) return null;
+  try {
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') return null;
+      const dose = item as Partial<ActivityDose>;
+      if (!dose.domain || !dose.completedAt) return null;
+      if (dose.minutes === undefined && dose.sets === undefined) return null;
+    }
+    return deduplicateWorkoutActivity(raw as ActivityDose[]);
+  } catch {
+    return null;
+  }
+}
+
+function validateStoredAssessments(raw: unknown): Assessment[] | null {
+  if (!Array.isArray(raw)) return null;
+  try {
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') return null;
+      const assessment = item as Partial<Assessment>;
+      if (!assessment.metricId || !assessment.recordedAt || typeof assessment.value !== 'number') return null;
+    }
+    return raw as Assessment[];
+  } catch {
+    return null;
+  }
+}
+
+function validateStoredSkillAssessments(raw: unknown): SkillAssessment[] | null {
+  if (!Array.isArray(raw)) return null;
+  try {
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') return null;
+      const skill = item as Partial<SkillAssessment>;
+      if (!skill.treeId || !skill.stepId || !skill.recordedAt) return null;
+      if (typeof skill.passed !== 'boolean' || typeof skill.clean !== 'boolean' || typeof skill.pain !== 'boolean') return null;
+    }
+    return raw as SkillAssessment[];
+  } catch {
+    return null;
+  }
+}
+
+function validateStoredScheduleEvents(raw: unknown): ScheduleEvent[] | null {
+  if (!Array.isArray(raw)) return null;
+  try {
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') return null;
+      const event = item as Partial<ScheduleEvent>;
+      if (!event.type || !event.from || !event.to || !event.recordedAt || !event.reason) return null;
+    }
+    return raw as ScheduleEvent[];
+  } catch {
+    return null;
+  }
+}
+
 type FinalizationJournal = {
   version: 1;
   workoutId: string;
@@ -157,13 +244,28 @@ function commitFinalizationJournal(journal: FinalizationJournal) {
   return true;
 }
 
+function validateStoredReadiness(raw: unknown): ReadinessRecord[] | null {
+  if (!Array.isArray(raw)) return null;
+  try {
+    for (const item of raw) {
+      if (!item || typeof item !== 'object') return null;
+      const record = item as Partial<ReadinessRecord>;
+      if (!record.recordedAt || !record.input || typeof record.input !== 'object') return null;
+    }
+    return (raw as ReadinessRecord[]).filter(record => record.source !== 'connected-sleep');
+  } catch {
+    return null;
+  }
+}
+
 function storedReadiness(): ReadinessRecord[] {
   const value = read<unknown>(READINESS, []);
-  if (!Array.isArray(value)) {
-    mutationFailure = 'Saved readiness data was invalid and was ignored.';
-    return [];
-  }
-  return (value as ReadinessRecord[]).filter(record => record && record.source !== 'connected-sleep' && typeof record.recordedAt === 'string' && record.input && typeof record.input === 'object');
+  return validateStoredValue(
+    value,
+    validateStoredReadiness,
+    'readiness data',
+    'Saved readiness data is corrupt.'
+  );
 }
 
 function effectiveReadiness(): ReadinessRecord[] {
@@ -349,8 +451,12 @@ export const store = {
 
   loadHistory(): HistoryEntry[] {
     const value = read<unknown>(HISTORY, []);
-    if (!Array.isArray(value)) { mutationFailure = 'Saved workout history was invalid and was ignored.'; return []; }
-    return deduplicateHistory(value as HistoryEntry[]);
+    return validateStoredValue(
+      value,
+      validateStoredHistory,
+      'workout history',
+      'Saved workout history is corrupt.'
+    );
   },
   saveHistory(value: HistoryEntry[]) {
     const next = deduplicateHistory(value);
@@ -369,8 +475,12 @@ export const store = {
   },
   loadActivity(): ActivityDose[] {
     const value = read<unknown>(ACTIVITY, []);
-    if (!Array.isArray(value)) { mutationFailure = 'Saved activity data was invalid and was ignored.'; return []; }
-    return deduplicateWorkoutActivity(value as ActivityDose[]);
+    return validateStoredValue(
+      value,
+      validateStoredActivity,
+      'activity data',
+      'Saved activity data is corrupt.'
+    );
   },
   saveActivity(value: ActivityDose[]) {
     const next = deduplicateWorkoutActivity(value);
@@ -384,48 +494,111 @@ export const store = {
   saveReadiness(value: ReadinessRecord[]) { return write(READINESS, value.filter(record => record.source !== 'connected-sleep').slice(-90)); },
   loadSkills(): Record<string, string> { return read<Record<string, string>>(SKILLS, {}); },
   saveSkills(value: Record<string, string>) { return write(SKILLS, value); },
-  loadAssessments(): Assessment[] { const value = read<unknown>(ASSESSMENTS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved capability assessments were invalid and were ignored.'; return []; } return value as Assessment[]; },
+  loadAssessments(): Assessment[] {
+    const value = read<unknown>(ASSESSMENTS, []);
+    return validateStoredValue(
+      value,
+      validateStoredAssessments,
+      'capability assessments',
+      'Saved capability assessments are corrupt.'
+    );
+  },
   saveAssessments(value: Assessment[]) { return write(ASSESSMENTS, value); },
   loadProgressions(): Record<string, string> { return read<Record<string, string>>(PROGRESSIONS, {}); },
   saveProgressions(value: Record<string, string>) { return write(PROGRESSIONS, value); },
-  loadSkillAssessments(): SkillAssessment[] { const value = read<unknown>(SKILL_ASSESSMENTS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved skill assessments were invalid and were ignored.'; return []; } return value as SkillAssessment[]; },
+  loadSkillAssessments(): SkillAssessment[] {
+    const value = read<unknown>(SKILL_ASSESSMENTS, []);
+    return validateStoredValue(
+      value,
+      validateStoredSkillAssessments,
+      'skill assessments',
+      'Saved skill assessments are corrupt.'
+    );
+  },
   saveSkillAssessments(value: SkillAssessment[]) { return write(SKILL_ASSESSMENTS, value); },
   loadPreferences(): UserPreferences { return normalizePreferences(read<Partial<UserPreferences>>(PREFERENCES, defaultPreferences)); },
   savePreferences(value: UserPreferences) { return write(PREFERENCES, normalizePreferences(value)); },
-  loadScheduleEvents(): ScheduleEvent[] { const value = read<unknown>(SCHEDULE_EVENTS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved schedule events were invalid and were ignored.'; return []; } return value as ScheduleEvent[]; },
+  loadScheduleEvents(): ScheduleEvent[] {
+    const value = read<unknown>(SCHEDULE_EVENTS, []);
+    return validateStoredValue(
+      value,
+      validateStoredScheduleEvents,
+      'schedule events',
+      'Saved schedule events are corrupt.'
+    );
+  },
   saveScheduleEvents(value: ScheduleEvent[]) { return write(SCHEDULE_EVENTS, value.slice(-100)); },
   
-  loadFuelChecks(): FuelCheck[] { const value = read<unknown>(FUEL_CHECKS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved fuel checks were invalid and were ignored.'; return []; } return value as FuelCheck[]; },
+  loadFuelChecks(): FuelCheck[] {
+    const value = read<unknown>(FUEL_CHECKS, []);
+    if (!Array.isArray(value)) {
+      throw new Error('Saved fuel checks are corrupt. Export your data if possible, then delete corrupt local training state before continuing.');
+    }
+    return value as FuelCheck[];
+  },
   saveFuelChecks(value: FuelCheck[]) { return write(FUEL_CHECKS, value.slice(-90)); },
   
-  loadSoftHabitCompletions(): SoftHabitCompletion[] { const value = read<unknown>(SOFT_HABIT_COMPLETIONS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved habit completions were invalid and were ignored.'; return []; } return value as SoftHabitCompletion[]; },
+  loadSoftHabitCompletions(): SoftHabitCompletion[] {
+    const value = read<unknown>(SOFT_HABIT_COMPLETIONS, []);
+    if (!Array.isArray(value)) {
+      throw new Error('Saved habit completions are corrupt. Export your data if possible, then delete corrupt local training state before continuing.');
+    }
+    return value as SoftHabitCompletion[];
+  },
   saveSoftHabitCompletions(value: SoftHabitCompletion[]) { return write(SOFT_HABIT_COMPLETIONS, value.slice(-180)); },
 
-  loadMindChecks(): MindCheck[] { const value = read<unknown>(MIND_CHECKS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved mind checks were invalid and were ignored.'; return []; } return value as MindCheck[]; },
+  loadMindChecks(): MindCheck[] {
+    const value = read<unknown>(MIND_CHECKS, []);
+    if (!Array.isArray(value)) {
+      throw new Error('Saved mind checks are corrupt. Export your data if possible, then delete corrupt local training state before continuing.');
+    }
+    return value as MindCheck[];
+  },
   saveMindChecks(value: MindCheck[]) { return write(MIND_CHECKS, value.slice(-180)); },
 
-  loadWeeklyReflections(): WeeklyReflection[] { const value = read<unknown>(WEEKLY_REFLECTIONS, []); if (!Array.isArray(value)) { mutationFailure = 'Saved weekly reflections were invalid and were ignored.'; return []; } return value as WeeklyReflection[]; },
+  loadWeeklyReflections(): WeeklyReflection[] {
+    const value = read<unknown>(WEEKLY_REFLECTIONS, []);
+    if (!Array.isArray(value)) {
+      throw new Error('Saved weekly reflections are corrupt. Export your data if possible, then delete corrupt local training state before continuing.');
+    }
+    return value as WeeklyReflection[];
+  },
   saveWeeklyReflections(value: WeeklyReflection[]) { return write(WEEKLY_REFLECTIONS, value.slice(-52)); },
 
   exportData(): HumanHealthExport {
+    const rawHistory = read<unknown>(HISTORY, []);
+    const rawActivity = read<unknown>(ACTIVITY, []);
+    const rawReadiness = read<unknown>(READINESS, []);
+    const rawAssessments = read<unknown>(ASSESSMENTS, []);
+    const rawSkillAssessments = read<unknown>(SKILL_ASSESSMENTS, []);
+    const rawScheduleEvents = read<unknown>(SCHEDULE_EVENTS, []);
+    const rawFuelChecks = read<unknown>(FUEL_CHECKS, []);
+    const rawSoftHabits = read<unknown>(SOFT_HABIT_COMPLETIONS, []);
+    const rawMindChecks = read<unknown>(MIND_CHECKS, []);
+    const rawReflections = read<unknown>(WEEKLY_REFLECTIONS, []);
+
+    const safeReadiness = Array.isArray(rawReadiness)
+      ? (rawReadiness as ReadinessRecord[]).filter(record => record && record.source !== 'connected-sleep' && typeof record.recordedAt === 'string' && record.input && typeof record.input === 'object')
+      : [];
+
     return {
       schemaVersion: 2,
       exportedAt: new Date().toISOString(),
       activeWorkout: store.loadActive(),
       restTimer: store.loadRestTimer(),
-      history: store.loadHistory(),
-      activity: store.loadActivity(),
-      readiness: storedReadiness(),
+      history: Array.isArray(rawHistory) ? deduplicateHistory(rawHistory as HistoryEntry[]) : [],
+      activity: Array.isArray(rawActivity) ? deduplicateWorkoutActivity(rawActivity as ActivityDose[]) : [],
+      readiness: safeReadiness,
       skills: store.loadSkills(),
-      assessments: store.loadAssessments(),
+      assessments: Array.isArray(rawAssessments) ? rawAssessments as Assessment[] : [],
       progressions: store.loadProgressions(),
-      skillAssessments: store.loadSkillAssessments(),
+      skillAssessments: Array.isArray(rawSkillAssessments) ? rawSkillAssessments as SkillAssessment[] : [],
       preferences: store.loadPreferences(),
-      scheduleEvents: store.loadScheduleEvents(),
-      fuelChecks: store.loadFuelChecks(),
-      softHabitCompletions: store.loadSoftHabitCompletions(),
-      mindChecks: store.loadMindChecks(),
-      weeklyReflections: store.loadWeeklyReflections(),
+      scheduleEvents: Array.isArray(rawScheduleEvents) ? rawScheduleEvents as ScheduleEvent[] : [],
+      fuelChecks: Array.isArray(rawFuelChecks) ? rawFuelChecks as FuelCheck[] : [],
+      softHabitCompletions: Array.isArray(rawSoftHabits) ? rawSoftHabits as SoftHabitCompletion[] : [],
+      mindChecks: Array.isArray(rawMindChecks) ? rawMindChecks as MindCheck[] : [],
+      weeklyReflections: Array.isArray(rawReflections) ? rawReflections as WeeklyReflection[] : [],
     };
   },
 
