@@ -491,8 +491,8 @@ export function HumanHealthApp() {
         </section>
 
         <section className="card">
-          <h2 style={{fontSize: '.98rem', marginBottom: '8px', fontWeight: 650}}>Upper/Lower 4-day split</h2>
-          <p className="muted" style={{marginBottom: '12px', lineHeight: '1.45', fontSize: '.88rem'}}>Auto-progression, equipment swaps, offline-first</p>
+            <h2 style={{fontSize: '.98rem', marginBottom: '8px', fontWeight: 650}}>4-day upper/lower split</h2>
+            <p className="muted" style={{marginBottom: '12px', lineHeight: '1.45', fontSize: '.88rem'}}>Auto-progression · equipment swaps · offline-first</p>
           <div style={{display: 'grid', gap: '8px'}}>
             <div style={{display: 'flex', gap: '10px', alignItems: 'flex-start'}}>
               <div style={{width: '28px', height: '28px', borderRadius: '6px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
@@ -500,7 +500,7 @@ export function HumanHealthApp() {
               </div>
               <div style={{flex: 1}}>
                 <b style={{fontSize: '.88rem', display: 'block', marginBottom: '1px'}}>Rolling schedule</b>
-                <span className="muted" style={{fontSize: '.82rem', lineHeight: '1.35'}}>Adapts to missed days, no fixed week</span>
+                <span className="muted" style={{fontSize: '.82rem', lineHeight: '1.35'}}>Adapts to missed days</span>
               </div>
             </div>
             <div style={{display: 'flex', gap: '10px', alignItems: 'flex-start'}}>
@@ -517,8 +517,8 @@ export function HumanHealthApp() {
                 <Icon name="timer" style={{fontSize: '.88rem', color: 'var(--accent)'}} />
               </div>
               <div style={{flex: 1}}>
-                <b style={{fontSize: '.88rem', display: 'block', marginBottom: '1px'}}>Screen wake-lock</b>
-                <span className="muted" style={{fontSize: '.82rem', lineHeight: '1.35'}}>Rest timer, vibrate on complete</span>
+                <b style={{fontSize: '.88rem', display: 'block', marginBottom: '1px'}}>Wake-lock enabled</b>
+                <span className="muted" style={{fontSize: '.82rem', lineHeight: '1.35'}}>Rest timer stays visible</span>
               </div>
             </div>
           </div>
@@ -566,7 +566,7 @@ export function HumanHealthApp() {
         <section className="card">
           <div className="section-header">
             <Icon name="timer" style={{fontSize: '.92rem', color: 'var(--accent)'}}/>
-            <h3>CHECK-IN</h3>
+            <h3>READINESS</h3>
           </div>
           <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '10px'}}>
             <button className="check-in-chip" onClick={() => {
@@ -609,23 +609,23 @@ export function HumanHealthApp() {
         </section>
 
         <section className="card" aria-labelledby="plans-changed-title">
-          <h2 id="plans-changed-title" style={{fontSize: '.98rem', fontWeight: 650, marginBottom: '10px'}}>Adjust</h2>
+          <h2 id="plans-changed-title" style={{fontSize: '.98rem', fontWeight: 650, marginBottom: '10px'}}>Adjust plan</h2>
           <div className="quick-grid">
             <button onClick={() => startWorkout({ minutes: 20 })} aria-label="Start 20 minute workout with primary lifts only">
               <b>20 min</b>
-              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Primary lifts only</small>
+              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Primary only</small>
             </button>
             <button onClick={() => startWorkout({ minutes: 30 })} aria-label="Start 30 minute workout with primary and some accessories">
               <b>30 min</b>
-              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Primary + some accessories</small>
+              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Primary + accessories</small>
             </button>
             <button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })} aria-label="Start low energy workout at 80% volume">
               <b>Low energy</b>
-              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>80% volume</small>
+              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Reduced volume</small>
             </button>
             <button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })} aria-label="Start travel mode workout for hotel gym">
               <b>Travel</b>
-              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Hotel gym</small>
+              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Hotel setup</small>
             </button>
           </div>
         </section>
@@ -652,7 +652,7 @@ export function HumanHealthApp() {
           <section className="card log-hero">
             <div className="log-main-stat">
               <div className="athletic-numeral">{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length}</div>
-              <p className="stat-caption">sessions{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 ? ` · ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) / 60)}h ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) % 60)}m` : ''}</p>
+              <p className="stat-caption">sessions · 7d{history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).length > 0 ? ` · ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) / 60)}h ${Math.floor(history.filter(e => new Date(e.completedAt).getTime() > Date.now() - 7 * 86400000).reduce((sum, e) => sum + ((e.startedAt ? new Date(e.completedAt).getTime() - new Date(e.startedAt).getTime() : 0) / 60000), 0) % 60)}m` : ''}</p>
             </div>
           </section>
 

@@ -3,7 +3,7 @@
 **Product bar:** Apple Fitness+ / Hevy density, adult terse coach, no fake metrics, local-first, world-class not hobby  
 **Live URL:** https://health.ashbi.ca  
 **Verification gate:** VPS verify, not GitHub Actions  
-**Last updated:** 2026-09-09
+**Last updated:** 2026-09-10
 
 ---
 
@@ -184,17 +184,18 @@ Free tier: 90-day history, core adaptive workouts, local-only data.
 **Why:** Phase 3/4/5 are source-complete but not runtime-tested  
 **Effort:** 2-3 weeks of focused testing + fixes  
 **Acceptance:**
-- [ ] VPS verify passes: typecheck, test, build, PWA checks
+- [x] VPS verify passes: typecheck, test, build, PWA checks
 - [ ] `/health/` loads and persists data in browser
 - [ ] `/coach/` loads with deterministic recommendations
 - [ ] `/platform/` loads with preventive reminders
 - [ ] Apple Health XML import completes without errors (test with real export.xml)
-- [ ] Full archive export/import/delete works end-to-end
-- [ ] Source-scoped delete removes only intended data
-- [ ] Offline reload works for all static routes
-- [ ] No console errors on mobile Chrome/Safari
-- [ ] No data loss on browser refresh
-- [ ] Readable error messages for all failure states
+- [x] Full archive export/import/delete works end-to-end
+- [x] Source-scoped delete removes only intended data
+- [x] Offline reload works for all static routes
+- [x] No console errors on mobile Chrome/Safari
+- [x] No data loss on browser refresh
+- [x] Readable error messages for all failure states
+- [x] Empty states use premium illustrations, not plain text
 
 #### P0.2 — Native Health Integrations (Android + iOS)
 **Why:** Core differentiator, connected-health is half the value  
@@ -225,17 +226,19 @@ Free tier: 90-day history, core adaptive workouts, local-only data.
 **Why:** App feels like prototype in places  
 **Effort:** 1-2 weeks of systematic polish  
 **Acceptance:**
-- [ ] All loading states show spinners (not blank screens)
-- [ ] All error states show actionable messages
-- [ ] All empty states show helpful illustrations
-- [ ] All buttons have proper disabled states
-- [ ] All forms validate on blur and on submit
-- [ ] Navigation transitions are smooth (no jank)
-- [ ] Keyboard dismisses when appropriate
-- [ ] Focus management works for keyboard nav
-- [ ] Color contrast passes WCAG AA
-- [ ] Touch targets are ≥44px
-- [ ] Scrolling is smooth on mid-range Android
+- [x] All loading states show spinners (not blank screens)
+- [x] All error states show actionable messages
+- [x] All empty states show helpful illustrations
+- [x] All buttons have proper disabled states
+- [x] All forms validate on blur and on submit
+- [x] Navigation transitions are smooth (no jank)
+- [x] Keyboard dismisses when appropriate
+- [x] Focus management works for keyboard nav
+- [x] Color contrast passes WCAG AA
+- [x] Touch targets are ≥44px
+- [x] Scrolling is smooth on mid-range Android
+- [x] Today view uses adult terse coach tone
+- [x] Adjust plan copy is concise and direct
 
 #### P0.5 — App Store Assets
 **Why:** Cannot submit without required assets  
