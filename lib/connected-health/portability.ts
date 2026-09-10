@@ -74,12 +74,37 @@ export async function importFullHealthArchive(text: string, mode: 'merge' | 'rep
   }
 }
 
+/**
+ * Complete local data deletion operations contract (issue #88).
+ * 
+ * Domain inventory — every Human Health persistence mechanism:
+ * 
+ * 1. Training data (storage.ts localStorage):
+ *    - human-health:active, history, activity, readiness, skills, assessments
+ *    - human-health:progressions, skill-assessments, rest-timer, rest-until (legacy)
+ *    - human-health:preferences, schedule-events, finalization-journal
+ *    - human-health:fuel-checks, soft-habit-completions, mind-checks, weekly-reflections
+ *    - human-health:connected-sleep-context
+ * 
+ * 2. Connected health (repository.ts IndexedDB):
+ *    - Database: human-health-connected
+ *      - Store: observations (health metrics)
+ *      - Store: sources (Apple Health, etc.)
+ *      - Store: meta (preferences)
+ * 
+ * 3. Platform/preventive health (platform/storage.ts localStorage):
+ *    - human-health:platform:v1 (preventive care records and reminders)
+ * 
+ * 4. Service worker caches (sw.js):
+ *    - human-health-v* (app shell for offline access; no user data)
+ */
 export type CompleteDeletionOperations = {
   clearTraining(): boolean | Promise<boolean>;
   trainingError?(): string | null;
   clearConnected(): void | Promise<void>;
   clearPlatform(): boolean | Promise<boolean>;
   platformError?(): string | null;
+  clearCaches?(): void | Promise<void>;
 };
 
 /**
@@ -109,9 +134,24 @@ export async function runCompleteDeletion(operations: CompleteDeletionOperations
     failures.push(`preventive/platform: ${error instanceof Error ? error.message : 'preventive/platform data deletion failed'}`);
   }
 
+  if (operations.clearCaches) {
+    try {
+      await operations.clearCaches();
+    } catch (error) {
+      failures.push(`service worker caches: ${error instanceof Error ? error.message : 'cache deletion failed'}`);
+    }
+  }
+
   if (failures.length) {
     throw new Error(`Delete-all was incomplete. ${failures.join(' | ')}. Successfully deleted domains were not restored; retry delete-all after resolving the reported storage failure.`);
   }
+}
+
+async function clearServiceWorkerCaches() {
+  if (typeof caches === 'undefined') return;
+  const keys = await caches.keys();
+  const humanHealthCaches = keys.filter(key => key.startsWith('human-health-'));
+  await Promise.all(humanHealthCaches.map(key => caches.delete(key)));
 }
 
 export async function clearAllHumanHealthData() {
@@ -123,6 +163,7 @@ export async function clearAllHumanHealthData() {
     clearConnected: () => healthRepository.clearAll(),
     clearPlatform: () => platformStore.clear(),
     platformError: () => platformStore.getMutationError(),
+    clearCaches: clearServiceWorkerCaches,
   });
 }
 
