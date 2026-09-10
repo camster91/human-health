@@ -7,6 +7,7 @@ class MemoryStorage {
   setItem(key: string, value: string) { this.values.set(key, String(value)); }
   removeItem(key: string) { this.values.delete(key); }
   clear() { this.values.clear(); }
+  keys() { return Array.from(this.values.keys()); }
 }
 
 class FaultyStorage extends MemoryStorage {
@@ -213,6 +214,99 @@ describe('training state integrity fail-closed validation', () => {
       expect(store.clearAll()).toBe(true);
       expect(() => store.loadHistory()).not.toThrow();
       expect(() => store.loadActivity()).not.toThrow();
+    } finally { restore(); }
+  });
+});
+
+describe('store.clearAll — domain coverage regression tests', () => {
+  /**
+   * Inventory of all Human Health local storage domains (issue #88):
+   * 
+   * Training data (storage.ts localStorage keys):
+   * - human-health:active
+   * - human-health:history
+   * - human-health:activity
+   * - human-health:readiness
+   * - human-health:skills
+   * - human-health:assessments
+   * - human-health:progressions
+   * - human-health:skill-assessments
+   * - human-health:rest-timer
+   * - human-health:rest-until (legacy)
+   * - human-health:preferences
+   * - human-health:schedule-events
+   * - human-health:finalization-journal
+   * - human-health:fuel-checks
+   * - human-health:soft-habit-completions
+   * - human-health:mind-checks
+   * - human-health:weekly-reflections
+   * - human-health:connected-sleep-context
+   * 
+   * Connected health (repository.ts IndexedDB):
+   * - Database: human-health-connected
+   *   - Store: observations
+   *   - Store: sources
+   *   - Store: meta (preferences)
+   * 
+   * Platform/preventive health (platform/storage.ts localStorage):
+   * - human-health:platform:v1
+   * 
+   * Service worker caches (sw.js):
+   * - human-health-v* (e.g., human-health-v9)
+   */
+
+  it('clears all training localStorage keys including mind checks and weekly reflections', () => {
+    const memory = new MemoryStorage();
+    const restore = installStorage(memory);
+    try {
+      memory.setItem('human-health:active', JSON.stringify({ id: 'w1', session: 'upper-a', startedAt: '2024-01-01T10:00:00Z', gymId: 'gym1', status: 'active', exercises: [] }));
+      memory.setItem('human-health:history', JSON.stringify([{ session: 'upper-a', completedAt: '2024-01-01T10:00:00Z', exercises: [] }]));
+      memory.setItem('human-health:activity', JSON.stringify([{ domain: 'cardio', completedAt: '2024-01-01T10:00:00Z', minutes: 30 }]));
+      memory.setItem('human-health:readiness', JSON.stringify([{ recordedAt: '2024-01-01T10:00:00Z', input: { sleep: 'good' } }]));
+      memory.setItem('human-health:skills', JSON.stringify({ 'movement:squat': 'clean' }));
+      memory.setItem('human-health:assessments', JSON.stringify([{ metricId: 'rom-hip', recordedAt: '2024-01-01T10:00:00Z', value: 90 }]));
+      memory.setItem('human-health:progressions', JSON.stringify({ 'upper-a': 'week-2' }));
+      memory.setItem('human-health:skill-assessments', JSON.stringify([{ treeId: 'squat', stepId: 'step1', recordedAt: '2024-01-01T10:00:00Z', passed: true, clean: true, pain: false }]));
+      memory.setItem('human-health:rest-timer', JSON.stringify({ status: 'running', endsAt: Date.now() + 60000, durationMs: 60000 }));
+      memory.setItem('human-health:rest-until', String(Date.now() + 60000));
+      memory.setItem('human-health:preferences', JSON.stringify({ selectedGymId: 'gym1' }));
+      memory.setItem('human-health:schedule-events', JSON.stringify([{ type: 'skip', from: 'upper-a', to: 'lower-a', recordedAt: '2024-01-01T10:00:00Z', reason: 'travel' }]));
+      memory.setItem('human-health:finalization-journal', JSON.stringify({ version: 1, workoutId: 'w1', history: [], activity: null }));
+      memory.setItem('human-health:fuel-checks', JSON.stringify([{ recordedAt: '2024-01-01T10:00:00Z', type: 'pre-workout', consumed: true }]));
+      memory.setItem('human-health:soft-habit-completions', JSON.stringify([{ habitId: 'protein', completedAt: '2024-01-01T10:00:00Z' }]));
+      memory.setItem('human-health:mind-checks', JSON.stringify([{ recordedAt: '2024-01-01T10:00:00Z', level: 'calm' }]));
+      memory.setItem('human-health:weekly-reflections', JSON.stringify([{ recordedAt: '2024-01-01T10:00:00Z', prompt: 'What went well?', response: 'Good week' }]));
+      memory.setItem('human-health:connected-sleep-context', JSON.stringify({ observedAt: '2024-01-01T10:00:00Z', sourceId: 's1', sourceName: 'Apple Health', input: { sleepHours: 8, sleep: 'good' } }));
+
+      expect(memory.keys()).toHaveLength(18);
+      expect(store.clearAll()).toBe(true);
+      expect(memory.keys()).toHaveLength(0);
+    } finally { restore(); }
+  });
+
+  it('reports failure if any key cannot be removed', () => {
+    const faulty = new FaultyStorage(undefined, 'human-health:mind-checks');
+    const restore = installStorage(faulty);
+    try {
+      faulty.setItem('human-health:history', JSON.stringify([]));
+      faulty.setItem('human-health:mind-checks', JSON.stringify([]));
+
+      expect(store.clearAll()).toBe(false);
+      expect(store.getMutationError()).toBe('Browser storage rejected a local deletion.');
+    } finally { restore(); }
+  });
+
+  it('persists already-deleted state when clearAll succeeds', () => {
+    const memory = new MemoryStorage();
+    const restore = installStorage(memory);
+    try {
+      memory.setItem('human-health:history', JSON.stringify([{ session: 'upper-a', completedAt: '2024-01-01T10:00:00Z', exercises: [] }]));
+      memory.setItem('human-health:weekly-reflections', JSON.stringify([{ recordedAt: '2024-01-01T10:00:00Z', prompt: 'test', response: 'test' }]));
+      
+      expect(store.clearAll()).toBe(true);
+      expect(store.loadHistory()).toEqual([]);
+      expect(store.loadWeeklyReflections()).toEqual([]);
+      expect(memory.keys()).toHaveLength(0);
     } finally { restore(); }
   });
 });
