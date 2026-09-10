@@ -2,9 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import './connected-health.css';
 import { ServiceWorkerRegistration } from './service-worker-registration';
-import { initErrorReporting } from './error-reporting';
-
-initErrorReporting();
+import { ErrorReporting } from './ErrorReporting';
 
 export const metadata: Metadata = {
   title: 'Human Health',
@@ -19,5 +17,5 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { themeColor: '#c84712', width: 'device-width', initialScale: 1, viewportFit: 'cover' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="en"><body>{children}<ServiceWorkerRegistration /></body></html>;
+  return <html lang="en"><body>{children}<ServiceWorkerRegistration /><ErrorReporting /></body></html>;
 }
