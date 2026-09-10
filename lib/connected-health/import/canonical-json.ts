@@ -38,12 +38,18 @@ export function parseConnectedJson(text: string): HealthRepositoryExport {
   const candidate = value as Partial<ConnectedJsonEnvelope & HealthRepositoryExport>;
   const data = candidate.format === 'human-health-connected-export' ? candidate.data : candidate;
   if (!data || data.schemaVersion !== 1 || !Array.isArray(data.observations) || !Array.isArray(data.sources)) throw new Error('Unsupported connected-health JSON format.');
+  
+  const exportedAt = typeof data.exportedAt === 'string' ? data.exportedAt : undefined;
+  if (!exportedAt || !Number.isFinite(Date.parse(exportedAt))) {
+    throw new Error('Connected-health archive exportedAt is missing or invalid. This archive cannot be trusted for import.');
+  }
+  
   const merged = mergeObservationCollections([], data.observations as HealthObservation[]);
   if (merged.rejected) throw new Error(`${merged.rejected} connected-health observations were invalid.`);
   const sources = data.sources.map(parseSourceState);
   return {
     schemaVersion: 1,
-    exportedAt: typeof data.exportedAt === 'string' && Number.isFinite(Date.parse(data.exportedAt)) ? new Date(data.exportedAt).toISOString() : new Date().toISOString(),
+    exportedAt: new Date(exportedAt).toISOString(),
     observations: merged.observations,
     sources,
     preferences: normalizeConnectedPreferences(data.preferences),

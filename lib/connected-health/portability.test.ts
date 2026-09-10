@@ -79,6 +79,24 @@ describe('connected and full archive parsing', () => {
     expect(() => parseConnectedJson(JSON.stringify({ schemaVersion: 2, observations: [], sources: [] }))).toThrow('Unsupported');
   });
 
+  it('rejects archives with missing or invalid exportedAt timestamp', () => {
+    const base = { schemaVersion: 1, observations: [], sources: [], preferences: defaultConnectedHealthPreferences };
+    expect(() => parseConnectedJson(JSON.stringify({ ...base, exportedAt: undefined }))).toThrow('exportedAt is missing or invalid');
+    expect(() => parseConnectedJson(JSON.stringify({ ...base, exportedAt: null }))).toThrow('exportedAt is missing or invalid');
+    expect(() => parseConnectedJson(JSON.stringify({ ...base, exportedAt: 'not-a-date' }))).toThrow('exportedAt is missing or invalid');
+    expect(() => parseConnectedJson(JSON.stringify({ ...base, exportedAt: '' }))).toThrow('exportedAt is missing or invalid');
+    
+    const fullArchive = {
+      format: 'human-health-full-export' as const,
+      schemaVersion: 2 as const,
+      training: trainingExport(),
+      connected: connectedExport(),
+      platform: { schemaVersion: 1, records: [], reminders: [] },
+    };
+    expect(() => parseFullHealthArchive(JSON.stringify({ ...fullArchive, exportedAt: undefined }))).toThrow('exportedAt is missing or invalid');
+    expect(() => parseFullHealthArchive(JSON.stringify({ ...fullArchive, exportedAt: 'invalid' }))).toThrow('exportedAt is missing or invalid');
+  });
+
   it('rejects malformed source metadata instead of silently coercing it', () => {
     const observation = createManualObservation('water', 250, new Date('2026-09-03T12:00:00Z'));
     const base = { schemaVersion: 1, exportedAt: '2026-09-03T12:00:00Z', observations: [observation], preferences: defaultConnectedHealthPreferences };

@@ -35,9 +35,15 @@ export function parseFullHealthArchive(text: string): FullHealthArchive {
   try { value = JSON.parse(text); } catch { throw new Error('Human Health archive is not valid JSON.'); }
   const archive = value as { format?: unknown; schemaVersion?: unknown; exportedAt?: unknown; training?: unknown; connected?: unknown; platform?: unknown };
   if (archive.format !== 'human-health-full-export' || (archive.schemaVersion !== 1 && archive.schemaVersion !== 2) || !archive.training || !archive.connected) throw new Error('Unsupported Human Health full archive.');
+  
+  const exportedAt = typeof archive.exportedAt === 'string' ? archive.exportedAt : undefined;
+  if (!exportedAt || !Number.isFinite(Date.parse(exportedAt))) {
+    throw new Error('Full archive exportedAt is missing or invalid. This archive cannot be trusted for import.');
+  }
+  
   return {
     format: 'human-health-full-export', schemaVersion: 2,
-    exportedAt: typeof archive.exportedAt === 'string' ? archive.exportedAt : new Date().toISOString(),
+    exportedAt: new Date(exportedAt).toISOString(),
     training: validateTrainingExport(archive.training),
     connected: parseConnectedJson(JSON.stringify(archive.connected)),
     platform: archive.schemaVersion === 2 ? validatePlatformData(archive.platform) : createEmptyPlatformData(),

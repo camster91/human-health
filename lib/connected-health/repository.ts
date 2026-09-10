@@ -190,7 +190,19 @@ export const healthRepository = {
   },
 
   async listSources() {
-    return (await getAll<HealthSourceState>(SOURCES)).map(normalizeSourceState).sort((a, b) => a.displayName.localeCompare(b.displayName));
+    const rawSources = await getAll<unknown>(SOURCES);
+    const sources: HealthSourceState[] = [];
+    const invalidCount = rawSources.length;
+    
+    for (const raw of rawSources) {
+      try {
+        sources.push(normalizeSourceState(raw as HealthSourceState));
+      } catch {
+        throw new Error(`Connected-health storage contains invalid source state. Delete the affected source or use complete local-data deletion before relying on connected-health.`);
+      }
+    }
+    
+    return sources.sort((a, b) => a.displayName.localeCompare(b.displayName));
   },
 
   async getSource(id: string) {
@@ -294,8 +306,13 @@ export const healthRepository = {
     };
   },
 
-  async importData(payload: HealthRepositoryExport, mode: 'merge' | 'replace' = 'merge') {
+  async importData(payload: HealthRepositoryExport, mode: 'merge' | 'replace' = 'replace') {
     if (!payload || payload.schemaVersion !== 1 || !Array.isArray(payload.observations) || !Array.isArray(payload.sources)) throw new Error('Unsupported connected-health archive.');
+    
+    if (typeof payload.exportedAt !== 'string' || !Number.isFinite(Date.parse(payload.exportedAt))) {
+      throw new Error('Connected-health archive exportedAt is missing or invalid. Import rejected.');
+    }
+    
     const observations = payload.observations.flatMap(item => { const value = normalizeObservation(item); return value ? [value] : []; });
     if (observations.length !== payload.observations.length) throw new Error(`${payload.observations.length - observations.length} connected-health observations were invalid. No local data was changed.`);
     const sources = payload.sources.map(normalizeSourceState);
