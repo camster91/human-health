@@ -40,6 +40,13 @@ export function normalizeObservation(observation: HealthObservation): HealthObse
   const imported = Date.parse(provenance.importedAt);
   if (!normalized || !Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(recorded) || !Number.isFinite(imported) || end < start) return null;
   if (typeof observation.sourceId !== 'string' || !observation.sourceId.trim() || typeof provenance.externalId !== 'string' || !provenance.externalId.trim() || typeof provenance.sourceName !== 'string' || !provenance.sourceName.trim() || typeof provenance.originalType !== 'string' || !provenance.originalType.trim()) return null;
+  
+  // Validate optional version is a non-negative integer when present
+  if (provenance.externalVersion !== undefined && (!Number.isFinite(provenance.externalVersion) || provenance.externalVersion < 0 || !Number.isInteger(provenance.externalVersion))) return null;
+  
+  // Validate optional timezoneOffsetMinutes is finite when present
+  if (observation.timezoneOffsetMinutes !== undefined && !Number.isFinite(observation.timezoneOffsetMinutes)) return null;
+  
   const tags = observation.tags && typeof observation.tags === 'object'
     ? Object.fromEntries(Object.entries(observation.tags).filter(([, value]) => ['string', 'number', 'boolean'].includes(typeof value))) as Record<string, string | number | boolean>
     : undefined;

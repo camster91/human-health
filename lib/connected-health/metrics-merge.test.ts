@@ -45,6 +45,23 @@ describe('connected-health normalization and merge', () => {
     expect(normalizeObservation({ ...base, unit: 'km' as never })).toBeNull();
   });
 
+  it('rejects observations with invalid version or timezone fields', () => {
+    const valid = makeObservation('steps', 1234, { externalId: 'steps-1', provenance: { provider: 'health-connect', ingestionMethod: 'native-sync', sourceName: 'Health Connect', originalType: 'StepsRecord', originalUnit: 'count', externalId: 'steps-1', externalVersion: 5, importedAt: '2026-09-01T12:00:00Z' } });
+    const badVersion = { ...valid, provenance: { ...valid.provenance, externalId: 'steps-2', externalVersion: -1 } };
+    const badTimezone = { ...valid, provenance: { ...valid.provenance, externalId: 'steps-3' }, timezoneOffsetMinutes: NaN };
+    const floatVersion = { ...valid, provenance: { ...valid.provenance, externalId: 'steps-4', externalVersion: 1.5 } };
+    
+    expect(normalizeObservation(badVersion)).toBeNull();
+    expect(normalizeObservation(badTimezone)).toBeNull();
+    expect(normalizeObservation(floatVersion)).toBeNull();
+    
+    const merged = mergeObservationCollections([], [valid, badVersion, badTimezone, floatVersion]);
+    expect(merged.observations).toHaveLength(1);
+    expect(merged.observations[0].provenance.externalId).toBe('steps-1');
+    expect(merged.accepted).toBe(1);
+    expect(merged.rejected).toBe(3);
+  });
+
   it('upserts a newer provider version without duplicating the observation', () => {
     const first = makeObservation('steps', 1_000, { externalId: 'record-1', provenance: { provider: 'health-connect', ingestionMethod: 'native-sync', sourceName: 'Health Connect', originalType: 'StepsRecord', originalUnit: 'count', externalId: 'record-1', externalVersion: 1, importedAt: '2026-09-01T12:00:00Z' } });
     const updated = makeObservation('steps', 1_200, { externalId: 'record-1', provenance: { ...first.provenance, externalVersion: 2, importedAt: '2026-09-02T12:00:00Z' } });
