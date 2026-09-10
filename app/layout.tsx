@@ -2,6 +2,9 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import './connected-health.css';
 import { ServiceWorkerRegistration } from './service-worker-registration';
+import { initErrorReporting } from './error-reporting';
+
+initErrorReporting();
 
 export const metadata: Metadata = {
   title: 'Human Health',

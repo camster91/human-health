@@ -15,6 +15,15 @@ Before production deployment:
 
 Phase 1 is configured as a static Next.js export. Deploy the generated `out/` directory to the approved Sites/static-hosting target only after explicit production approval.
 
+## Monitoring
+
+Human Health uses VPS-hosted monitoring infrastructure:
+
+- **Uptime Kuma** — availability monitoring and status checks
+- **GlitchTip** (self-hosted at `https://glitchtip.ashbi.ca`) — error reporting and exception tracking
+
+Error reporting requires `NEXT_PUBLIC_SENTRY_DSN` environment variable set on the VPS. See `.env.example` for configuration details. No third-party SaaS monitoring services are used.
+
 ## Rollback
 
 Keep the previous deploy artifact/release available. If the new build causes workout-state loss, broken navigation, service-worker cache problems, or a critical accessibility regression, restore the previous artifact and invalidate the new service-worker/cache version.
