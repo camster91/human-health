@@ -192,7 +192,6 @@ export const healthRepository = {
   async listSources() {
     const rawSources = await getAll<unknown>(SOURCES);
     const sources: HealthSourceState[] = [];
-    const invalidCount = rawSources.length;
     
     for (const raw of rawSources) {
       try {
@@ -306,7 +305,7 @@ export const healthRepository = {
     };
   },
 
-  async importData(payload: HealthRepositoryExport, mode: 'merge' | 'replace' = 'replace') {
+  async importData(payload: HealthRepositoryExport, mode: 'merge' | 'replace' = 'merge') {
     if (!payload || payload.schemaVersion !== 1 || !Array.isArray(payload.observations) || !Array.isArray(payload.sources)) throw new Error('Unsupported connected-health archive.');
     
     if (typeof payload.exportedAt !== 'string' || !Number.isFinite(Date.parse(payload.exportedAt))) {
