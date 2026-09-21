@@ -12,11 +12,12 @@ The user interacts with one calm Guide. Behind it, the system can coordinate spe
 
 Read these first:
 
-1. [Canonical Product Direction](docs/CANONICAL_PRODUCT_DIRECTION.md)
-2. [Guide-First Architecture](docs/GUIDE_ARCHITECTURE.md)
-3. [Experience System](docs/EXPERIENCE_SYSTEM.md)
-4. [Refactor Plan](docs/REFACTOR_PLAN.md)
-5. [Agent Mission](docs/AGENT_MISSION_GUIDE_FIRST.md)
+1. [Master Product Blueprint](docs/MASTER_PRODUCT_BLUEPRINT.md)
+2. [Canonical Product Direction](docs/CANONICAL_PRODUCT_DIRECTION.md)
+3. [Guide-First Architecture](docs/GUIDE_ARCHITECTURE.md)
+4. [Experience System](docs/EXPERIENCE_SYSTEM.md)
+5. [Refactor Plan](docs/REFACTOR_PLAN.md)
+6. [Agent Mission](docs/AGENT_MISSION_GUIDE_FIRST.md)
 
 When historical docs conflict with these, the documents above win.
 
