@@ -9,7 +9,8 @@ Before product work:
 3. `docs/GUIDE_ARCHITECTURE.md`
 4. `docs/EXPERIENCE_SYSTEM.md`
 5. `docs/REFACTOR_PLAN.md`
-6. `docs/AGENT_MISSION_GUIDE_FIRST.md`
+6. `docs/AUTONOMOUS_COMPLETION_MISSION.md`
+7. `docs/AGENT_MISSION_GUIDE_FIRST.md`
 
 Historical phase/ship docs are implementation evidence only. They do not override the Guide-first product direction.
 
