@@ -68,8 +68,8 @@ export function hasMindCheckToday(checks: MindCheck[], now = new Date()): boolea
 /**
  * Get a summary message for the mind check pattern
  */
-export function mindCheckSummary(checks: MindCheck[], days = 7): string {
-  const recent = recentMindChecks(checks, { days });
+export function mindCheckSummary(checks: MindCheck[], days = 7, now = new Date()): string {
+  const recent = recentMindChecks(checks, { days, now });
   
   if (recent.length === 0) {
     return `No check-ins yet.`;
