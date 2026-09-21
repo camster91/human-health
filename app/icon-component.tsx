@@ -11,6 +11,14 @@ const ASSET_ICONS = {
   'lift-outline': '/icons/lift-outline.svg',
   'log-outline': '/icons/log-outline.svg',
   'you-outline': '/icons/you-outline.svg',
+
+  // Guide-first shell tabs (#148). Canonical IA is Today / Body / Progress / Guide / You.
+  'body-filled': '/icons/body-filled.svg',
+  'body-outline': '/icons/body-outline.svg',
+  'progress-filled': '/icons/progress-filled.svg',
+  'progress-outline': '/icons/progress-outline.svg',
+  'guide-filled': '/icons/guide-filled.svg',
+  'guide-outline': '/icons/guide-outline.svg',
   
   // Check-in icons
   'ready': '/icons/ready.svg',

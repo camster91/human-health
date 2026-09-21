@@ -8,9 +8,11 @@ import { defaultPreferences, normalizePreferences, swapPreferenceKey, UserPrefer
 import { buildSession, exerciseIsAvailable, exercises, gyms, rankedSubstitutions, starterProgramDefinition } from '@/lib/program';
 import { extendRestTimer, pauseRestTimer, remainingRestSeconds, restartRestTimer, RestTimerState, resumeRestTimer, startRestTimer } from '@/lib/rest-timer';
 import { advanceSession, contextualRollingSession, createScheduleOverride, nextRollingSession } from '@/lib/schedule';
+import { MINIMUM_USEFUL_MINUTES, lessTimeContext, todayRecommendation } from '@/lib/session';
 import { store } from '@/lib/storage';
 import { ActivityDose, Assessment, ReadinessRecord, readinessDecisionFromRecords, workoutActivityDoses } from '@/lib/whole-person';
 import { Icon, HeroIllustration, EmptyStateIllustration } from './icon-component';
+import { GuideSurface } from './guide-surface';
 import { LiftProgressPanel } from './lift-progress-panel';
 import { MindReflectionPanel } from './mind-reflection-panel';
 import { OfflineIndicator } from './offline-indicator';
@@ -20,6 +22,15 @@ import { SkillProgressPanel, WholePersonDashboard } from './whole-person-dashboa
 function title(value: string) {
   return value.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 }
+
+/** Canonical Guide-first surfaces (#148). Session is immersive, not a tab. */
+const SHELL_TABS = [
+  { id: 'today', label: 'Today', icon: 'today' },
+  { id: 'body', label: 'Body', icon: 'body' },
+  { id: 'progress', label: 'Progress', icon: 'progress' },
+  { id: 'guide', label: 'Guide', icon: 'guide' },
+  { id: 'settings', label: 'You', icon: 'you' },
+] as const;
 function kgToDisplay(kg: number, units: UserPreferences['unitSystem']) {
   return units === 'imperial' ? kg * 2.2046226218 : kg;
 }
@@ -50,7 +61,7 @@ export function HumanHealthApp() {
   const [active, setActive] = useState<Workout | null>(null);
   const [restTimer, setRestTimer] = useState<RestTimerState | null>(null);
   const [now, setNow] = useState(0);
-  const [tab, setTab] = useState<'today' | 'log' | 'progress' | 'settings'>('today');
+  const [tab, setTab] = useState<'today' | 'body' | 'progress' | 'guide' | 'settings'>('today');
   const [notes, setNotes] = useState<string[]>([]);
   const [swapIndex, setSwapIndex] = useState<number | null>(null);
   const [saveSwap, setSaveSwap] = useState(false);
@@ -169,6 +180,15 @@ export function HumanHealthApp() {
   const activeGym = useMemo(() => active ? gyms.find(item => item.id === active.gymId) || gym : gym, [active, gym]);
   const restSeconds = remainingRestSeconds(restTimer, now);
   const currentAdjustment = strengthLoadAdjustment(rolling.session, recentLoad, latestReadiness.level);
+  const todayPlan = todayRecommendation({
+    history,
+    session: rolling.session,
+    repeating: rolling.repeating,
+    manual: rolling.manual === true,
+    readiness: latestReadiness,
+    preferences,
+    progressionAllowed: currentAdjustment.pauseProgression !== true && latestReadiness.allowProgression === true && rolling.progressionAllowed === true,
+  });
 
   function savePreferences(next: UserPreferences) {
     const selectedGymId = gyms.some(item => item.id === next.selectedGymId) ? next.selectedGymId : gyms[0].id;
@@ -472,76 +492,142 @@ export function HumanHealthApp() {
         <Icon name="user" />
       </button>
     </header>}
-    {tab !== 'today' && <header><div><span className="eyebrow">{tab === 'log' ? 'This week' : tab === 'progress' ? '' : 'HUMAN HEALTH'}</span><h1>{title(tab)}</h1></div>{tab !== 'settings' && tab !== 'log' && <select value={gym.id} onChange={event => savePreferences({ ...preferences, selectedGymId: event.target.value })} aria-label="Gym profile">{gyms.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</header>}
+    {tab !== 'today' && <header><div><span className="eyebrow">{tab === 'body' ? '' : tab === 'progress' ? '' : 'HUMAN HEALTH'}</span><h1>{title(tab)}</h1></div>{(tab === 'body' || tab === 'progress' || tab === 'guide') && <select value={gym.id} onChange={event => savePreferences({ ...preferences, selectedGymId: event.target.value })} aria-label="Gym profile">{gyms.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}</header>}
 
     {tab === 'today' && <>
-      {history.length === 0 ? <>
-        <section className="hero-card">
-          <div className="hero-content">
-            <div className="hero-text">
-              <span className="pill-accent">→ UP NEXT</span>
-              <h2>Upper · 40m</h2>
-              <p className="hero-subtitle">Push · DB · 7 moves</p>
-              <button className="primary" onClick={() => startWorkout()}>Start</button>
-            </div>
-            <div className="hero-illustration">
-              <HeroIllustration type="upper" />
-            </div>
+      <section className="hero-card">
+        <div className="hero-content">
+          <div className="hero-text">
+            <span className="pill-accent">→ {history.length === 0 ? 'START HERE' : rolling.manual ? 'CUSTOM' : rolling.repeating ? 'REPEAT' : 'UP NEXT'}</span>
+            <h2>{title(rolling.session)} · {todayPlan.durationMinutes}m</h2>
+            <p className="hero-subtitle">{todayPlan.movementCount} movements · {latestReadiness.level === 'normal' ? 'full volume' : `${(latestReadiness.volumeMultiplier * 100).toFixed(0)}% volume`}</p>
+            <p className="coach-inline">{todayPlan.reason}</p>
+            <button className="primary" onClick={() => startWorkout()}>Start</button>
           </div>
-        </section>
+          <div className="hero-illustration">
+            <HeroIllustration type="upper" />
+          </div>
+        </div>
+      </section>
 
-        <section className="card">
-            <h2 style={{fontSize: '.98rem', marginBottom: '8px', fontWeight: 650}}>4-day upper/lower split</h2>
-            <p className="muted" style={{marginBottom: '12px', lineHeight: '1.45', fontSize: '.88rem'}}>Auto-progression · equipment swaps · offline-first</p>
-          <div style={{display: 'grid', gap: '8px'}}>
-            <div style={{display: 'flex', gap: '10px', alignItems: 'flex-start'}}>
-              <div style={{width: '28px', height: '28px', borderRadius: '6px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-                <Icon name="dumbbell" style={{fontSize: '.88rem', color: 'var(--accent)'}} />
-              </div>
-              <div style={{flex: 1}}>
-                <b style={{fontSize: '.88rem', display: 'block', marginBottom: '1px'}}>Rolling schedule</b>
-                <span className="muted" style={{fontSize: '.82rem', lineHeight: '1.35'}}>Adapts to missed days</span>
-              </div>
-            </div>
-            <div style={{display: 'flex', gap: '10px', alignItems: 'flex-start'}}>
-              <div style={{width: '28px', height: '28px', borderRadius: '6px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-                <Icon name="checkmark" style={{fontSize: '.88rem', color: 'var(--accent)'}} />
-              </div>
-              <div style={{flex: 1}}>
-                <b style={{fontSize: '.88rem', display: 'block', marginBottom: '1px'}}>Progressive overload</b>
-                <span className="muted" style={{fontSize: '.82rem', lineHeight: '1.35'}}>Auto-calculated from previous sets</span>
-              </div>
-            </div>
-            <div style={{display: 'flex', gap: '10px', alignItems: 'flex-start'}}>
-              <div style={{width: '28px', height: '28px', borderRadius: '6px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-                <Icon name="timer" style={{fontSize: '.88rem', color: 'var(--accent)'}} />
-              </div>
-              <div style={{flex: 1}}>
-                <b style={{fontSize: '.88rem', display: 'block', marginBottom: '1px'}}>Wake-lock enabled</b>
-                <span className="muted" style={{fontSize: '.82rem', lineHeight: '1.35'}}>Rest timer stays visible</span>
-              </div>
-            </div>
-          </div>
-        </section>
-      </> : <>
-        <section className="hero-card">
-          <div className="hero-content">
-            <div className="hero-text">
-              <span className="pill-accent">→ {rolling.manual ? 'CUSTOM' : rolling.repeating ? 'REPEAT' : 'UP NEXT'}</span>
-              <h2>{title(rolling.session)} · 40m</h2>
-              <p className="hero-subtitle">Push · DB · 7 moves</p>
-              {latestReadiness.level !== 'normal' && <p className="coach-inline"><b>Volume {(latestReadiness.volumeMultiplier * 100).toFixed(0)}%</b> — {latestReadiness.reasons.join(' ')}</p>}
-              {latestReadiness.level === 'normal' && currentAdjustment.reduce && <p className="coach-inline"><b>Volume {(currentAdjustment.volumeMultiplier * 100).toFixed(0)}%</b> — {currentAdjustment.reason}</p>}
-              <button className="primary" onClick={() => startWorkout()}>Start</button>
-            </div>
-            <div className="hero-illustration">
-              <HeroIllustration type="upper" />
-            </div>
-          </div>
-        </section>
+      <section className="card" aria-labelledby="today-actions-title">
+        <h2 id="today-actions-title" style={{fontSize: '.98rem', fontWeight: 650, marginBottom: '4px'}}>Not the right fit today?</h2>
+        <p className="muted" style={{fontSize: '.84rem', marginBottom: '2px'}}>One tap changes the plan. No need to explain yourself.</p>
+        <div className="quick-grid">
+          <button onClick={() => startWorkout(lessTimeContext(MINIMUM_USEFUL_MINUTES))} aria-label="Start a 10 minute minimum useful session">
+            <b>Less time</b>
+            <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>10 min minimum</small>
+          </button>
+          <button onClick={() => {
+            const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 2 as const, soreness: 'high' as const }, source: 'manual' as const }];
+            const saved = store.saveReadiness(next);
+            if (saved) setReadinessRecords(next);
+            else setStorageWarning('Readiness check-in could not be saved.');
+          }} aria-label="Check in as sore and reduce volume">
+            <b>I'm sore</b>
+            <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Reduce volume</small>
+          </button>
+          <button onClick={() => {
+            const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 2 as const, pain: true, soreness: 'high' as const }, source: 'manual' as const }];
+            const saved = store.saveReadiness(next);
+            if (saved) setReadinessRecords(next);
+            else setStorageWarning('Pain check-in could not be saved.');
+            setTab('guide');
+          }} aria-label="Report pain and open Guide for safety guidance">
+            <b>Something hurts</b>
+            <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Safety first</small>
+          </button>
+          <button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })} aria-label="Start a travel mode session">
+            <b>Change equipment</b>
+            <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Travel / hotel</small>
+          </button>
+        </div>
+        <button className="link" onClick={() => setTab('guide')} aria-label="Ask Guide a question" style={{marginTop: '4px'}}>Ask Guide</button>
+      </section>
 
+      {history.length === 0 && <section className="card">
+        <h2 style={{fontSize: '.98rem', marginBottom: '8px', fontWeight: 650}}>4-day upper/lower split</h2>
+        <p className="muted" style={{marginBottom: '12px', lineHeight: '1.45', fontSize: '.88rem'}}>Auto-progression · equipment swaps · offline-first</p>
+        <div style={{display: 'grid', gap: '8px'}}>
+          <div style={{display: 'flex', gap: '10px', alignItems: 'flex-start'}}>
+            <div style={{width: '28px', height: '28px', borderRadius: '6px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+              <Icon name="dumbbell" style={{fontSize: '.88rem', color: 'var(--accent)'}} />
+            </div>
+            <div style={{flex: 1}}>
+              <b style={{fontSize: '.88rem', display: 'block', marginBottom: '1px'}}>Rolling schedule</b>
+              <span className="muted" style={{fontSize: '.82rem', lineHeight: '1.35'}}>Adapts to missed days</span>
+            </div>
+          </div>
+          <div style={{display: 'flex', gap: '10px', alignItems: 'flex-start'}}>
+            <div style={{width: '28px', height: '28px', borderRadius: '6px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+              <Icon name="checkmark" style={{fontSize: '.88rem', color: 'var(--accent)'}} />
+            </div>
+            <div style={{flex: 1}}>
+              <b style={{fontSize: '.88rem', display: 'block', marginBottom: '1px'}}>Progressive overload</b>
+              <span className="muted" style={{fontSize: '.82rem', lineHeight: '1.35'}}>Auto-calculated from previous sets</span>
+            </div>
+          </div>
+          <div style={{display: 'flex', gap: '10px', alignItems: 'flex-start'}}>
+            <div style={{width: '28px', height: '28px', borderRadius: '6px', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
+              <Icon name="timer" style={{fontSize: '.88rem', color: 'var(--accent)'}} />
+            </div>
+            <div style={{flex: 1}}>
+              <b style={{fontSize: '.88rem', display: 'block', marginBottom: '1px'}}>Wake-lock enabled</b>
+              <span className="muted" style={{fontSize: '.82rem', lineHeight: '1.35'}}>Rest timer stays visible</span>
+            </div>
+          </div>
+        </div>
+      </section>}
+
+      <section className="card">
+        <div className="section-header">
+          <Icon name="timer" style={{fontSize: '.92rem', color: 'var(--accent)'}}/>
+          <h3>HOW DO YOU FEEL?</h3>
+        </div>
+        <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '10px'}}>
+          <button className="check-in-chip" onClick={() => {
+            const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 5 as const }, source: 'manual' as const }];
+            const saved = store.saveReadiness(next);
+            if (saved) setReadinessRecords(next);
+            else setStorageWarning('Readiness check-in could not be saved.');
+          }} aria-label="Check in: Ready">
+            <Icon name="ready" style={{fontSize: '1.6rem'}} />
+            <span>Ready</span>
+          </button>
+          <button className="check-in-chip" onClick={() => {
+            const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 3 as const, fatigue: 'moderate' as const }, source: 'manual' as const }];
+            const saved = store.saveReadiness(next);
+            if (saved) setReadinessRecords(next);
+            else setStorageWarning('Readiness check-in could not be saved.');
+          }} aria-label="Check in: Flat">
+            <Icon name="flat" style={{fontSize: '1.6rem'}} />
+            <span>Flat</span>
+          </button>
+          <button className="check-in-chip" onClick={() => {
+            const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 2 as const, soreness: 'high' as const }, source: 'manual' as const }];
+            const saved = store.saveReadiness(next);
+            if (saved) setReadinessRecords(next);
+            else setStorageWarning('Readiness check-in could not be saved.');
+          }} aria-label="Check in: Sore">
+            <Icon name="sore" style={{fontSize: '1.6rem'}} />
+            <span>Sore</span>
+          </button>
+          <button className="check-in-chip" onClick={() => {
+            const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 5 as const, sleep: 'good' as const }, source: 'manual' as const }];
+            const saved = store.saveReadiness(next);
+            if (saved) setReadinessRecords(next);
+            else setStorageWarning('Readiness check-in could not be saved.');
+          }} aria-label="Check in: Peak">
+            <Icon name="peak" style={{fontSize: '1.6rem'}} />
+            <span>Peak</span>
+          </button>
+        </div>
+      </section>
+
+      <details>
+        <summary>More detail</summary>
         {readinessRecords.length > 0 && (
-          <div className="metrics-row">
+          <div className="metrics-row" style={{marginTop: '14px'}}>
             <div className="metric-card">
               <div className="metric-header">
                 <Icon name="ready" style={{fontSize: '1rem', color: 'var(--accent)'}}/>
@@ -562,82 +648,31 @@ export function HumanHealthApp() {
             )}
           </div>
         )}
-
-        <section className="card">
-          <div className="section-header">
-            <Icon name="timer" style={{fontSize: '.92rem', color: 'var(--accent)'}}/>
-            <h3>READINESS</h3>
-          </div>
-          <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '10px'}}>
-            <button className="check-in-chip" onClick={() => {
-              const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 5 as const }, source: 'manual' as const }];
-              const saved = store.saveReadiness(next);
-              if (saved) setReadinessRecords(next);
-              else setStorageWarning('Readiness check-in could not be saved.');
-            }} aria-label="Check in: Ready">
-              <Icon name="ready" style={{fontSize: '1.6rem'}} />
-              <span>Ready</span>
-            </button>
-            <button className="check-in-chip" onClick={() => {
-              const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 3 as const, fatigue: 'moderate' as const }, source: 'manual' as const }];
-              const saved = store.saveReadiness(next);
-              if (saved) setReadinessRecords(next);
-              else setStorageWarning('Readiness check-in could not be saved.');
-            }} aria-label="Check in: Flat">
-              <Icon name="flat" style={{fontSize: '1.6rem'}} />
-              <span>Flat</span>
-            </button>
-            <button className="check-in-chip" onClick={() => {
-              const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 2 as const, soreness: 'high' as const }, source: 'manual' as const }];
-              const saved = store.saveReadiness(next);
-              if (saved) setReadinessRecords(next);
-              else setStorageWarning('Readiness check-in could not be saved.');
-            }} aria-label="Check in: Sore">
-              <Icon name="sore" style={{fontSize: '1.6rem'}} />
-              <span>Sore</span>
-            </button>
-            <button className="check-in-chip" onClick={() => {
-              const next = [...readinessRecords, { recordedAt: new Date().toISOString(), input: { subjective: 5 as const, sleep: 'good' as const }, source: 'manual' as const }];
-              const saved = store.saveReadiness(next);
-              if (saved) setReadinessRecords(next);
-              else setStorageWarning('Readiness check-in could not be saved.');
-            }} aria-label="Check in: Peak">
-              <Icon name="peak" style={{fontSize: '1.6rem'}} />
-              <span>Peak</span>
-            </button>
-          </div>
-        </section>
-
-        <section className="card" aria-labelledby="plans-changed-title">
-          <h2 id="plans-changed-title" style={{fontSize: '.98rem', fontWeight: 650, marginBottom: '10px'}}>Adjust plan</h2>
-          <div className="quick-grid">
-            <button onClick={() => startWorkout({ minutes: 20 })} aria-label="Start 20 minute workout with primary lifts only">
-              <b>20 min</b>
-              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Primary only</small>
-            </button>
-            <button onClick={() => startWorkout({ minutes: 30 })} aria-label="Start 30 minute workout with primary and some accessories">
-              <b>30 min</b>
-              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Primary + accessories</small>
-            </button>
-            <button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })} aria-label="Start low energy workout at 80% volume">
-              <b>Low energy</b>
-              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Reduced volume</small>
-            </button>
-            <button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })} aria-label="Start travel mode workout for hotel gym">
-              <b>Travel</b>
-              <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Hotel setup</small>
-            </button>
-          </div>
-        </section>
-
+        <div className="quick-grid" style={{marginTop: '14px'}}>
+          <button onClick={() => startWorkout({ minutes: 20 })} aria-label="Start 20 minute workout with primary lifts only">
+            <b>20 min</b>
+            <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Primary only</small>
+          </button>
+          <button onClick={() => startWorkout({ minutes: 30 })} aria-label="Start 30 minute workout with primary and some accessories">
+            <b>30 min</b>
+            <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Primary + accessories</small>
+          </button>
+          <button onClick={() => startWorkout({ lowEnergy: true, volumeMultiplier: 0.8 })} aria-label="Start low energy workout at 80% volume">
+            <b>Low energy</b>
+            <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Reduced volume</small>
+          </button>
+          <button onClick={() => startWorkout({ gym: gyms.find(item => item.id === 'hotel') || gym, mode: 'travel' })} aria-label="Start travel mode workout for hotel gym">
+            <b>Travel</b>
+            <small style={{color: 'var(--muted)', fontSize: '.78rem', marginTop: '2px'}}>Hotel setup</small>
+          </button>
+        </div>
         <WholePersonDashboard history={history} activity={activity} readinessRecords={readinessRecords} assessments={assessments} preferences={preferences} gym={gym} nextSession={rolling.session} onActivityChange={setActivity} onReadinessChange={setReadinessRecords} fuelChecks={fuelChecks} softHabitCompletions={softHabitCompletions} onFuelChecksChange={setFuelChecks} onSoftHabitCompletionsChange={setSoftHabitCompletions}/>
-
         <MindReflectionPanel mindChecks={mindChecks} weeklyReflections={weeklyReflections} onMindChecksChange={next => store.saveMindChecks(next) && setMindChecks(next)} onWeeklyReflectionsChange={next => store.saveWeeklyReflections(next) && setWeeklyReflections(next)} />
         <SkillProgressPanel gym={gym}/>
-      </>}
+      </details>
     </>}
 
-    {tab === 'log' && <>
+    {tab === 'progress' && <>
       {history.length === 0 ? (
         <section className="card">
           <div style={{padding: '32px 18px', textAlign: 'center'}}>
@@ -670,27 +705,75 @@ export function HumanHealthApp() {
       )}
     </>}
 
+    {(tab === 'progress' || tab === 'body') && <>
+      {tab === 'body' && <section className="card">
+        <div className="section-header">
+          <Icon name="activity" style={{fontSize: '.92rem', color: 'var(--accent)'}} />
+          <h3>HOW YOU FEEL TODAY</h3>
+        </div>
+        <p className="muted" style={{marginTop: '8px', marginBottom: '0', fontSize: '.86rem'}}>
+          The interactive body map arrives with #152. For now this reads your recorded readiness and recent training.
+        </p>
+        <div className="chip-grid" style={{gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginTop: '12px'}}>
+          {([
+            { id: 'ready', label: 'Ready' },
+            { id: 'flat', label: 'Flat' },
+            { id: 'sore', label: 'Sore' },
+            { id: 'peak', label: 'Peak' },
+          ] as const).map(item => <div key={item.id} className="check-in-chip" aria-hidden="true" style={{cursor: 'default'}}>
+            <Icon name={item.id} style={{fontSize: '1.6rem'}} />
+            <span>{item.label}</span>
+          </div>)}
+        </div>
+        <p className="muted" style={{marginTop: '10px', marginBottom: '0', fontSize: '.82rem'}}>
+          Current readiness: <b style={{color: 'var(--ink)'}}>{latestReadiness.level}</b>
+          {latestReadiness.reasons.length > 0 ? ` — ${latestReadiness.reasons.join(' ')}` : ''}
+        </p>
+      </section>}
+
+      <section className="card" aria-labelledby="recent-training-title">
+        <div className="section-header">
+          <Icon name="checkmark" style={{fontSize: '.92rem', color: 'var(--accent)'}} />
+          <h3 id="recent-training-title">RECENTLY TRAINED</h3>
+        </div>
+        {history.length === 0
+          ? <p className="muted" style={{marginBottom: '0', fontSize: '.86rem'}}>No sessions recorded yet.</p>
+          : <div style={{display: 'grid', gap: '8px', marginTop: '10px'}}>
+              {[...history].reverse().slice(0, 4).map((entry, index) => <div className="history" key={`${entry.completedAt}-${index}`} style={{gridTemplateColumns: '1fr auto'}}>
+                <b>{title(entry.session)}</b>
+                <span>{new Date(entry.completedAt).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}</span>
+                <small>{entry.exercises.reduce((sum, exercise) => sum + workingLogs(exercise).length, 0)} working sets</small>
+              </div>)}
+            </div>}
+      </section>
+    </>}
+
     {tab === 'progress' && <LiftProgressPanel history={history} activity={activity} readinessRecords={readinessRecords} />}
+
+    {tab === 'guide' && <GuideSurface history={history} readiness={latestReadiness} session={rolling.session} />}
 
     {tab === 'settings' && <SettingsPanel preferences={preferences} gyms={gyms} onChange={savePreferences} onDataCleared={resetLocalState}/>} 
 
     <nav className="bottom-nav" aria-label="Primary">
-      <button className={tab === 'today' ? 'active' : ''} onClick={() => setTab('today')}>
-        <Icon name={tab === 'today' ? 'today-filled' : 'today-outline'} style={{fontSize: '1.5rem'}} />
-        <span>Today</span>
-      </button>
-      <button className={tab === 'progress' ? 'active' : ''} onClick={() => setTab('progress')}>
-        <Icon name={tab === 'progress' ? 'lift-filled' : 'lift-outline'} style={{fontSize: '1.5rem'}} />
-        <span>Lift</span>
-      </button>
-      <button className={tab === 'log' ? 'active' : ''} onClick={() => { setActivity(store.loadActivity()); setAssessments(store.loadAssessments()); setReadinessRecords(store.loadReadiness()); setTab('log'); }}>
-        <Icon name={tab === 'log' ? 'log-filled' : 'log-outline'} style={{fontSize: '1.5rem'}} />
-        <span>Log</span>
-      </button>
-      <button className={tab === 'settings' ? 'active' : ''} onClick={() => setTab('settings')}>
-        <Icon name={tab === 'settings' ? 'you-filled' : 'you-outline'} style={{fontSize: '1.5rem'}} />
-        <span>You</span>
-      </button>
+      {SHELL_TABS.map(item => {
+        const isActive = tab === item.id;
+        return <button
+          key={item.id}
+          className={isActive ? 'active' : ''}
+          aria-current={isActive ? 'page' : undefined}
+          onClick={() => {
+            if (item.id === 'progress' || item.id === 'body') {
+              setActivity(store.loadActivity());
+              setAssessments(store.loadAssessments());
+              setReadinessRecords(store.loadReadiness());
+            }
+            setTab(item.id);
+          }}
+        >
+          <Icon name={`${item.icon}-${isActive ? 'filled' : 'outline'}`} style={{ fontSize: '1.5rem' }} />
+          <span>{item.label}</span>
+        </button>;
+      })}
     </nav>
   </main>;
 }

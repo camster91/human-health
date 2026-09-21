@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Human Health",
   "short_name": "Human Health",
-  "description": "Adaptive strength training with progressive overload, equipment swaps, and offline-first logging.",
+  "description": "One simple guide for your whole body and long-term health. Adaptive training, recovery, and progress that fits real life, offline-first.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -46,13 +46,13 @@
   "shortcuts": [
     {
       "name": "Today",
-      "url": "/",
-      "description": "View today's workout"
+      "url": "/?shell=guide&tab=today",
+      "description": "What to do now"
     },
     {
-      "name": "Log",
-      "url": "/?tab=log",
-      "description": "View workout history"
+      "name": "Progress",
+      "url": "/?shell=guide&tab=progress",
+      "description": "See what is changing"
     }
   ]
 }
