@@ -4,11 +4,12 @@
 
 Before product work:
 
-1. `docs/CANONICAL_PRODUCT_DIRECTION.md`
-2. `docs/GUIDE_ARCHITECTURE.md`
-3. `docs/EXPERIENCE_SYSTEM.md`
-4. `docs/REFACTOR_PLAN.md`
-5. `docs/AGENT_MISSION_GUIDE_FIRST.md`
+1. `docs/MASTER_PRODUCT_BLUEPRINT.md`
+2. `docs/CANONICAL_PRODUCT_DIRECTION.md`
+3. `docs/GUIDE_ARCHITECTURE.md`
+4. `docs/EXPERIENCE_SYSTEM.md`
+5. `docs/REFACTOR_PLAN.md`
+6. `docs/AGENT_MISSION_GUIDE_FIRST.md`
 
 Historical phase/ship docs are implementation evidence only. They do not override the Guide-first product direction.
 
