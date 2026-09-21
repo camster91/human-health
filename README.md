@@ -17,7 +17,8 @@ Read these first:
 3. [Guide-First Architecture](docs/GUIDE_ARCHITECTURE.md)
 4. [Experience System](docs/EXPERIENCE_SYSTEM.md)
 5. [Refactor Plan](docs/REFACTOR_PLAN.md)
-6. [Agent Mission](docs/AGENT_MISSION_GUIDE_FIRST.md)
+6. [Autonomous Completion Mission](docs/AUTONOMOUS_COMPLETION_MISSION.md)
+7. [Agent Mission](docs/AGENT_MISSION_GUIDE_FIRST.md)
 
 When historical docs conflict with these, the documents above win.
 
