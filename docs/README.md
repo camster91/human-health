@@ -1,16 +1,38 @@
-# Human Health docs
+# Human Health documentation index
 
-Key project documents:
+## Canonical — read first
 
-- `implementation-roadmap.md` — phased product roadmap
-- `10-year-lifecycle.md` — long-horizon lifecycle plan
-- `phase-2-final-review.md` — Phase 2 completion/source review
-- `phase-3-status.md` — current connected-health phase status
-- `phase-3-final-review.md` — Phase 3 source review and remaining release gates
-- `phase-3-completion-checklist.md` — automated/browser/native completion gates
-- `phase-3-acceptance-audit.md` — source-level acceptance audit while CI is runner-blocked
-- `connected-health-architecture.md` — provider-neutral data architecture
-- `connected-health-privacy.md` — privacy/data ownership boundaries
-- `native-health-bridge-contract.md` — Android/Apple native-host boundary
+1. `CANONICAL_PRODUCT_DIRECTION.md`
+2. `GUIDE_ARCHITECTURE.md`
+3. `EXPERIENCE_SYSTEM.md`
+4. `REFACTOR_PLAN.md`
+5. `AGENT_MISSION_GUIDE_FIRST.md`
+6. `../AGENTS.md`
 
-A checked source item does not imply executable verification. Typecheck, tests, build, browser/PWA QA and native-host validation are recorded separately.
+These define the active Guide-first product direction.
+
+## Active supporting docs
+
+- `implementation-roadmap.md`
+- `10-year-lifecycle.md`
+- `coaching-principles.md`
+- `privacy-safety-boundaries.md`
+- `status.md`
+- current QA/release/security/data docs that remain applicable
+
+## Historical implementation docs
+
+Phase 0–5, old end-to-end ship plans, old UI summaries, and previous handoffs document how the existing application evolved.
+
+They are useful for:
+
+- migration evidence;
+- existing architecture;
+- tests;
+- safety decisions;
+- known issues;
+- data compatibility.
+
+They are **not** product authority when they conflict with the canonical Guide-first documents.
+
+Do not build new UX from an old historical document without reconciling it against the canonical direction.
