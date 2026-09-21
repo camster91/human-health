@@ -115,10 +115,22 @@ describe('hasMindCheckToday', () => {
   });
 });
 
+// mindCheckSummary windows to the last 7 days from "now", so these fixtures must
+// control "now" as well as the recorded dates. Relying on the real clock made the
+// assertions depend on the calendar date the suite happened to run on.
 describe('mindCheckSummary', () => {
+  const fixedNow = new Date('2026-09-07T12:00:00Z');
+
   test('returns no-data message for empty array', () => {
     const summary = mindCheckSummary([]);
     expect(summary).toBe('No check-ins yet.');
+  });
+  
+  test('returns no-data message when every check is outside the window', () => {
+    const checks = [
+      createMindCheck('calm', undefined, new Date('2026-06-01T10:00:00Z')),
+    ];
+    expect(mindCheckSummary(checks, 7, fixedNow)).toBe('No check-ins yet.');
   });
   
   test('returns calm-focused message for mostly calm days', () => {
@@ -128,7 +140,7 @@ describe('mindCheckSummary', () => {
       createMindCheck('okay', undefined, new Date('2026-09-05T10:00:00Z')),
       createMindCheck('calm', undefined, new Date('2026-09-04T10:00:00Z')),
     ];
-    const summary = mindCheckSummary(checks, 7);
+    const summary = mindCheckSummary(checks, 7, fixedNow);
     expect(summary).toContain('4 check-ins');
     expect(summary).toContain('mostly calm');
   });
@@ -140,7 +152,7 @@ describe('mindCheckSummary', () => {
       createMindCheck('stressed', undefined, new Date('2026-09-05T10:00:00Z')),
       createMindCheck('overwhelmed', undefined, new Date('2026-09-04T10:00:00Z')),
     ];
-    const summary = mindCheckSummary(checks, 7);
+    const summary = mindCheckSummary(checks, 7, fixedNow);
     expect(summary).toContain('4 check-ins');
     expect(summary).toContain('more overwhelmed days than calm');
     expect(summary).toContain('rest counts');
@@ -152,7 +164,7 @@ describe('mindCheckSummary', () => {
       createMindCheck('stressed', undefined, new Date('2026-09-06T10:00:00Z')),
       createMindCheck('calm', undefined, new Date('2026-09-05T10:00:00Z')),
     ];
-    const summary = mindCheckSummary(checks, 7);
+    const summary = mindCheckSummary(checks, 7, fixedNow);
     expect(summary).toBe('3 check-ins this week.');
   });
 });
