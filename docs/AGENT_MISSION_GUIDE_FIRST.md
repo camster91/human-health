@@ -4,11 +4,13 @@
 
 Before changing product code, read:
 
-1. `docs/CANONICAL_PRODUCT_DIRECTION.md`
-2. `docs/GUIDE_ARCHITECTURE.md`
-3. `docs/EXPERIENCE_SYSTEM.md`
-4. `docs/REFACTOR_PLAN.md`
-5. `AGENTS.md`
+1. `docs/MASTER_PRODUCT_BLUEPRINT.md`
+2. `docs/CANONICAL_PRODUCT_DIRECTION.md`
+3. `docs/GUIDE_ARCHITECTURE.md`
+4. `docs/EXPERIENCE_SYSTEM.md`
+5. `docs/REFACTOR_PLAN.md`
+6. `docs/AUTONOMOUS_COMPLETION_MISSION.md`
+7. `AGENTS.md`
 
 Historical phase docs may contain useful implementation details, but they do not override the canonical direction above.
 
