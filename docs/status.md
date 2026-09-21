@@ -1,24 +1,40 @@
-# Project status
+# Project status — Guide-first refactor
 
-## Completed and verified
-- Repository initialized
-- Long-term roadmap documented
-- MVP build order documented
-- Product epics created
-- Design direction documented
-- Safety/privacy boundaries documented
+## 1. Completed and verified
 
-## Completed but awaiting verification
-- None
+- Existing Human Health repository and current application history inspected.
+- Existing product direction, roadmap, handoff, safety docs and old UX epics reconciled.
+- New canonical Guide-first product direction written.
+- New AI/safety/context architecture written.
+- New visual/multimodal experience system written.
+- Refactor/migration roadmap written.
+- Agent entry points updated on the planning branch.
+- Canonical refactor epic #146 created.
+- Implementation issues #147–#157 created.
+- Old competing product/UX umbrella issues #128–#130 closed as superseded.
+- Branch comparison confirms the planning branch is documentation-only and ahead of `main` with no application-code changes.
 
-## In progress
-- Break roadmap into implementation issues
+## 2. Completed but awaiting verification
 
-## Blocked
-- GitHub Projects board creation/configuration is not exposed by the connected GitHub tool in this chat.
+- Documentation/source-of-truth reset on `planning/guide-first-health-os-refactor`.
 
-## Awaiting client or teammate
-- None
+It is not merged into `main`, so the current production app is not yet the Guide-first product.
 
-## Next action
-- Create implementation-ready MVP and Phase 2 issues and then add them to a GitHub Project manually or through a future Projects-capable connector.
+## 3. In progress
+
+- Draft planning PR and review of the new canonical direction.
+
+## 4. Blocked
+
+- No blocker for planning.
+- Broad implementation should not start by deleting/replacing code before #147 inventories and classifies current subsystems.
+- Merge/deploy requires separate explicit approval.
+
+## 5. Awaiting client or teammate
+
+- Future merge/deploy approval remains with Cameron.
+- No approval is required to continue safe read-only inventory/planning work on #147.
+
+## 6. Next action
+
+Start #147: audit the current architecture and create the Preserve / Adapt / Replace / Quarantine / Retire migration matrix.

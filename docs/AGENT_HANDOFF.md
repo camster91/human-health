@@ -1,46 +1,45 @@
-# Agent Handoff — Human Health (`camster91/human-health`)
+# Agent Handoff — Human Health
 
-**Product:** Human Health — calm whole-human fitness coach PWA. Apple / Hevy density bar. Adult terse tone. Local-first.
-**Live:** https://health.ashbi.ca (Ashbi VPS). **Ship gate = VPS verify**, not GitHub Actions.
-**Owner:** Cameron (camster91)
-**Last updated:** 2026-09-10
+**Repository:** `camster91/human-health`
 
-## Status
+## Current direction
 
-- Live and shipping polish / integrity; still **below** Apple/Hevy visual bar.
-- Keep-shipping **paused** until Cameron asks to resume (Cursor usage / billing).
+Human Health is entering a Guide-first product refactor.
+
+The current live/legacy implementation contains valuable engines and data models, but its existing information architecture and historical phase roadmap are not the target product.
+
+Do not continue old Today/Lift/Log/You or phase-driven UX work unless it is explicitly reconciled with the canonical documents.
 
 ## Read first
 
-1. `docs/END_TO_END_SHIP_PLAN.md`
-2. `docs/implementation-roadmap.md`
-3. This file
-4. Open GitHub issues (P0/P1 integrity + UX epics #128–#130)
+1. `docs/CANONICAL_PRODUCT_DIRECTION.md`
+2. `docs/GUIDE_ARCHITECTURE.md`
+3. `docs/EXPERIENCE_SYSTEM.md`
+4. `docs/REFACTOR_PLAN.md`
+5. `docs/AGENT_MISSION_GUIDE_FIRST.md`
+6. Open Guide-first refactor issues
 
-## Recent ships (2026-09-10)
+## Current implementation status
 
-- #137–#140 visual / phone density · #138–#139 GlitchTip · #141 connected-health fail-closed
-- #142 training storage fail-closed · #143 pain/illness prescription regression (#89) · #144 delete-all domains (#88)
-- Live SHA was `865995c2` after #144 (confirm with Infra / VPS before assuming)
+Existing app foundations include training, recovery, connected-health, coaching, local data, PWA/native packaging and long-horizon platform work.
 
-## Next agent track (when Cameron resumes)
+These are **candidates for reuse**, not proof that the new product is already implemented.
 
-Prefer **P0/P1 integrity** then visual bar:
+## Immediate next track
 
-1. Remaining connected-health P1s (#99–#112) — fail-closed / quarantine / freshness
-2. P0 leftovers if any still open after #88/#89
-3. UX density toward Hevy/Apple (Today / Lift / Log / You) — epics #128–#130; use Dribbble refs / attached PNGs (Figma MCP broken)
+1. Perform architecture/migration inventory.
+2. Classify current subsystems: Preserve / Adapt / Replace / Quarantine / Retire.
+3. Design the target module boundaries.
+4. Implement the new Guide-first shell.
+5. Add Context + Memory.
+6. Add DeepSeek-first orchestration behind strict application contracts.
+7. Integrate deterministic programme/safety.
+8. Add multimodal UI/media/tools.
+9. Verify end-to-end before any merge/deploy decision.
 
-## Do NOT do without Cameron
+## Important
 
-- App Store / Play as ship gates for this trio (PWA on VPS for now)
-- Inventing medical claims / diagnosing
-- Soft baby-talk coach voice
-- Third-party SaaS when Ashbi VPS self-host is preferred
-- Agency BD
-
-## Rules
-
-- GitHub Actions ≠ ship gate
-- After merge, ask Infrastructure to deploy `health.ashbi.ca` and confirm live SHA
-- World-class bar — Cameron rejected thin/empty UI before
+- Do not delete old code before migration inventory.
+- Do not make production changes from the planning branch.
+- Do not merge or deploy without explicit approval.
+- The current production site must not be described as running the Guide-first refactor until separately verified.

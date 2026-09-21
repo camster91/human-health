@@ -1,39 +1,70 @@
-# 10-year lifecycle plan
+# 10-year lifecycle — Guide-first Human Health
 
-## Years 0–1: Prove the adaptive training experience
-- Ship the mobile-first PWA.
-- Make live workout logging excellent.
-- Validate adaptive substitutions, rolling schedules, progression, and recovery-aware changes.
-- Establish privacy/security, backups, observability, accessibility, and data portability.
-- Measure retention, workout completion, recommendation acceptance, and user-reported usefulness.
+The product should become smarter over time without becoming harder to use.
 
-## Years 1–2: Whole-person fitness
-- Add core, mobility, bodyweight skills, cardio, balance, power, and capability assessments.
-- Build a capability map backed by measured performance rather than arbitrary scores.
-- Introduce travel, minimum-effective-day, return-from-break, and life-phase modes.
+## Years 0–1 — Prove the Guide
 
-## Years 2–3: Connected health context
-- Add Health Connect and Apple Health adapters where practical.
-- Ingest sleep, steps, heart rate, workouts, and selected body metrics with provenance and stale-data handling.
-- Add opt-in nutrition/hydration and recovery context.
+- Refactor into Today / Body / Progress / Guide / You.
+- Make one-screen Today excellent.
+- Preserve dependable training and health foundations.
+- Build BodyProfile, DailyState and personal rules.
+- Add DeepSeek-first orchestration behind deterministic programme/safety systems.
+- Make workouts visual, fast and satisfying.
+- Prove that users do not need prompt engineering.
 
-## Years 3–5: Personal coaching intelligence
-- Improve plateau/deload logic, multi-goal balancing, long-term trend detection, and explainable recommendations.
-- Add conversational adaptation where it improves usability.
-- Explore optional movement/video analysis only if reliability and privacy standards are met.
+## Years 1–2 — Whole-person adaptation
 
-## Years 5–7: Health platform maturity
-- Strong import/export and user-owned data portability.
-- Clinician-friendly summaries/exports where useful without presenting the app as a medical authority.
-- Validated assessment models and research partnerships where appropriate.
-- More provider/device adapters behind stable interfaces.
+- Improve strength/cardio/mobility/balance/recovery coordination.
+- Learn session-duration fit and behaviour patterns.
+- Add transparent small experiments.
+- Add quality-of-life checkpoints.
+- Make return-after-gap and maintenance first-class.
 
-## Years 7–10: Durable personal health operating system
-- Privacy-preserving personal models.
-- Longitudinal capability and lifestyle insights.
-- Extensible API/integration platform.
-- Regulatory review as capabilities evolve.
-- Continue annual product pruning: remove low-value features and preserve simplicity.
+## Years 2–3 — Connected context
+
+- Mature Apple Health/Health Connect and other approved adapters.
+- Use connected data as context, not as a dashboard obligation.
+- Improve source freshness/provenance.
+- Add optional health/lifestyle modules.
+- Expand trusted media and research tools.
+
+## Years 3–5 — Personal Guide intelligence
+
+- Improve specialist coordination.
+- Improve multi-timescale planning.
+- Add richer multimodal responses.
+- Add voice for hands-free sessions.
+- Use web/media/location/weather tools when they genuinely improve the next action.
+- Add better trust/correction controls for memory and inference.
+
+## Years 5–7 — Durable health companion
+
+- Strong clinician/professional discussion exports where useful.
+- Mature personal rules and long-term body timeline.
+- Better aging/maintenance priorities.
+- More provider/device adapters behind stable contracts.
+- Validate any higher-risk capability before expanding claims.
+
+## Years 7–10 — Personal health operating system
+
+- Longitudinal personal models.
+- Extensible but permissioned tools/integrations.
+- Rich long-term capability and lifestyle insight.
+- Conservative movement/camera assistance where validated.
+- Continued privacy/security/regulatory review.
+- Aggressive product pruning to preserve simplicity.
 
 ## Annual review
-Every year reassess evidence, user needs, platform capabilities, regulation, privacy risk, maintenance cost, and product-market fit. Future-year items are hypotheses, not promises.
+
+Every year reassess:
+
+- actual user value;
+- evidence;
+- privacy/security;
+- regulation;
+- model/provider landscape;
+- maintenance cost;
+- accessibility;
+- what can be removed.
+
+The backend may become more powerful. The front end should not become more complicated just because more data exists.
