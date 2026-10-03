@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { HealthSyncRepository, connectAdapter, syncAdapter } from './sync';
 import { ConnectedMetric, HealthDataAdapter, HealthObservation, HealthSourceState, HealthSyncBatch } from './types';
 import { makeObservation } from './test-helpers';
@@ -48,8 +48,50 @@ describe('connected-health sync state machine', () => {
     const state = await syncAdapter(source, ['steps'], { startTime: '2026-09-01T00:00:00Z', endTime: '2026-09-03T00:00:00Z' }, repository);
     expect(cursors).toEqual([undefined, 'cursor-1']);
     expect(state.status).toBe('current');
+    expect(state.partialReason).toBeUndefined();
     expect(state.cursor).toBe('cursor-1');
     expect(state.recordCount).toBe(1);
+  });
+
+  it('marks a complete sync partial when observations are rejected, preserving accepted data and deletions', async () => {
+    const repository = new MemoryRepository();
+    const value = makeObservation('steps', 1_000, { sourceId: 'native:test', externalId: 'accepted' });
+    repository.observations = [makeObservation('steps', 500, { sourceId: 'native:test', externalId: 'deleted' })];
+    const upsertBatch = repository.upsertBatch.bind(repository);
+    vi.spyOn(repository, 'upsertBatch').mockImplementation(async (sourceId, batch) => {
+      const result = await upsertBatch(sourceId, { ...batch, observations: batch.observations.slice(0, 1) });
+      return { ...result, rejected: 1 };
+    });
+    const state = await syncAdapter(adapter(async () => ({ observations: [value, value], deletedExternalIds: ['deleted'], complete: true })), ['steps'], {}, repository);
+    expect(state.status).toBe('partial');
+    expect(state.partialReason).toBe('1 observations rejected.');
+    expect(state.recordCount).toBe(1);
+    expect(repository.observations).toEqual([value]);
+    expect(repository.source).toEqual(state);
+  });
+
+  it('accumulates rejected counts across batches in one partial reason', async () => {
+    const repository = new MemoryRepository();
+    vi.spyOn(repository, 'upsertBatch')
+      .mockResolvedValueOnce({ accepted: 0, rejected: 2, deleted: 0 })
+      .mockResolvedValueOnce({ accepted: 0, rejected: 3, deleted: 0 });
+    const source = adapter(async request => ({ observations: [], deletedExternalIds: [], nextCursor: request.cursor ? undefined : 'next', complete: !!request.cursor }));
+    const state = await syncAdapter(source, ['steps'], {}, repository);
+    expect(repository.upsertBatch).toHaveBeenCalledTimes(2);
+    expect(state.status).toBe('partial');
+    expect(state.partialReason).toBe('5 observations rejected.');
+  });
+
+  it('reports a repository write error as failed even after rejected observations', async () => {
+    const repository = new MemoryRepository();
+    vi.spyOn(repository, 'upsertBatch')
+      .mockResolvedValueOnce({ accepted: 0, rejected: 2, deleted: 0 })
+      .mockRejectedValueOnce(new Error('repository write failed'));
+    const source = adapter(async request => ({ observations: [], deletedExternalIds: [], nextCursor: request.cursor ? undefined : 'next', complete: !!request.cursor }));
+    const state = await syncAdapter(source, ['steps'], {}, repository);
+    expect(state.status).toBe('failed');
+    expect(state.error).toBe('repository write failed');
+    expect(repository.source).toEqual(state);
   });
 
   it('preserves successful data and reports partial sync without a usable next cursor', async () => {

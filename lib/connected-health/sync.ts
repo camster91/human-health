@@ -77,6 +77,7 @@ export async function syncAdapter(
   await repository.saveSource({ ...baseState(adapter, previous), status: 'syncing', grantedMetrics: granted, lastAttemptAt: attemptAt, error: undefined, partialReason: undefined });
   let cursor = previous?.cursor;
   let batches = 0;
+  let rejected = 0;
   let complete = false;
   const warnings: string[] = [];
   const maxBatches = Math.max(1, Math.min(1_000, options.maxBatches || 100));
@@ -89,7 +90,8 @@ export async function syncAdapter(
         endTime: options.endTime || new Date().toISOString(),
         cursor,
       });
-      await repository.upsertBatch(adapter.sourceId, batch);
+      const result = await repository.upsertBatch(adapter.sourceId, batch);
+      rejected += result.rejected;
       warnings.push(...(batch.warnings || []));
       complete = batch.complete;
       batches++;
@@ -104,6 +106,7 @@ export async function syncAdapter(
       cursor = batch.nextCursor || cursor;
     }
     if (!complete && batches >= maxBatches) warnings.push(`Sync stopped after the configured ${maxBatches} batch limit.`);
+    if (rejected > 0) warnings.push(`${rejected} observations rejected.`);
     const count = (await repository.listObservations({ sourceId: adapter.sourceId })).length;
     const partial = !complete || warnings.length > 0;
     const next: HealthSourceState = {
