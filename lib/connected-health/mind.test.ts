@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   applyMindCheckRetention,
   createMindCheck,
@@ -10,6 +10,15 @@ import {
 } from './mind';
 
 describe('createMindCheck', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-07T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test('creates basic check without note', () => {
     const now = new Date('2026-09-07T10:00:00Z');
     const check = createMindCheck('calm', undefined, now);
@@ -116,6 +125,15 @@ describe('hasMindCheckToday', () => {
 });
 
 describe('mindCheckSummary', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-07T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test('returns no-data message for empty array', () => {
     const summary = mindCheckSummary([]);
     expect(summary).toBe('No check-ins yet.');
