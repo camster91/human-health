@@ -1,109 +1,86 @@
 # Human Health
 
-Human Health is being refactored into a **Guide-first personal health operating system**: one simple, visual app that helps a person understand what their body needs next and guides them through it.
+A calm, local-first fitness coach that tells you what to train today, adapts to how you feel, and keeps your data on your device.
 
-The target experience is:
+**Live app:** [health.ashbi.ca](https://health.ashbi.ca) (installable PWA, works offline)
 
-**Open → understand what matters → do the next useful thing → see meaningful progress → leave.**
+## What it does
 
-The user interacts with one calm Guide. Behind it, the system can coordinate specialist reasoning, deterministic training/recovery logic, connected health context, trusted web/media tools, personal history, and long-term planning.
+Most fitness apps either hand you a static program or bury you in dashboards. Human Health opens on one screen, **Today**, with the next session it recommends, a quick check-in (Ready, Flat, Sore, Peak), and simple ways to adjust the plan when life gets in the way. Behind that screen, deterministic training, recovery and load-management logic decides what to suggest, and recommendations come with plain-language explanations.
 
-## Canonical product direction
+Everything is stored locally in the browser. There is no account and no server-side database, and you can export, restore or delete all of your data at any time.
 
-Read these first:
+Human Health is a fitness and wellbeing tool, not a medical product. It does not diagnose, treat or monitor any condition, and pain or illness check-ins never trigger an exercise prescription.
 
-1. [Master Product Blueprint](docs/MASTER_PRODUCT_BLUEPRINT.md)
-2. [Canonical Product Direction](docs/CANONICAL_PRODUCT_DIRECTION.md)
-3. [Guide-First Architecture](docs/GUIDE_ARCHITECTURE.md)
-4. [Experience System](docs/EXPERIENCE_SYSTEM.md)
-5. [Refactor Plan](docs/REFACTOR_PLAN.md)
-6. [Autonomous Completion Mission](docs/AUTONOMOUS_COMPLETION_MISSION.md)
-7. [Agent Mission](docs/AGENT_MISSION_GUIDE_FIRST.md)
+## Features
 
-When historical docs conflict with these, the documents above win.
+- **Adaptive training:** a 4-day upper/lower split with progression, plateau detection and deload suggestions based on your history and recovery.
+- **Readiness check-ins:** one-tap Ready / Flat / Sore / Peak check-ins that shape the session you get.
+- **Flexible sessions:** 20 or 30 minute versions, a low-energy option at reduced volume, and a travel mode for hotel gyms.
+- **Gym profiles:** choose the equipment you have and exercise selection follows it.
+- **Focused workout mode:** an immersive set logger with a rest timer, add-exercise, pause/resume and recovery from interrupted sessions.
+- **Progress and history:** lift progress, a weekly log, capability trends and skill progressions.
+- **Whole-person context:** recovery, movement and mobility assessments, fuel and soft habits, and short mind reflections, without a single "health score".
+- **Connected health (optional):** import an Apple Health export file, parsed entirely on-device, with source provenance, freshness rules and per-source deletion.
+- **Data ownership:** full archive export and import with validation, and a complete local wipe. The app fails closed on corrupt data instead of guessing.
+- **Offline-first PWA:** service worker caching, an offline page and an installable manifest.
 
-## Current implementation
+## Tech stack
 
-The repository already contains a substantial local-first fitness/health PWA with:
+- [Next.js](https://nextjs.org/) 15 (static export) and React 19
+- TypeScript
+- Vitest for unit tests
+- Service worker and Web App Manifest for offline and install support
+- Browser LocalStorage for persistence (no backend)
+- Optional Sentry error reporting, only enabled when a DSN is configured
 
-- adaptive training;
-- exercise/equipment knowledge;
-- workout history;
-- readiness and recovery logic;
-- connected-health context and provenance;
-- import/export;
-- offline/PWA/native foundations;
-- safety/privacy rules;
-- long-horizon health work.
+## Getting started
 
-That implementation is now an **asset inventory**, not a requirement to preserve every current screen or product assumption.
-
-The refactor should preserve good engines/data, adapt useful subsystems, and replace user-facing architecture that conflicts with the Guide-first direction.
-
-The current production experience must not be described as already refactored until the new work is implemented, verified, approved, and deployed.
-
-## Target product shell
-
-- **Today** — what matters now.
-- **Body** — body state, capability, soreness/pain, mobility, recovery.
-- **Progress** — meaningful trajectories without one fake health score.
-- **Guide** — natural help, explanations, learning, planning.
-- **You** — goals, personal rules, integrations, privacy, data and preferences.
-
-Workout/session mode is immersive rather than a permanent tab.
-
-## AI direction
-
-The preferred initial model backend is **DeepSeek through a provider-agnostic model gateway**.
-
-The LLM:
-
-- reasons;
-- coordinates specialist roles;
-- requests tools;
-- explains;
-- composes structured UI intent.
-
-The application:
-
-- owns authoritative health/training state;
-- validates output;
-- enforces personal rules;
-- enforces deterministic programme logic;
-- enforces safety;
-- handles privacy/consent;
-- renders accessible UI.
-
-Core training guidance must degrade safely when the LLM or internet is unavailable.
-
-## Safety
-
-Human Health is a fitness/health-support product, not a medical authority.
-
-It must not autonomously diagnose disease, prescribe medication/insulin, provide emergency monitoring, or clear injuries.
-
-Safety and personal rules outrank model output.
-
-## Development
+Requires Node.js 22 and npm.
 
 ```bash
 npm install
-npm run typecheck
-npm test
-npm run build
-npm run check:pwa
+npm run dev          # http://localhost:3000
 ```
 
-`npm run verify` runs the consolidated source/build/PWA gate.
+Optional settings are read from environment variables; `.env.example` lists the names. The app runs fully without them.
 
-## Delivery rules
+Production-style build:
 
-- Mobile-first and Figma-first.
-- Work through feature branches and PRs.
-- Do not merge or deploy without explicit approval.
-- Preserve data meaning and historical workout evidence.
-- Prefer deterministic rules for authoritative programme/safety decisions.
-- Treat observed facts, user reports, preferences, inferences, and external evidence separately.
-- Keep recommendations explainable and reversible.
-- Build progressive disclosure: simple by default, deep on demand.
-- Accessibility, privacy, offline behaviour, security, testing, deployment and rollback are acceptance criteria, not polish tasks.
+```bash
+npm run build        # static export to out/
+npm run start        # serves out/ locally
+```
+
+## Testing
+
+```bash
+npm run typecheck    # TypeScript
+npm test             # Vitest unit tests
+npm run check:pwa    # PWA manifest and asset checks
+npm run verify       # all of the above plus a production build
+```
+
+The same checks run in GitHub Actions on every push and pull request.
+
+## Project structure
+
+```
+app/                   Today, workout mode, progress, log, settings, health and coach views
+lib/                   Training engine, program, load management, readiness, storage and validation
+lib/coaching/          Session planner and plain-language explanations
+lib/connected-health/  Apple Health import, metric merging, freshness, portability and deletion
+lib/platform/          Long-horizon capability models and export
+public/                Icons, illustrations, manifest and service worker
+scripts/               Static server, PWA checks and icon generation
+docs/                  Product, architecture, privacy and safety documentation
+```
+
+## Docs
+
+- [Coaching principles](docs/coaching-principles.md)
+- [Privacy and safety boundaries](docs/privacy-safety-boundaries.md)
+- [Connected health architecture](docs/connected-health-architecture.md)
+- [Connected health privacy](docs/connected-health-privacy.md)
+- [Data model notes](docs/data-model-notes.md)
+- [Product direction](docs/CANONICAL_PRODUCT_DIRECTION.md)
